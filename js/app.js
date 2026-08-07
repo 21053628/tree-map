@@ -83,7 +83,7 @@ const App = (function() {
     layerBar.addTo(map);
     
     // 樹木和地盤圖層
-    treeLayer = L.layerGroups().addTo(map);
+    treeLayer = L.layerGroup().addTo(map);
     prjLayer  = L.layerGroup().addTo(map);
     
     // 圖例
