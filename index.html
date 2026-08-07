@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>樹木互動地圖</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif}
+  #map{height:100%}
+  #status{position:absolute;top:8px;left:8px;z-index:999;background:#fff;padding:6px 12px;
+          border-radius:8px;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.2);max-width:85%}
+  .popup-img{width:160px;border-radius:6px;margin:4px 0}
+  .legend{background:#fff;padding:8px 12px;border-radius:8px;font-size:12px;
+          box-shadow:0 1px 4px rgba(0,0,0,.25);line-height:1.7}
+</style>
+</head>
+<body>
+<div id="status">🗺️ 載入中…</div>
+<div id="map"></div>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API = 'https://script.google.com/macros/s/XXXX/exec'; // ← 一定要換成你的 /exec 網址
+const status = document.getElementById('status');
+
+if(!window.L){
+  status.textContent = '❌ 地圖元件載入失敗（網路問題），請重新整理';
+}else{
+  const map = L.map('map').setView([25.0375,121.5637], 16);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              {attribution:'© OpenStreetMap'}).addTo(map);
+
+  const COLORS = {'正常':'#2e7d32','注意':'#f9a825','異常':'#c62828'};
+
+  const legend = L.control({position:'bottomright'});
+  legend.onAdd = function(){
+    const d = L.DomUtil.create('div','legend');
+    d.innerHTML = '<b>樹木狀態</b><br><span style="color:#2e7d32">●</span> 正常 '+
+                  '<span style="color:#f9a825">●</span> 注意 <span style="color:#c62828">●</span> 異常';
+    return d;
+  };
+  legend.addTo(map);
+
+  fetch(API + '?action=trees')
+    .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(res){
+      const data = res.data || [];
+      status.textContent = '✅ 已載入 ' + data.length + ' 棵樹';
+      setTimeout(function(){ status.style.display='none'; }, 3000);
+      data.forEach(function(t){
+        const lat = +t.lat, lng = +t.lng;
+        if(!lat || !lng) return;
+        L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
+          fillColor:COLORS[t.status]||'#757575',fillOpacity:.9})
+        .addTo(map).bindPopup(
+          '<b>'+t.tree_id+' '+t.name+'</b><br><i>'+t.species+'</i><br>'+
+          '狀態：'+t.status+'｜風險：'+t.risk+'<br>'+
+          ((t.photo_url && String(t.photo_url).indexOf('...')===-1)
+             ? '<img class="popup-img" src="'+t.photo_url+'"><br>' : '')+
+          '<a href="t.html?id='+encodeURIComponent(t.tree_id)+'">📋 樹木頁（巡查／簽到）</a>');
+      });
+    })
+    .catch(function(err){
+      status.textContent = '❌ 後端連線失敗：' + err.message + '（檢查 API 是否已換成你的 /exec 網址）';
+    });
+}
+</script>
+</body>
+</html>
