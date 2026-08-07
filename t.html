@@ -32,10 +32,13 @@
 const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
 const STAFF_PASS = 'tree2026';
 const $ = function(s){ return document.querySelector(s); };
-const id = new URLSearchParams(location.search).get('id') || 'A001';
+
+/* 複合鑰匙：編號 + 工程 */
+const params = new URLSearchParams(location.search);
+const id  = params.get('id') || 'A001';
+const prj = params.get('prj') || '';
 let TREE = null;
 
-/* 密碼 30 分鐘有效（地圖頁共用） */
 function staffOk(){
   const until = +localStorage.getItem('tree_staff_until') || 0;
   if(Date.now() < until) return true;
@@ -47,7 +50,6 @@ function staffOk(){
   alert('密碼錯誤'); return false;
 }
 
-/* 本地時間格式化（修正 UTC 顯示問題） */
 function fmtTime(v){
   const d = new Date(v);
   if(isNaN(d.getTime())) return String(v).slice(0,16);
@@ -56,12 +58,12 @@ function fmtTime(v){
          ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-/* ---------- 載入樹木 ---------- */
-fetch(API + '?action=tree&id=' + encodeURIComponent(id))
+/* 載入樹木（帶工程鑰匙） */
+fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
   .then(function(r){ return r.json(); })
   .then(function(res){
     const t = res.data;
-    if(!t){ $('#app').innerHTML = '<div class="card">找不到樹木編號：' + id + '</div>'; return; }
+    if(!t){ $('#app').innerHTML = '<div class="card">找不到樹木：' + id + '</div>'; return; }
     TREE = t; render(t); loadLogs();
   })
   .catch(function(err){
@@ -91,7 +93,6 @@ function render(t){
   '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>';
 }
 
-/* ---------- 工作人員面板（極簡 3 按鈕） ---------- */
 function staffMode(){
   if(!staffOk()) return;
   $('#staffBox').innerHTML =
@@ -111,7 +112,6 @@ function staffMode(){
     '<textarea id="eDesc" rows="2" placeholder="簡介"></textarea>' +
     '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
 
-  /* 帶入現有值 */
   $('#eName').value = TREE.name || '';
   $('#eSpecies').value = TREE.species || '';
   $('#eStatus').value = TREE.status || 'Normal';
@@ -122,7 +122,6 @@ function staffMode(){
   $('#eLng').value = TREE.lng || '';
   $('#eDesc').value = TREE.description || '';
 
-  /* 載入工程下拉選單 */
   fetch(API + '?action=projects').then(function(r){ return r.json(); }).then(function(res){
     const opts = (res.data || []).map(function(p){
       return '<option value="' + p.project_id + '">🚩 ' + p.name + '</option>';
@@ -132,27 +131,24 @@ function staffMode(){
   });
 }
 
-/* ---------- 簽到 ---------- */
 async function checkin(){
   const staff = prompt('工作人員姓名：') || '未填';
-  const r = await post({type:'checkin', staff:staff, tree_id:id});
+  const r = await post({type:'checkin', staff:staff, tree_id:id, prj:prj});
   alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：' + r.error);
 }
 
-/* ---------- 上傳巡查 ---------- */
 async function submitInspection(){
   const staff  = prompt('工作人員姓名：') || '未填';
   const f = $('#photo').files[0];
   const b64 = f ? await compress(f) : '';
-  const r = await post({type:'inspection', staff:staff, tree_id:id,
+  const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
     health:$('#health').value, note:$('#note').value, photo_base64:b64});
   alert(r.ok ? '✅ 已上傳！主照片已自動更新' : '❌ 失敗：' + r.error);
   if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
 }
 
-/* ---------- 儲存樹木資料 ---------- */
 async function saveTreeInfo(){
-  const r = await post({type:'update_tree', tree_id:id,
+  const r = await post({type:'update_tree', tree_id:id, prj:prj,
     name:$('#eName').value, species:$('#eSpecies').value, status:$('#eStatus').value,
     project_id:$('#eProject').value, height:$('#eHeight').value,
     spread:$('#eSpread').value, dbh:$('#eDbh').value,
@@ -161,7 +157,6 @@ async function saveTreeInfo(){
   if(r.ok) setTimeout(function(){ location.reload(); }, 800);
 }
 
-/* ---------- 共用 ---------- */
 function post(payload){
   return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify(payload)}).then(r=>r.json());
@@ -177,9 +172,8 @@ async function compress(file, maxW, q){
   return c.toDataURL('image/jpeg', q).split(',')[1];
 }
 
-/* ---------- 巡查歷史（本地時間） ---------- */
 function loadLogs(){
-  fetch(API + '?action=inspections&id=' + encodeURIComponent(id))
+  fetch(API + '?action=inspections&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
     .then(function(r){ return r.json(); })
     .then(function(res){
       const data = res.data || [];

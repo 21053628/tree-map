@@ -23,12 +23,10 @@
   .popup-img{width:160px;border-radius:6px;margin:4px 0}
   .legend{background:#fff;padding:8px 12px;border-radius:8px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.25);line-height:1.7}
   .prjIcon{background:#1565c0;color:#fff;border-radius:6px;padding:2px 6px;font-size:13px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
-  /* 樹木編號標記 */
   .treeIcon{display:flex;flex-direction:column;align-items:center}
   .treeIcon .lbl{background:#263238;color:#ffd54f;font-weight:bold;font-size:11px;padding:2px 8px;
                  border-radius:10px;border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);margin-bottom:2px;white-space:nowrap}
   .treeIcon .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
-  /* 圖層切換列 */
   .layerbar{background:#fff;border-radius:10px;padding:4px;display:flex;gap:4px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
   .layerbar button{border:none;background:#eceff1;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer}
   .layerbar button.on{background:#4527a0;color:#fff}
@@ -64,7 +62,6 @@ function staffOk(){
 let PROJECTS=[], TREES=[], curProject='';
 const map = L.map('map').setView([22.5,114.1], 11);
 
-/* ---------- 免費圖層：衛星／地形／街道 ---------- */
 const baseLayers = {
   sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
        {attribution:'© Esri World Imagery', maxZoom:19}),
@@ -73,7 +70,7 @@ const baseLayers = {
   street: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
        {attribution:'© OpenStreetMap', maxZoom:19})
 };
-baseLayers.sat.addTo(map);   // 預設衛星
+baseLayers.sat.addTo(map);
 
 const layerBar = L.control({position:'bottomleft'});
 layerBar.onAdd = function(){
@@ -130,7 +127,7 @@ function buildSelect(){
 function drawProjects(){
   prjLayer.clearLayers();
   PROJECTS.forEach(function(p){
-    if(String(p.project_id) === String(curProject)) return;  // 到工地後旗標隱藏
+    if(String(p.project_id) === String(curProject)) return;
     const lat=+p.lat, lng=+p.lng;
     if(!lat||!lng) return;
     const count = TREES.filter(t=>String(t.project_id)===String(p.project_id)).length;
@@ -152,7 +149,6 @@ function selectProject(pid){
   drawProjects(); drawTrees();
 }
 
-/* ---------- 樹木標記：顯示樹木編號 ---------- */
 function drawTrees(){
   treeLayer.clearLayers();
   const list = curProject ? TREES.filter(t=>String(t.project_id)===String(curProject)) : TREES;
@@ -170,13 +166,12 @@ function drawTrees(){
       '<b>DBH:</b> '+(t.dbh||'-')+' cm | <b>Height:</b> '+(t.height||'-')+' m<br>'+
       '<b>Spread:</b> '+(t.spread||'-')+' m<br>'+
       ((t.photo_url && String(t.photo_url).indexOf('...')===-1) ? '<img class="popup-img" src="'+t.photo_url+'"><br>' : '')+
-      '<a href="t.html?id='+encodeURIComponent(t.tree_id)+'">📋 樹木頁（巡查／簽到）</a>');
+      '<a href="t.html?id='+encodeURIComponent(t.tree_id)+'&prj='+encodeURIComponent(t.project_id||'')+'">📋 樹木頁（巡查／簽到）</a>');
   });
   const pname = curProject ? (PROJECTS.find(x=>String(x.project_id)===String(curProject))||{}).name : '全部';
   statusEl.textContent = '✅ 工程：' + pname + '｜顯示 ' + list.length + ' 棵樹';
 }
 
-/* ---------- 面板表單 ---------- */
 function showPanel(html){ $('#panelContent').innerHTML = html; $('#panel').style.display='block'; }
 function closePanel(){ $('#panel').style.display='none'; }
 
