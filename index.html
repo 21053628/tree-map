@@ -7,16 +7,18 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
 <style>
-  html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif}
+  html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif;
+            -webkit-tap-highlight-color:transparent}
   #map{height:100%}
+  button{touch-action:manipulation}
   #bar{position:absolute;top:8px;right:8px;z-index:999;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-  #bar select{padding:8px;border-radius:8px;border:1px solid #bbb;font-size:14px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);max-width:46vw}
-  #bar button{padding:8px 10px;border-radius:8px;border:none;font-size:14px;background:#2e7d32;color:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+  #bar select{padding:10px;border-radius:8px;border:1px solid #bbb;font-size:15px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);max-width:46vw}
+  #bar button{padding:10px 12px;border-radius:8px;border:none;font-size:15px;background:#2e7d32;color:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
   #bar button.blue{background:#1565c0}
   #panel{display:none;position:absolute;top:52px;right:8px;z-index:1000;background:#fff;border-radius:12px;
-         padding:12px;width:270px;box-shadow:0 2px 10px rgba(0,0,0,.3);max-height:80vh;overflow:auto}
-  #panel input,#panel select{width:100%;padding:8px;margin-top:6px;border:1px solid #bbb;border-radius:8px;font-size:14px;box-sizing:border-box}
-  #panel button{width:100%;padding:10px;margin-top:8px;border:none;border-radius:8px;background:#2e7d32;color:#fff;font-size:15px;cursor:pointer}
+         padding:12px;width:290px;box-shadow:0 2px 10px rgba(0,0,0,.3);max-height:80vh;overflow:auto}
+  #panel input,#panel select{width:100%;padding:10px;margin-top:6px;border:1px solid #bbb;border-radius:8px;font-size:15px;box-sizing:border-box}
+  #panel button{width:100%;padding:12px;margin-top:8px;border:none;border-radius:8px;background:#2e7d32;color:#fff;font-size:16px;cursor:pointer}
   #panel .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   #panel .x{background:#90a4ae}
   #status{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:999;background:#fff;
@@ -29,8 +31,26 @@
                  border-radius:10px;border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);margin-bottom:2px;white-space:nowrap}
   .treeIcon .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
   .layerbar{background:#fff;border-radius:10px;padding:4px;display:flex;gap:4px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
-  .layerbar button{border:none;background:#eceff1;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+  .layerbar button{border:none;background:#eceff1;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer}
   .layerbar button.on{background:#4527a0;color:#fff}
+  .leaflet-popup-content{font-size:14px;line-height:1.5}
+  .leaflet-popup-content button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;margin-top:4px}
+
+  /* ---------- 手機優化 ---------- */
+  @media (max-width:600px){
+    #bar{left:8px;right:8px}
+    #bar select{flex:1;max-width:none;font-size:16px}
+    #bar button{flex:1;font-size:15px}
+    /* 表單改底部抽屜 */
+    #panel{position:fixed;top:auto;bottom:0;left:0;right:0;width:auto;max-height:78vh;
+           border-radius:16px 16px 0 0;padding:10px 14px 18px}
+    #panel::before{content:'';display:block;width:44px;height:4px;background:#ccc;border-radius:2px;margin:2px auto 8px}
+    #panel input,#panel select{font-size:16px;padding:12px}   /* 16px 防 iOS 自動放大 */
+    #panel button{padding:14px;font-size:16px}
+    .layerbar button{padding:10px 14px}
+    #status{font-size:12px;bottom:10px;max-width:92%}
+    .legend{font-size:11px;padding:6px 8px}
+  }
 </style>
 </head>
 <body>
@@ -216,13 +236,13 @@ function drawTrees(){
 function showPanel(html){ $('#panelContent').innerHTML = html; $('#panel').style.display='block'; }
 function closePanel(){ $('#panel').style.display='none'; }
 
-/* ---------- 建立地盤（HK80 N/E 輸入） ---------- */
+/* ---------- 建立地盤（HK80 N/E） ---------- */
 function openProjectForm(){
   if(!staffOk()) return;
   showPanel(
     '<b>＋ 建立地盤</b>' +
     '<input id="pName" placeholder="地盤名稱（e.g. Naichung 泥涌）">' +
-    '<div class="row2"><input id="pN" placeholder="HK80 N"><input id="pE" placeholder="HK80 E"></div>' +
+    '<div class="row2"><input id="pN" placeholder="HK80 N" inputmode="decimal"><input id="pE" placeholder="HK80 E" inputmode="decimal"></div>' +
     '<button onclick="doCreateProject()">💾 建立</button>' +
     '<button class="x" onclick="closePanel()">✖ 關閉</button>');
 }
@@ -237,7 +257,7 @@ function doCreateProject(){
   });
 }
 
-/* ---------- 新增樹木（HK80 N/E + Level 輸入） ---------- */
+/* ---------- 新增樹木（HK80 N/E + Level） ---------- */
 function openTreeForm(){
   if(!curProject){ alert('請先選擇地盤'); return; }
   if(!staffOk()) return;
@@ -247,16 +267,16 @@ function openTreeForm(){
     '<input id="tName" placeholder="名稱">' +
     '<input id="tSpecies" placeholder="樹種">' +
     '<select id="tStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
-    '<div class="row2"><input id="tHeight" placeholder="Height (m)"><input id="tSpread" placeholder="Spread (m)"></div>' +
-    '<input id="tDbh" placeholder="DBH (cm)">' +
-    '<div class="row2"><input id="tN" placeholder="HK80 N"><input id="tE" placeholder="HK80 E"></div>' +
-    '<input id="tLevel" placeholder="Level (m)">' +
+    '<div class="row2"><input id="tHeight" placeholder="Height (m)" inputmode="decimal"><input id="tSpread" placeholder="Spread (m)" inputmode="decimal"></div>' +
+    '<input id="tDbh" placeholder="DBH (cm)" inputmode="decimal">' +
+    '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal"><input id="tE" placeholder="HK80 E" inputmode="decimal"></div>' +
+    '<input id="tLevel" placeholder="Level (m)" inputmode="decimal">' +
     '<button onclick="doCreateTree()">💾 建立樹木</button>' +
     '<button class="x" onclick="closePanel()">✖ 關閉</button>');
 }
 function doCreateTree(){
   const N=$('#tN').value, E=$('#tE').value;
-  if(!N||!E){ alert('請填寫 HK80 座標'); return; }
+  if(!N||!E){ alert('請填寫 HK80 座標 N/E'); return; }
   const w = toWGS(N,E);
   if(!w){ alert('HK80 座標轉換失敗'); return; }
   post({type:'create_tree', tree_id:$('#tId').value, project_id:curProject,
