@@ -18,10 +18,20 @@
   #panel button{width:100%;padding:10px;margin-top:8px;border:none;border-radius:8px;background:#2e7d32;color:#fff;font-size:15px;cursor:pointer}
   #panel .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   #panel .x{background:#90a4ae}
-  #status{position:absolute;bottom:24px;left:8px;z-index:999;background:#fff;padding:6px 12px;border-radius:8px;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.2);max-width:85%}
+  #status{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:999;background:#fff;
+          padding:6px 12px;border-radius:8px;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.2);max-width:85%;white-space:nowrap}
   .popup-img{width:160px;border-radius:6px;margin:4px 0}
   .legend{background:#fff;padding:8px 12px;border-radius:8px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.25);line-height:1.7}
   .prjIcon{background:#1565c0;color:#fff;border-radius:6px;padding:2px 6px;font-size:13px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+  /* 樹木編號標記 */
+  .treeIcon{display:flex;flex-direction:column;align-items:center}
+  .treeIcon .lbl{background:#263238;color:#ffd54f;font-weight:bold;font-size:11px;padding:2px 8px;
+                 border-radius:10px;border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);margin-bottom:2px;white-space:nowrap}
+  .treeIcon .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  /* 圖層切換列 */
+  .layerbar{background:#fff;border-radius:10px;padding:4px;display:flex;gap:4px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
+  .layerbar button{border:none;background:#eceff1;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .layerbar button.on{background:#4527a0;color:#fff}
 </style>
 </head>
 <body>
@@ -40,7 +50,6 @@ const STAFF_PASS = 'tree2026';
 const statusEl = document.getElementById('status');
 const $ = function(s){ return document.querySelector(s); };
 
-/* 密碼 30 分鐘有效 */
 function staffOk(){
   const until = +localStorage.getItem('tree_staff_until') || 0;
   if(Date.now() < until) return true;
@@ -54,7 +63,36 @@ function staffOk(){
 
 let PROJECTS=[], TREES=[], curProject='';
 const map = L.map('map').setView([22.5,114.1], 11);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
+
+/* ---------- 免費圖層：衛星／地形／街道 ---------- */
+const baseLayers = {
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+       {attribution:'© Esri World Imagery', maxZoom:19}),
+  topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+       {attribution:'© OpenTopoMap (CC-BY-SA)', maxZoom:17}),
+  street: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+       {attribution:'© OpenStreetMap', maxZoom:19})
+};
+baseLayers.sat.addTo(map);   // 預設衛星
+
+const layerBar = L.control({position:'bottomleft'});
+layerBar.onAdd = function(){
+  const div = L.DomUtil.create('div','layerbar');
+  div.innerHTML = '<button data-l="sat" class="on">衛星</button>' +
+                  '<button data-l="topo">地形</button>' +
+                  '<button data-l="street">街道</button>';
+  L.DomEvent.disableClickPropagation(div);
+  div.querySelectorAll('button').forEach(function(b){
+    b.onclick = function(){
+      Object.keys(baseLayers).forEach(k=>map.removeLayer(baseLayers[k]));
+      baseLayers[b.dataset.l].addTo(map);
+      div.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
+    };
+  });
+  return div;
+};
+layerBar.addTo(map);
+
 const treeLayer = L.layerGroup().addTo(map);
 const prjLayer  = L.layerGroup().addTo(map);
 const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828'};
@@ -89,11 +127,10 @@ function buildSelect(){
   $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
 }
 
-/* 旗標：已選的工程不畫（避免擋住樹木） */
 function drawProjects(){
   prjLayer.clearLayers();
   PROJECTS.forEach(function(p){
-    if(String(p.project_id) === String(curProject)) return;
+    if(String(p.project_id) === String(curProject)) return;  // 到工地後旗標隱藏
     const lat=+p.lat, lng=+p.lng;
     if(!lat||!lng) return;
     const count = TREES.filter(t=>String(t.project_id)===String(p.project_id)).length;
@@ -110,19 +147,23 @@ function selectProject(pid){
   buildSelect();
   if(pid){
     const p = PROJECTS.find(x=>String(x.project_id)===String(pid));
-    if(p) map.flyTo([+p.lat, +p.lng], 17);
+    if(p) map.flyTo([+p.lat, +p.lng], 18);
   }
   drawProjects(); drawTrees();
 }
 
+/* ---------- 樹木標記：顯示樹木編號 ---------- */
 function drawTrees(){
   treeLayer.clearLayers();
   const list = curProject ? TREES.filter(t=>String(t.project_id)===String(curProject)) : TREES;
   list.forEach(function(t){
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
-    L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
-      fillColor:COLORS[t.status]||'#757575',fillOpacity:.9})
+    const color = COLORS[t.status] || '#757575';
+    const html = '<div class="treeIcon"><span class="lbl">' + t.tree_id +
+                 '</span><span class="dot" style="background:' + color + '"></span></div>';
+    L.marker([lat,lng],{icon:L.divIcon({className:'', html:html,
+      iconSize:[70,42], iconAnchor:[35,40], popupAnchor:[0,-34])})
     .addTo(treeLayer).bindPopup(
       '<b>'+t.tree_id+' '+t.name+'</b><br><i>'+t.species+'</i><br>'+
       '<b>Status:</b> '+t.status+'<br>'+

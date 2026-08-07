@@ -35,7 +35,7 @@ const $ = function(s){ return document.querySelector(s); };
 const id = new URLSearchParams(location.search).get('id') || 'A001';
 let TREE = null;
 
-/* 密碼 30 分鐘有效 */
+/* 密碼 30 分鐘有效（地圖頁共用） */
 function staffOk(){
   const until = +localStorage.getItem('tree_staff_until') || 0;
   if(Date.now() < until) return true;
@@ -47,6 +47,16 @@ function staffOk(){
   alert('密碼錯誤'); return false;
 }
 
+/* 本地時間格式化（修正 UTC 顯示問題） */
+function fmtTime(v){
+  const d = new Date(v);
+  if(isNaN(d.getTime())) return String(v).slice(0,16);
+  const p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) +
+         ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+/* ---------- 載入樹木 ---------- */
 fetch(API + '?action=tree&id=' + encodeURIComponent(id))
   .then(function(r){ return r.json(); })
   .then(function(res){
@@ -63,7 +73,6 @@ const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor'
 function render(t){
   const hasPhoto = t.photo_url && String(t.photo_url).indexOf('...') === -1;
   $('#app').innerHTML =
-  '<div class="wrap" style="padding:0">' +
   '<a class="back" href="index.html">⬅ 地圖</a>' +
   '<div class="card">' +
     '<h1>' + t.tree_id + ' ' + t.name + '</h1>' +
@@ -79,11 +88,10 @@ function render(t){
     '<div class="sub" style="margin-top:6px">📍 ' + t.lat + ', ' + t.lng + '</div>' +
   '</div>' +
   '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員</button></div>' +
-  '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>' +
-  '</div>';
+  '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>';
 }
 
-/* 極簡工作人員面板：只有 3 顆按鈕 */
+/* ---------- 工作人員面板（極簡 3 按鈕） ---------- */
 function staffMode(){
   if(!staffOk()) return;
   $('#staffBox').innerHTML =
@@ -103,6 +111,7 @@ function staffMode(){
     '<textarea id="eDesc" rows="2" placeholder="簡介"></textarea>' +
     '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
 
+  /* 帶入現有值 */
   $('#eName').value = TREE.name || '';
   $('#eSpecies').value = TREE.species || '';
   $('#eStatus').value = TREE.status || 'Normal';
@@ -113,6 +122,7 @@ function staffMode(){
   $('#eLng').value = TREE.lng || '';
   $('#eDesc').value = TREE.description || '';
 
+  /* 載入工程下拉選單 */
   fetch(API + '?action=projects').then(function(r){ return r.json(); }).then(function(res){
     const opts = (res.data || []).map(function(p){
       return '<option value="' + p.project_id + '">🚩 ' + p.name + '</option>';
@@ -122,12 +132,14 @@ function staffMode(){
   });
 }
 
+/* ---------- 簽到 ---------- */
 async function checkin(){
   const staff = prompt('工作人員姓名：') || '未填';
   const r = await post({type:'checkin', staff:staff, tree_id:id});
   alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：' + r.error);
 }
 
+/* ---------- 上傳巡查 ---------- */
 async function submitInspection(){
   const staff  = prompt('工作人員姓名：') || '未填';
   const f = $('#photo').files[0];
@@ -138,6 +150,7 @@ async function submitInspection(){
   if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
 }
 
+/* ---------- 儲存樹木資料 ---------- */
 async function saveTreeInfo(){
   const r = await post({type:'update_tree', tree_id:id,
     name:$('#eName').value, species:$('#eSpecies').value, status:$('#eStatus').value,
@@ -148,6 +161,7 @@ async function saveTreeInfo(){
   if(r.ok) setTimeout(function(){ location.reload(); }, 800);
 }
 
+/* ---------- 共用 ---------- */
 function post(payload){
   return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify(payload)}).then(r=>r.json());
@@ -163,6 +177,7 @@ async function compress(file, maxW, q){
   return c.toDataURL('image/jpeg', q).split(',')[1];
 }
 
+/* ---------- 巡查歷史（本地時間） ---------- */
 function loadLogs(){
   fetch(API + '?action=inspections&id=' + encodeURIComponent(id))
     .then(function(r){ return r.json(); })
@@ -171,7 +186,7 @@ function loadLogs(){
       if(!data.length){ $('#logs').innerHTML = '<div class="log">尚無記錄</div>'; return; }
       $('#logs').innerHTML = data.reverse().map(function(r){
         return '<div class="log"><span class="ok">' + r.health + '</span>｜' + r.staff +
-               '｜' + String(r.time).slice(0,16) + '<br>' + (r.note||'') +
+               '｜' + fmtTime(r.time) + '<br>' + (r.note||'') +
                (r.photo_url ? '<img class="tree" src="' + r.photo_url + '">' : '') + '</div>';
       }).join('');
     })
