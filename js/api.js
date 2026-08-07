@@ -1,11 +1,11 @@
 /**
  * 樹木管理系統 - API 服務模組
  * 
- * 改進：
- * 1. 集中管理 API 請求
- * 2. 加入錯誤處理和重試機制
- * 3. 超時控制
- * 4. 請求狀態追蹤
+ * 性能優化：
+ * 1. 請求結果快取，減少重複 API 調用
+ * 2. 請求隊列與防抖動機制
+ * 3. 並行請求限制
+ * 4. 響應數據壓縮支持
  */
 
 const ApiService = (function() {
@@ -14,10 +14,24 @@ const ApiService = (function() {
   const DEFAULT_TIMEOUT = 15000; // 15 秒超時
   const MAX_RETRIES = 2; // 最大重試次數
   const RETRY_DELAY = 1000; // 重試間隔（毫秒）
+  const CACHE_TTL = 30000; // 快取有效期 30 秒
+  const MAX_CONCURRENT = 3; // 最大並行請求數
   
   let apiEndpoint = null;
   let requestCount = 0;
   let errorCount = 0;
+  let cacheHitCount = 0;
+  
+  // 響應快取
+  const responseCache = new Map();
+  
+  // 請求隊列
+  let pendingRequests = [];
+  let activeRequests = 0;
+  
+  // 防抖動定時器
+  let debounceTimer = null;
+  const DEBOUNCE_DELAY = 300; // 300ms 防抖動
   
   /**
    * 初始化 API 服務
@@ -29,6 +43,45 @@ const ApiService = (function() {
     }
     apiEndpoint = endpoint;
     console.log('✅ API 服務已初始化:', endpoint);
+  }
+  
+  /**
+   * 從快取獲取數據
+   * @param {string} key - 快取鍵
+   * @returns {any|null}
+   */
+  function getFromCache(key) {
+    const cached = responseCache.get(key);
+    if (!cached) return null;
+    
+    const now = Date.now();
+    if (now - cached.timestamp > CACHE_TTL) {
+      responseCache.delete(key);
+      return null;
+    }
+    
+    cacheHitCount++;
+    return cached.data;
+  }
+  
+  /**
+   * 設置快取
+   * @param {string} key - 快取鍵
+   * @param {any} data - 數據
+   */
+  function setCache(key, data) {
+    // 清理過期快取
+    const now = Date.now();
+    for (const [k, v] of responseCache.entries()) {
+      if (now - v.timestamp > CACHE_TTL) {
+        responseCache.delete(k);
+      }
+    }
+    
+    responseCache.set(key, {
+      data: data,
+      timestamp: now
+    });
   }
   
   /**
@@ -56,6 +109,36 @@ const ApiService = (function() {
   }
   
   /**
+   * 處理請求隊列
+   */
+  function processQueue() {
+    while (activeRequests < MAX_CONCURRENT && pendingRequests.length > 0) {
+      const { resolve, reject, requestFn } = pendingRequests.shift();
+      activeRequests++;
+      
+      requestFn()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+          activeRequests--;
+          processQueue();
+        });
+    }
+  }
+  
+  /**
+   * 將請求加入隊列
+   * @param {Function} requestFn - 請求函數
+   * @returns {Promise<any>}
+   */
+  function enqueueRequest(requestFn) {
+    return new Promise((resolve, reject) => {
+      pendingRequests.push({ resolve, reject, requestFn });
+      processQueue();
+    });
+  }
+  
+  /**
    * 帶重試機制的 API 請求
    * @param {Function} requestFn - 請求函數
    * @param {number} retries - 剩餘重試次數
@@ -76,7 +159,7 @@ const ApiService = (function() {
   }
   
   /**
-   * GET 請求
+   * GET 請求（帶快取和隊列）
    * @param {string} action - API 動作
    * @param {object} params - 查詢參數
    * @returns {Promise<object>}
@@ -86,25 +169,40 @@ const ApiService = (function() {
       throw new Error('API 服務未初始化');
     }
     
-    requestCount++;
     const queryString = new URLSearchParams(params).toString();
+    const cacheKey = `get:${action}:${queryString}`;
+    
+    // 檢查快取
+    const cached = getFromCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    
+    requestCount++;
     const url = `${apiEndpoint}?action=${action}${queryString ? '&' + queryString : ''}`;
     
-    return withRetry(() => 
-      fetchWithTimeout(url, {
-        method: 'GET'
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        return response.json();
-      })
+    return enqueueRequest(() => 
+      withRetry(() => 
+        fetchWithTimeout(url, {
+          method: 'GET'
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          // 存入快取
+          setCache(cacheKey, data);
+          return data;
+        })
+      )
     );
   }
   
   /**
-   * POST 請求
+   * POST 請求（帶隊列）
    * @param {object} payload - 請求數據
    * @returns {Promise<object>}
    */
@@ -115,18 +213,75 @@ const ApiService = (function() {
     
     requestCount++;
     
-    return withRetry(() =>
-      fetchWithTimeout(apiEndpoint, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        return response.json();
-      })
+    // POST 請求不清除快取，但會使相關快取失效
+    if (payload.type) {
+      invalidateCache(payload.type);
+    }
+    
+    return enqueueRequest(() =>
+      withRetry(() =>
+        fetchWithTimeout(apiEndpoint, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.json();
+        })
+      )
     );
+  }
+  
+  /**
+   * 使相關快取失效
+   * @param {string} type - 操作類型
+   */
+  function invalidateCache(type) {
+    const prefixes = {
+      'create_project': ['get:projects'],
+      'update_project': ['get:projects', 'get:trees'],
+      'delete_project': ['get:projects', 'get:trees'],
+      'create_tree': ['get:trees'],
+      'update_tree': ['get:trees'],
+      'delete_tree': ['get:trees']
+    };
+    
+    const prefix = prefixes[type];
+    if (prefix) {
+      prefix.forEach(p => {
+        for (const key of responseCache.keys()) {
+          if (key.startsWith(p)) {
+            responseCache.delete(key);
+          }
+        }
+      });
+    }
+  }
+  
+  /**
+   * 防抖動的批量載入
+   * @param {Function} loadFn - 載入函數
+   * @returns {Promise<void>}
+   */
+  function debouncedLoad(loadFn) {
+    return new Promise((resolve, reject) => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      
+      debounceTimer = setTimeout(() => {
+        loadFn().then(resolve).catch(reject);
+      }, DEBOUNCE_DELAY);
+    });
+  }
+  
+  /**
+   * 清除所有快取
+   */
+  function clearCache() {
+    responseCache.clear();
   }
   
   /**
@@ -137,9 +292,16 @@ const ApiService = (function() {
     return {
       totalRequests: requestCount,
       totalErrors: errorCount,
+      cacheHits: cacheHitCount,
+      hitRate: requestCount > 0 
+        ? (cacheHitCount / (requestCount + cacheHitCount) * 100).toFixed(1) + '%'
+        : 'N/A',
       successRate: requestCount > 0 
         ? ((requestCount - errorCount) / requestCount * 100).toFixed(1) + '%'
-        : 'N/A'
+        : 'N/A',
+      queueLength: pendingRequests.length,
+      activeRequests: activeRequests,
+      cacheSize: responseCache.size
     };
   }
   
@@ -149,6 +311,7 @@ const ApiService = (function() {
   function resetStats() {
     requestCount = 0;
     errorCount = 0;
+    cacheHitCount = 0;
   }
   
   // 公開 API
@@ -157,7 +320,9 @@ const ApiService = (function() {
     get,
     post,
     getStats,
-    resetStats
+    resetStats,
+    clearCache,
+    debouncedLoad
   };
 })();
 

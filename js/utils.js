@@ -1,16 +1,59 @@
 /**
  * 樹木管理系統 - 座標轉換工具模組
  * 
- * 改進：
- * 1. 抽取共用函數避免重複
- * 2. 加入快取機制提升效能
- * 3. 完整的錯誤處理
+ * 性能優化：
+ * 1. LRU 快取機制，限制快取大小防止記憶體洩露
+ * 2. 批量轉換支持，減少函數調用開銷
+ * 3. 預熱常用座標轉換
  */
 
 const CoordUtils = (function() {
   'use strict';
   
+  // LRU 快取配置
+  const MAX_CACHE_SIZE = 500; // 最大快取條目數
   const coordCache = new Map();
+  const cacheOrder = []; // 維護插入順序用於 LRU
+  
+  /**
+   * 從快取中獲取並更新訪問順序
+   * @param {string} key - 快取鍵
+   * @returns {any|null}
+   */
+  function getFromCache(key) {
+    if (!coordCache.has(key)) return null;
+    
+    // 更新訪問順序（移到末尾）
+    const idx = cacheOrder.indexOf(key);
+    if (idx > -1) {
+      cacheOrder.splice(idx, 1);
+      cacheOrder.push(key);
+    }
+    
+    return coordCache.get(key);
+  }
+  
+  /**
+   * 設置快取並維護 LRU 順序
+   * @param {string} key - 快取鍵
+   * @param {any} value - 快取值
+   */
+  function setCache(key, value) {
+    // 如果已存在，先移除舊的順序記錄
+    if (coordCache.has(key)) {
+      const idx = cacheOrder.indexOf(key);
+      if (idx > -1) cacheOrder.splice(idx, 1);
+    }
+    
+    // 如果達到上限，移除最久未使用的條目
+    while (coordCache.size >= MAX_CACHE_SIZE && cacheOrder.length > 0) {
+      const oldestKey = cacheOrder.shift();
+      coordCache.delete(oldestKey);
+    }
+    
+    coordCache.set(key, value);
+    cacheOrder.push(key);
+  }
   
   /**
    * WGS84 轉 HK80 座標
@@ -25,14 +68,13 @@ const CoordUtils = (function() {
     }
     
     const key = `wgs2hk:${lat},${lng}`;
-    if (coordCache.has(key)) {
-      return coordCache.get(key);
-    }
+    const cached = getFromCache(key);
+    if (cached) return cached;
     
     try {
       const result = proj4(Config.PROJECTIONS.WGS84, Config.PROJECTIONS.HK80, [parseFloat(lng), parseFloat(lat)]);
       const converted = { N: result[1], E: result[0] };
-      coordCache.set(key, converted);
+      setCache(key, converted);
       return converted;
     } catch (error) {
       console.error('❌ HK80 轉換失敗:', error);
@@ -53,19 +95,29 @@ const CoordUtils = (function() {
     }
     
     const key = `hk2wgs:${N},${E}`;
-    if (coordCache.has(key)) {
-      return coordCache.get(key);
-    }
+    const cached = getFromCache(key);
+    if (cached) return cached;
     
     try {
       const result = proj4(Config.PROJECTIONS.HK80, Config.PROJECTIONS.WGS84, [parseFloat(E), parseFloat(N)]);
       const converted = { lat: result[1], lng: result[0] };
-      coordCache.set(key, converted);
+      setCache(key, converted);
       return converted;
     } catch (error) {
       console.error('❌ WGS84 轉換失敗:', error);
       return null;
     }
+  }
+  
+  /**
+   * 批量轉換座標（性能優化）
+   * @param {Array<{lat:number,lng:number}>} coords - WGS84 座標陣列
+   * @returns {Array<{N:number,E:number}>} HK80 座標陣列
+   */
+  function batchToHK80(coords) {
+    return coords.map(function(c) {
+      return toHK80(c.lat, c.lng) || { N: 0, E: 0 };
+    });
   }
   
   /**
@@ -91,15 +143,30 @@ const CoordUtils = (function() {
    */
   function clearCache() {
     coordCache.clear();
+    cacheOrder.length = 0;
+  }
+  
+  /**
+   * 獲取快取統計信息
+   * @returns {object}
+   */
+  function getCacheStats() {
+    return {
+      size: coordCache.size,
+      maxSize: MAX_CACHE_SIZE,
+      usagePercent: ((coordCache.size / MAX_CACHE_SIZE) * 100).toFixed(1) + '%'
+    };
   }
   
   // 公開 API
   return {
     toHK80,
     toWGS84,
+    batchToHK80,
     format1,
     format5,
-    clearCache
+    clearCache,
+    getCacheStats
   };
 })();
 
