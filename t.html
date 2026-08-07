@@ -45,28 +45,47 @@
 <script>if(!window.proj4){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"><\/script>');}</script>
 
 <script>
-const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
-const STAFF_PASS = 'tree2026';
-const $ = function(s){ return document.querySelector(s); };
-
-/* ---------- HK1980 (EPSG:2326) ---------- */
-const HK80  = '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs';
-const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
-function toHK(lat,lng){
-  if(!window.proj4 || !lat || !lng) return null;
-  try{ const r = proj4(WGS84, HK80, [+lng, +lat]); return {N:r[1], E:r[0]}; }catch(e){ return null; }
-}
-function toWGS(N,E){
-  if(!window.proj4) return null;
-  try{ const r = proj4(HK80, WGS84, [+E, +N]); return {lat:r[1], lng:r[0]}; }catch(e){ return null; }
-}
-function f1(n){ return Number(n).toFixed(1); }   // HK80：小數 1 位
-function f5(n){ return Number(n).toFixed(5); }   // WGS84：小數 5 位
-
-const params = new URLSearchParams(location.search);
-const id  = params.get('id') || 'A001';
-const prj = params.get('prj') || '';
-let TREE = null;
+(function(){
+  'use strict';
+  
+  const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
+  const STAFF_PASS = 'tree2026';
+  const $ = function(s){ return document.querySelector(s); };
+  
+  /* ---------- HK1980 (EPSG:2326) ---------- */
+  const HK80  = '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs';
+  const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
+  
+  const coordCache = new Map();
+  function toHK(lat,lng){
+    if(!window.proj4 || !lat || !lng) return null;
+    const key = lat+','+lng;
+    if(coordCache.has(key)) return coordCache.get(key);
+    try{ 
+      const r = proj4(WGS84, HK80, [+lng, +lat]); 
+      const result = {N:r[1], E:r[0]};
+      coordCache.set(key, result);
+      return result;
+    }catch(e){ return null; }
+  }
+  function toWGS(N,E){
+    if(!window.proj4) return null;
+    const key = N+','+E;
+    if(coordCache.has(key)) return coordCache.get(key);
+    try{ 
+      const r = proj4(HK80, WGS84, [+E, +N]); 
+      const result = {lat:r[1], lng:r[0]};
+      coordCache.set(key, result);
+      return result;
+    }catch(e){ return null; }
+  }
+  function f1(n){ return Number(n).toFixed(1); }   // HK80：小數 1 位
+  function f5(n){ return Number(n).toFixed(5); }   // WGS84：小數 5 位
+  
+  const params = new URLSearchParams(location.search);
+  const id  = params.get('id') || 'A001';
+  const prj = params.get('prj') || '';
+  let TREE = null;
 
 function staffOk(){
   const until = +localStorage.getItem('tree_staff_until') || 0;
@@ -240,6 +259,14 @@ function loadLogs(){
     })
     .catch(function(){ $('#logs').innerHTML = '<div class="log">載入失敗</div>'; });
 }
+
+// 暴露全局函數供 HTML onclick 使用
+window.staffMode = staffMode;
+window.checkin = checkin;
+window.submitInspection = submitInspection;
+window.saveTreeInfo = saveTreeInfo;
+
+})();
 </script>
 </body>
 </html>
