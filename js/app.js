@@ -27,6 +27,10 @@ const App = (function() {
   let TREES = [];
   let curProject = '';
   
+  // 標記緩存（性能優化）
+  let projectMarkersCache = null;
+  let treesCache = new Map(); // key: tree_id, value: marker
+  
   // 地圖物件
   let map = null;
   let treeLayer = null;
@@ -157,6 +161,14 @@ const App = (function() {
    */
   function drawProjects() {
     prjLayer.clearLayers();
+    
+    // 如果數據未變，使用緩存
+    const cacheKey = curProject || 'all';
+    if (projectMarkersCache && projectMarkersCache.key === cacheKey) {
+      prjLayer.addLayer(L.layerGroup(projectMarkersCache.markers));
+      return;
+    }
+    
     const markers = [];
     
     PROJECTS.forEach(function(p) {
@@ -186,9 +198,10 @@ const App = (function() {
       markers.push(marker);
     });
     
-    // 批量添加到圖層
+    // 批量添加到圖層並更新緩存
     if (markers.length > 0) {
       prjLayer.addLayer(L.layerGroup(markers));
+      projectMarkersCache = { key: cacheKey, markers: markers };
     }
   }
   
@@ -259,6 +272,7 @@ const App = (function() {
       );
       
       markers.push(marker);
+      treesCache.set(t.tree_id, marker);
     });
     
     // 批量添加到圖層
@@ -435,8 +449,17 @@ const App = (function() {
     doCreateProject,
     openTreeForm,
     doCreateTree,
-    closePanel
+    closePanel,
+    clearCache
   };
+
+  /**
+   * 清除緩存（用於數據更新後）
+   */
+  function clearCache() {
+    projectMarkersCache = null;
+    treesCache.clear();
+  }
 })();
 
 // 啟動應用
