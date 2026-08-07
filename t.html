@@ -349,11 +349,12 @@ function loadLogs(){
       $('#logs').innerHTML = data.reverse().map(function(r){
         var photoHtml = '';
         if(r.photo_url){
+          var timeStr = fmtTime(r.time).replace(/'/g, "\\'").replace(/"/g, '&quot;');
           photoHtml = '<br><img class="tree zoomable-img" src="' + escapeHtml(r.photo_url) + '" loading="lazy" onclick="zoomImage(this.src)" title="點擊放大">' +
-                      '<button style="width:auto;padding:6px 12px;margin-top:6px;font-size:13px;background:#546e7a;color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="downloadPhoto(\'' + escapeHtml(r.photo_url) + '\', \'' + escapeHtml(r.tree_id||id) + '\', \'' + fmtTime(r.time).replace(/'/g,"\\'") + '\')">⬇️ 下載巡查照片</button>';
+                      '<button style="width:auto;padding:6px 12px;margin-top:6px;font-size:13px;background:#546e7a;color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="downloadPhoto(\'' + escapeHtml(r.photo_url) + '\', \'' + escapeHtml(r.tree_id||id) + '\', \'' + timeStr + '\')">⬇️ 下載巡查照片</button>';
         }
         return '<div class="log"><span class="ok">' + escapeHtml(r.health) + '</span>｜' +
-               escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>');
+               escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>';
       }).join('');
     })
     .catch(function(err){ 
