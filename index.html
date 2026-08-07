@@ -46,6 +46,8 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
 <script>if(!window.L){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>');}</script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
+<script>if(!window.proj4){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"><\/script>');}</script>
 
 <script>
 const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
@@ -53,6 +55,19 @@ const STAFF_PASS = 'tree2026';
 const statusEl = document.getElementById('status');
 const $ = function(s){ return document.querySelector(s); };
 const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828'};
+
+/* ---------- HK1980 (EPSG:2326) ---------- */
+const HK80  = '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs';
+const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
+function toHK(lat,lng){
+  if(!window.proj4 || !lat || !lng) return null;
+  try{ const r = proj4(WGS84, HK80, [+lng, +lat]); return {N:r[1], E:r[0]}; }catch(e){ return null; }
+}
+function toWGS(N,E){
+  if(!window.proj4) return null;
+  try{ const r = proj4(HK80, WGS84, [+E, +N]); return {lat:r[1], lng:r[0]}; }catch(e){ return null; }
+}
+function f2(n){ return Number(n).toFixed(2); }
 
 let PROJECTS=[], TREES=[], curProject='';
 let map=null, treeLayer=null, prjLayer=null, baseLayers={};
@@ -148,10 +163,12 @@ function drawProjects(){
     if(String(p.project_id) === String(curProject)) return;
     const lat=+p.lat, lng=+p.lng;
     if(!lat||!lng) return;
+    const hk = toHK(lat,lng);
     const count = TREES.filter(function(t){ return String(t.project_id)===String(p.project_id); }).length;
     L.marker([lat,lng],{icon:L.divIcon({className:'',html:'<div class="prjIcon">🚩</div>',iconSize:[34,24],iconAnchor:[17,12]})})
       .addTo(prjLayer)
       .bindPopup('<b>🚩 '+p.name+'</b><br>此地盤樹木：'+count+' 棵<br>'+
+        (hk ? 'HK80：N '+f2(hk.N)+' / E '+f2(hk.E)+'<br>' : '')+
         '<button onclick="selectProject(\''+p.project_id+'\')">📍 前往地盤查看樹木</button>');
   });
 }
@@ -167,7 +184,6 @@ function selectProject(pid){
   drawProjects(); drawTrees();
 }
 
-/* 樹木：選了地盤才顯示 */
 function drawTrees(){
   treeLayer.clearLayers();
   if(!curProject){
@@ -179,6 +195,7 @@ function drawTrees(){
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
     const color = COLORS[t.status] || '#757575';
+    const hk = toHK(lat,lng);
     const html = '<div class="treeIcon"><span class="lbl">' + t.tree_id +
                  '</span><span class="dot" style="background:' + color + '"></span></div>';
     L.marker([lat,lng],{icon:L.divIcon({className:'', html:html,
@@ -187,7 +204,8 @@ function drawTrees(){
       '<b>'+t.tree_id+' '+t.name+'</b><br><i>'+t.species+'</i><br>'+
       '<b>Status:</b> '+t.status+'<br>'+
       '<b>DBH:</b> '+(t.dbh||'-')+' cm | <b>Height:</b> '+(t.height||'-')+' m<br>'+
-      '<b>Spread:</b> '+(t.spread||'-')+' m<br>'+
+      '<b>Spread:</b> '+(t.spread||'-')+' m | <b>Level:</b> '+(t.level||'-')+' m<br>'+
+      (hk ? '<b>HK80：</b>N '+f2(hk.N)+' / E '+f2(hk.E)+'<br>' : '')+
       ((t.photo_url && String(t.photo_url).indexOf('...')===-1) ? '<img class="popup-img" src="'+t.photo_url+'"><br>' : '')+
       '<a href="t.html?id='+encodeURIComponent(t.tree_id)+'&prj='+encodeURIComponent(t.project_id||'')+'">📋 樹木頁（巡查／簽到）</a>');
   });
@@ -198,25 +216,28 @@ function drawTrees(){
 function showPanel(html){ $('#panelContent').innerHTML = html; $('#panel').style.display='block'; }
 function closePanel(){ $('#panel').style.display='none'; }
 
+/* ---------- 建立地盤（HK80 N/E 輸入） ---------- */
 function openProjectForm(){
   if(!staffOk()) return;
   showPanel(
     '<b>＋ 建立地盤</b>' +
     '<input id="pName" placeholder="地盤名稱（e.g. Naichung 泥涌）">' +
-    '<input id="pLat" placeholder="Latitude（緯度）">' +
-    '<input id="pLng" placeholder="Longitude（經度）">' +
+    '<div class="row2"><input id="pN" placeholder="HK80 N"><input id="pE" placeholder="HK80 E"></div>' +
     '<button onclick="doCreateProject()">💾 建立</button>' +
     '<button class="x" onclick="closePanel()">✖ 關閉</button>');
 }
 function doCreateProject(){
-  const name=$('#pName').value, lat=$('#pLat').value, lng=$('#pLng').value;
-  if(!name||!lat||!lng){ alert('請填寫完整'); return; }
-  post({type:'create_project', name:name, lat:lat, lng:lng}).then(function(r){
+  const name=$('#pName').value, N=$('#pN').value, E=$('#pE').value;
+  if(!name||!N||!E){ alert('請填寫完整'); return; }
+  const w = toWGS(N,E);
+  if(!w){ alert('HK80 座標轉換失敗'); return; }
+  post({type:'create_project', name:name, lat:w.lat.toFixed(6), lng:w.lng.toFixed(6)}).then(function(r){
     alert(r.ok ? '✅ 地盤已建立！' : '❌ ' + r.error);
     if(r.ok){ closePanel(); load(); }
   });
 }
 
+/* ---------- 新增樹木（HK80 N/E + Level 輸入） ---------- */
 function openTreeForm(){
   if(!curProject){ alert('請先選擇地盤'); return; }
   if(!staffOk()) return;
@@ -228,18 +249,20 @@ function openTreeForm(){
     '<select id="tStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
     '<div class="row2"><input id="tHeight" placeholder="Height (m)"><input id="tSpread" placeholder="Spread (m)"></div>' +
     '<input id="tDbh" placeholder="DBH (cm)">' +
-    '<input id="tLat" placeholder="Latitude（緯度）">' +
-    '<input id="tLng" placeholder="Longitude（經度）">' +
+    '<div class="row2"><input id="tN" placeholder="HK80 N"><input id="tE" placeholder="HK80 E"></div>' +
+    '<input id="tLevel" placeholder="Level (m)">' +
     '<button onclick="doCreateTree()">💾 建立樹木</button>' +
     '<button class="x" onclick="closePanel()">✖ 關閉</button>');
 }
 function doCreateTree(){
-  const lat=$('#tLat').value, lng=$('#tLng').value;
-  if(!lat||!lng){ alert('請填寫座標'); return; }
+  const N=$('#tN').value, E=$('#tE').value;
+  if(!N||!E){ alert('請填寫 HK80 座標'); return; }
+  const w = toWGS(N,E);
+  if(!w){ alert('HK80 座標轉換失敗'); return; }
   post({type:'create_tree', tree_id:$('#tId').value, project_id:curProject,
     name:$('#tName').value, species:$('#tSpecies').value, status:$('#tStatus').value,
     height:$('#tHeight').value, spread:$('#tSpread').value, dbh:$('#tDbh').value,
-    lat:lat, lng:lng}).then(function(r){
+    level:$('#tLevel').value, lat:w.lat.toFixed(6), lng:w.lng.toFixed(6)}).then(function(r){
     alert(r.ok ? '✅ 樹木 ' + r.tree_id + ' 已建立' : '❌ ' + r.error);
     if(r.ok){ closePanel(); load(); }
   });

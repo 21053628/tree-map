@@ -35,11 +35,26 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
 <script>if(!window.L){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>');}</script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
+<script>if(!window.proj4){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"><\/script>');}</script>
 
 <script>
 const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
 const STAFF_PASS = 'tree2026';
 const $ = function(s){ return document.querySelector(s); };
+
+/* ---------- HK1980 格網 (EPSG:2326) 轉換 ---------- */
+const HK80  = '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs';
+const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
+function toHK(lat,lng){
+  if(!window.proj4 || !lat || !lng) return null;
+  try{ const r = proj4(WGS84, HK80, [+lng, +lat]); return {N:r[1], E:r[0]}; }catch(e){ return null; }
+}
+function toWGS(N,E){
+  if(!window.proj4) return null;
+  try{ const r = proj4(HK80, WGS84, [+E, +N]); return {lat:r[1], lng:r[0]}; }catch(e){ return null; }
+}
+function f2(n){ return Number(n).toFixed(2); }
 
 const params = new URLSearchParams(location.search);
 const id  = params.get('id') || 'A001';
@@ -80,6 +95,7 @@ const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor'
 
 function render(t){
   const hasPhoto = t.photo_url && String(t.photo_url).indexOf('...') === -1;
+  const hk = toHK(t.lat, t.lng);
   $('#app').innerHTML =
   '<a class="back" href="index.html">⬅ 地圖</a>' +
   '<div class="card">' +
@@ -93,14 +109,14 @@ function render(t){
       '<div>DBH<b>' + (t.dbh||'-') + ' cm</b></div>' +
     '</div>' +
     '<div class="sub" style="margin-top:8px">' + (t.description||'') + '</div>' +
-    '<div class="sub" style="margin-top:6px">📍 GPS：' + t.lat + ', ' + t.lng + '</div>' +
+    '<div class="sub" style="margin-top:6px">📍 <b>HK80：</b>N ' + (hk?f2(hk.N):'—') + ' ／ E ' + (hk?f2(hk.E):'—') + ' ｜ <b>Level：</b>' + (t.level||'-') + ' m</div>' +
+    '<div class="sub">WGS84：' + t.lat + ', ' + t.lng + '</div>' +
     '<div id="minimap"></div>' +
   '</div>' +
   '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員</button></div>' +
   '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>';
 }
 
-/* 迷你地圖：顯示樹木 GPS 位置（政府免費圖資） */
 function initMiniMap(t){
   if(!window.L) return;
   const lat=+t.lat, lng=+t.lng;
@@ -116,6 +132,7 @@ function initMiniMap(t){
 
 function staffMode(){
   if(!staffOk()) return;
+  const hk = toHK(TREE.lat, TREE.lng);
   $('#staffBox').innerHTML =
     '<button onclick="checkin()">✅ 簽到</button>' +
     '<hr><b>巡查記錄</b>' +
@@ -123,13 +140,14 @@ function staffMode(){
     '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
-    '<hr><b>✏️ 樹木資料（含座標／地盤）</b>' +
+    '<hr><b>✏️ 樹木資料（HK80 座標／Level／地盤）</b>' +
     '<div class="row2"><input id="eName" placeholder="名稱"><input id="eSpecies" placeholder="樹種"></div>' +
     '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
     '<select id="eProject"></select>' +
     '<div class="row2"><input id="eHeight" placeholder="Height (m)"><input id="eSpread" placeholder="Spread (m)"></div>' +
     '<input id="eDbh" placeholder="DBH (cm)">' +
-    '<div class="row2"><input id="eLat" placeholder="Latitude"><input id="eLng" placeholder="Longitude"></div>' +
+    '<div class="row2"><input id="eN" placeholder="HK80 N (Northing)"><input id="eE" placeholder="HK80 E (Easting)"></div>' +
+    '<input id="eLevel" placeholder="Level (m，高程)">' +
     '<textarea id="eDesc" rows="2" placeholder="簡介"></textarea>' +
     '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
 
@@ -139,8 +157,9 @@ function staffMode(){
   $('#eHeight').value = TREE.height || '';
   $('#eSpread').value = TREE.spread || '';
   $('#eDbh').value = TREE.dbh || '';
-  $('#eLat').value = TREE.lat || '';
-  $('#eLng').value = TREE.lng || '';
+  $('#eN').value = hk ? f2(hk.N) : '';
+  $('#eE').value = hk ? f2(hk.E) : '';
+  $('#eLevel').value = TREE.level || '';
   $('#eDesc').value = TREE.description || '';
 
   fetch(API + '?action=projects').then(function(r){ return r.json(); }).then(function(res){
@@ -169,11 +188,19 @@ async function submitInspection(){
 }
 
 async function saveTreeInfo(){
+  /* HK80 N/E → WGS84 lat/lng */
+  let lat = TREE.lat, lng = TREE.lng;
+  const N = $('#eN').value, E = $('#eE').value;
+  if(N && E){
+    const w = toWGS(N, E);
+    if(!w){ alert('HK80 座標轉換失敗，請檢查 N/E 數值'); return; }
+    lat = w.lat.toFixed(6); lng = w.lng.toFixed(6);
+  }
   const r = await post({type:'update_tree', tree_id:id, prj:prj,
     name:$('#eName').value, species:$('#eSpecies').value, status:$('#eStatus').value,
     project_id:$('#eProject').value, height:$('#eHeight').value,
-    spread:$('#eSpread').value, dbh:$('#eDbh').value,
-    lat:$('#eLat').value, lng:$('#eLng').value, description:$('#eDesc').value});
+    spread:$('#eSpread').value, dbh:$('#eDbh').value, level:$('#eLevel').value,
+    lat:lat, lng:lng, description:$('#eDesc').value});
   alert(r.ok ? '✅ 已更新！' : '❌ 失敗：' + r.error);
   if(r.ok) setTimeout(function(){ location.reload(); }, 800);
 }
