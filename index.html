@@ -83,7 +83,7 @@ function toWGS(N,E){
   if(!window.proj4) return null;
   try{ const r = proj4(HK80, WGS84, [+E, +N]); return {lat:r[1], lng:r[0]}; }catch(e){ return null; }
 }
-function f2(n){ return Number(n).toFixed(2); }
+function f2(n){ return Number(n).toFixed(1); }   // HK80：小數 1 位
 
 let PROJECTS=[], TREES=[], curProject='';
 let map=null, treeLayer=null, prjLayer=null, baseLayers={};
