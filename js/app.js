@@ -11,8 +11,8 @@
 const App = (function() {
   'use strict';
   
-  // 配置 API 端點
-  const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
+  // 使用 Config 模組中的 API 端點
+  const API_ENDPOINT = Config.API_ENDPOINT;
   
   // 初始化模組
   ApiService.init(API_ENDPOINT);

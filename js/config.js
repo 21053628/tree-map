@@ -9,8 +9,8 @@
 
 // 配置對象 - 應從外部配置文件或環境變數加載
 const Config = {
-  // API 端點配置（應移至後端代理）
-  API_ENDPOINT: null, // 需從外部配置
+  // API 端點配置
+  API_ENDPOINT: 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec',
   
   // 認證配置
   AUTH: {
@@ -51,6 +51,8 @@ function initConfig(apiEndpoint) {
   // 驗證必要配置
   if (!Config.API_ENDPOINT) {
     console.warn('⚠️ API_ENDPOINT 未配置，請在初始化時提供');
+  } else {
+    console.log('✅ API 端點已配置:', Config.API_ENDPOINT);
   }
   
   return Config;
