@@ -1,1 +1,1 @@
-(js/app.js is just a source file modification, no build artifacts, dependencies, or temp files in the changes - so no need for any ignore rules)
+Nothing should be ignored based on the provided file changes. The only modified file is 't.html', which is a source file and should not be added to .gitignore.
