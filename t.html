@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>樹木資訊</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
 <style>
   body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#f1f5f1;color:#222}
   .wrap{max-width:560px;margin:0 auto;padding:14px}
@@ -24,16 +26,21 @@
   .grid b{display:block;color:#2e7d32;font-size:16px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   hr{border:none;border-top:1px dashed #ccc;margin:12px 0}
+  #minimap{height:180px;border-radius:10px;margin-top:8px}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"><div class="card">載入中…</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
+<script>if(!window.L){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>');}</script>
+
 <script>
 const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
 const STAFF_PASS = 'tree2026';
 const $ = function(s){ return document.querySelector(s); };
 
-/* 複合鑰匙：編號 + 工程 */
 const params = new URLSearchParams(location.search);
 const id  = params.get('id') || 'A001';
 const prj = params.get('prj') || '';
@@ -58,13 +65,12 @@ function fmtTime(v){
          ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-/* 載入樹木（帶工程鑰匙） */
 fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
   .then(function(r){ return r.json(); })
   .then(function(res){
     const t = res.data;
     if(!t){ $('#app').innerHTML = '<div class="card">找不到樹木：' + id + '</div>'; return; }
-    TREE = t; render(t); loadLogs();
+    TREE = t; render(t); initMiniMap(t); loadLogs();
   })
   .catch(function(err){
     $('#app').innerHTML = '<div class="card">❌ 後端連線失敗：' + err.message + '</div>';
@@ -87,10 +93,25 @@ function render(t){
       '<div>DBH<b>' + (t.dbh||'-') + ' cm</b></div>' +
     '</div>' +
     '<div class="sub" style="margin-top:8px">' + (t.description||'') + '</div>' +
-    '<div class="sub" style="margin-top:6px">📍 ' + t.lat + ', ' + t.lng + '</div>' +
+    '<div class="sub" style="margin-top:6px">📍 GPS：' + t.lat + ', ' + t.lng + '</div>' +
+    '<div id="minimap"></div>' +
   '</div>' +
   '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員</button></div>' +
   '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>';
+}
+
+/* 迷你地圖：顯示樹木 GPS 位置（政府免費圖資） */
+function initMiniMap(t){
+  if(!window.L) return;
+  const lat=+t.lat, lng=+t.lng;
+  if(!lat||!lng) return;
+  const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
+                 dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
+               .setView([lat,lng], 18);
+  L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+  L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+  L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
+    fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
 }
 
 function staffMode(){
@@ -102,7 +123,7 @@ function staffMode(){
     '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
-    '<hr><b>✏️ 樹木資料（含座標）</b>' +
+    '<hr><b>✏️ 樹木資料（含座標／地盤）</b>' +
     '<div class="row2"><input id="eName" placeholder="名稱"><input id="eSpecies" placeholder="樹種"></div>' +
     '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
     '<select id="eProject"></select>' +
@@ -126,7 +147,7 @@ function staffMode(){
     const opts = (res.data || []).map(function(p){
       return '<option value="' + p.project_id + '">🚩 ' + p.name + '</option>';
     }).join('');
-    $('#eProject').innerHTML = '<option value="">（不屬任何工程）</option>' + opts;
+    $('#eProject').innerHTML = '<option value="">（不屬任何地盤）</option>' + opts;
     $('#eProject').value = TREE.project_id || '';
   });
 }
@@ -159,7 +180,7 @@ async function saveTreeInfo(){
 
 function post(payload){
   return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(payload)}).then(r=>r.json());
+    body:JSON.stringify(payload)}).then(function(r){ return r.json(); });
 }
 
 async function compress(file, maxW, q){

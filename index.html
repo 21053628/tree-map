@@ -36,7 +36,7 @@
 <body>
 <div id="bar">
   <select id="projSel" onchange="selectProject(this.value)"></select>
-  <button class="blue" onclick="openProjectForm()">＋ 建立工程</button>
+  <button class="blue" onclick="openProjectForm()">＋ 建立地盤</button>
   <button id="addTreeBtn" style="display:none" onclick="openTreeForm()">🌳 新增樹木</button>
 </div>
 <div id="panel"><div id="panelContent"></div></div>
@@ -57,7 +57,6 @@ const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor'
 let PROJECTS=[], TREES=[], curProject='';
 let map=null, treeLayer=null, prjLayer=null, baseLayers={};
 
-/* ---------- 初始化地圖（含香港政府免費圖層） ---------- */
 if(window.L){
   map = L.map('map').setView([22.5,114.1], 11);
 
@@ -101,7 +100,7 @@ if(window.L){
   const legend = L.control({position:'bottomright'});
   legend.onAdd = function(){
     const d = L.DomUtil.create('div','legend');
-    d.innerHTML = '<b>🚩 工程｜● Tree Status</b><br><span style="color:#2e7d32">●</span> Normal ' +
+    d.innerHTML = '<b>🚩 地盤｜● Tree Status</b><br><span style="color:#2e7d32">●</span> Normal ' +
       '<span style="color:#f9a825">●</span> Fair <span style="color:#ef6c00">●</span> Poor ' +
       '<span style="color:#c62828">●</span> Very Poor';
     return d;
@@ -113,7 +112,6 @@ if(window.L){
   statusEl.textContent = '❌ 地圖元件載入失敗：請檢查網路後重新整理';
 }
 
-/* ---------- 密碼 30 分鐘 ---------- */
 function staffOk(){
   const until = +localStorage.getItem('tree_staff_until') || 0;
   if(Date.now() < until) return true;
@@ -125,7 +123,6 @@ function staffOk(){
   alert('密碼錯誤'); return false;
 }
 
-/* ---------- 載入資料 ---------- */
 function load(){
   Promise.all([
     fetch(API+'?action=projects').then(function(r){ return r.json(); }),
@@ -139,13 +136,12 @@ function load(){
 
 function buildSelect(){
   const sel = $('#projSel');
-  sel.innerHTML = '<option value="">🗂️ 全部工程</option>' +
+  sel.innerHTML = '<option value="">🗂️ 全部地盤</option>' +
     PROJECTS.map(function(p){ return '<option value="'+p.project_id+'">🚩 '+p.name+'</option>'; }).join('');
   sel.value = curProject;
   $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
 }
 
-/* ---------- 工程旗標 ---------- */
 function drawProjects(){
   prjLayer.clearLayers();
   PROJECTS.forEach(function(p){
@@ -155,8 +151,8 @@ function drawProjects(){
     const count = TREES.filter(function(t){ return String(t.project_id)===String(p.project_id); }).length;
     L.marker([lat,lng],{icon:L.divIcon({className:'',html:'<div class="prjIcon">🚩</div>',iconSize:[34,24],iconAnchor:[17,12]})})
       .addTo(prjLayer)
-      .bindPopup('<b>🚩 '+p.name+'</b><br>此工程樹木：'+count+' 棵<br>'+
-        '<button onclick="selectProject(\''+p.project_id+'\')">📍 前往工地查看樹木</button>');
+      .bindPopup('<b>🚩 '+p.name+'</b><br>此地盤樹木：'+count+' 棵<br>'+
+        '<button onclick="selectProject(\''+p.project_id+'\')">📍 前往地盤查看樹木</button>');
   });
 }
 
@@ -171,10 +167,14 @@ function selectProject(pid){
   drawProjects(); drawTrees();
 }
 
-/* ---------- 樹木標記（編號氣球） ---------- */
+/* 樹木：選了地盤才顯示 */
 function drawTrees(){
   treeLayer.clearLayers();
-  const list = curProject ? TREES.filter(function(t){ return String(t.project_id)===String(curProject); }) : TREES;
+  if(!curProject){
+    statusEl.textContent = '👉 請先選擇地盤，即可查看樹木';
+    return;
+  }
+  const list = TREES.filter(function(t){ return String(t.project_id)===String(curProject); });
   list.forEach(function(t){
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
@@ -191,19 +191,18 @@ function drawTrees(){
       ((t.photo_url && String(t.photo_url).indexOf('...')===-1) ? '<img class="popup-img" src="'+t.photo_url+'"><br>' : '')+
       '<a href="t.html?id='+encodeURIComponent(t.tree_id)+'&prj='+encodeURIComponent(t.project_id||'')+'">📋 樹木頁（巡查／簽到）</a>');
   });
-  const pname = curProject ? (PROJECTS.find(function(x){ return String(x.project_id)===String(curProject); })||{}).name : '全部';
-  statusEl.textContent = '✅ 工程：' + pname + '｜顯示 ' + list.length + ' 棵樹';
+  const pname = (PROJECTS.find(function(x){ return String(x.project_id)===String(curProject); })||{}).name;
+  statusEl.textContent = '✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹';
 }
 
-/* ---------- 面板表單 ---------- */
 function showPanel(html){ $('#panelContent').innerHTML = html; $('#panel').style.display='block'; }
 function closePanel(){ $('#panel').style.display='none'; }
 
 function openProjectForm(){
   if(!staffOk()) return;
   showPanel(
-    '<b>＋ 建立工程</b>' +
-    '<input id="pName" placeholder="工程名稱（e.g. Naichung 泥涌）">' +
+    '<b>＋ 建立地盤</b>' +
+    '<input id="pName" placeholder="地盤名稱（e.g. Naichung 泥涌）">' +
     '<input id="pLat" placeholder="Latitude（緯度）">' +
     '<input id="pLng" placeholder="Longitude（經度）">' +
     '<button onclick="doCreateProject()">💾 建立</button>' +
@@ -213,13 +212,13 @@ function doCreateProject(){
   const name=$('#pName').value, lat=$('#pLat').value, lng=$('#pLng').value;
   if(!name||!lat||!lng){ alert('請填寫完整'); return; }
   post({type:'create_project', name:name, lat:lat, lng:lng}).then(function(r){
-    alert(r.ok ? '✅ 工程已建立！' : '❌ ' + r.error);
+    alert(r.ok ? '✅ 地盤已建立！' : '❌ ' + r.error);
     if(r.ok){ closePanel(); load(); }
   });
 }
 
 function openTreeForm(){
-  if(!curProject){ alert('請先選擇工程'); return; }
+  if(!curProject){ alert('請先選擇地盤'); return; }
   if(!staffOk()) return;
   showPanel(
     '<b>🌳 新增樹木</b>' +
