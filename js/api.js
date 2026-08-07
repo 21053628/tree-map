@@ -92,8 +92,7 @@ const ApiService = (function() {
     
     return withRetry(() => 
       fetchWithTimeout(url, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        method: 'GET'
       })
       .then(response => {
         if (!response.ok) {
@@ -119,7 +118,6 @@ const ApiService = (function() {
     return withRetry(() =>
       fetchWithTimeout(apiEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       })
       .then(response => {
