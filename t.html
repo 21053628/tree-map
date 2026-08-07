@@ -96,7 +96,7 @@ fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURICom
     $('#app').innerHTML = '<div class="card">❌ 後端連線失敗：' + err.message + '</div>';
   });
 
-const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828'};
+const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828','Dead':'#424242'};
 
 function render(t){
   const hasPhoto = t.photo_url && String(t.photo_url).indexOf('...') === -1;
@@ -140,14 +140,14 @@ function staffMode(){
   const hk = toHK(TREE.lat, TREE.lng);
   $('#staffBox').innerHTML =
     '<button onclick="checkin()">✅ 簽到</button>' +
-    '<hr><b>巡查記錄</b>' +
-    '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
+    '<hr><b>巡查記錄（狀態會自動同步樹木資料）</b>' +
+    '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
     '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
     '<hr><b>✏️ 樹木資料（HK80 座標／Level／地盤）</b>' +
     '<div class="row2"><input id="eName" placeholder="名稱"><input id="eSpecies" placeholder="樹種"></div>' +
-    '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
+    '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
     '<select id="eProject"></select>' +
     '<div class="row2"><input id="eHeight" placeholder="Height (m)" inputmode="decimal"><input id="eSpread" placeholder="Spread (m)" inputmode="decimal"></div>' +
     '<input id="eDbh" placeholder="DBH (cm)" inputmode="decimal">' +
@@ -188,7 +188,7 @@ async function submitInspection(){
   const b64 = f ? await compress(f) : '';
   const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
     health:$('#health').value, note:$('#note').value, photo_base64:b64});
-  alert(r.ok ? '✅ 已上傳！主照片已自動更新' : '❌ 失敗：' + r.error);
+  alert(r.ok ? '✅ 已上傳！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
   if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
 }
 

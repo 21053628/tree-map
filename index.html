@@ -35,17 +35,14 @@
   .layerbar button.on{background:#4527a0;color:#fff}
   .leaflet-popup-content{font-size:14px;line-height:1.5}
   .leaflet-popup-content button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;margin-top:4px}
-
-  /* ---------- 手機優化 ---------- */
   @media (max-width:600px){
     #bar{left:8px;right:8px}
     #bar select{flex:1;max-width:none;font-size:16px}
     #bar button{flex:1;font-size:15px}
-    /* 表單改底部抽屜 */
     #panel{position:fixed;top:auto;bottom:0;left:0;right:0;width:auto;max-height:78vh;
            border-radius:16px 16px 0 0;padding:10px 14px 18px}
     #panel::before{content:'';display:block;width:44px;height:4px;background:#ccc;border-radius:2px;margin:2px auto 8px}
-    #panel input,#panel select{font-size:16px;padding:12px}   /* 16px 防 iOS 自動放大 */
+    #panel input,#panel select{font-size:16px;padding:12px}
     #panel button{padding:14px;font-size:16px}
     .layerbar button{padding:10px 14px}
     #status{font-size:12px;bottom:10px;max-width:92%}
@@ -74,9 +71,8 @@ const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877
 const STAFF_PASS = 'tree2026';
 const statusEl = document.getElementById('status');
 const $ = function(s){ return document.querySelector(s); };
-const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828'};
+const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828','Dead':'#424242'};
 
-/* ---------- HK1980 (EPSG:2326) ---------- */
 const HK80  = '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs';
 const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
 function toHK(lat,lng){
@@ -135,9 +131,10 @@ if(window.L){
   const legend = L.control({position:'bottomright'});
   legend.onAdd = function(){
     const d = L.DomUtil.create('div','legend');
-    d.innerHTML = '<b>🚩 地盤｜● Tree Status</b><br><span style="color:#2e7d32">●</span> Normal ' +
-      '<span style="color:#f9a825">●</span> Fair <span style="color:#ef6c00">●</span> Poor ' +
-      '<span style="color:#c62828">●</span> Very Poor';
+    d.innerHTML = '<b>🚩 地盤｜● Tree Status</b><br>' +
+      '<span style="color:#2e7d32">●</span> Normal <span style="color:#f9a825">●</span> Fair ' +
+      '<span style="color:#ef6c00">●</span> Poor <span style="color:#c62828">●</span> Very Poor ' +
+      '<span style="color:#424242">●</span> Dead';
     return d;
   };
   legend.addTo(map);
@@ -236,7 +233,6 @@ function drawTrees(){
 function showPanel(html){ $('#panelContent').innerHTML = html; $('#panel').style.display='block'; }
 function closePanel(){ $('#panel').style.display='none'; }
 
-/* ---------- 建立地盤（HK80 N/E） ---------- */
 function openProjectForm(){
   if(!staffOk()) return;
   showPanel(
@@ -257,7 +253,6 @@ function doCreateProject(){
   });
 }
 
-/* ---------- 新增樹木（HK80 N/E + Level） ---------- */
 function openTreeForm(){
   if(!curProject){ alert('請先選擇地盤'); return; }
   if(!staffOk()) return;
@@ -266,7 +261,7 @@ function openTreeForm(){
     '<input id="tId" placeholder="樹木編號（留空自動）">' +
     '<input id="tName" placeholder="名稱">' +
     '<input id="tSpecies" placeholder="樹種">' +
-    '<select id="tStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
+    '<select id="tStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
     '<div class="row2"><input id="tHeight" placeholder="Height (m)" inputmode="decimal"><input id="tSpread" placeholder="Spread (m)" inputmode="decimal"></div>' +
     '<input id="tDbh" placeholder="DBH (cm)" inputmode="decimal">' +
     '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal"><input id="tE" placeholder="HK80 E" inputmode="decimal"></div>' +
