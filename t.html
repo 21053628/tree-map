@@ -14,8 +14,8 @@
   img.tree{width:100%;border-radius:10px;margin-top:8px}
   button{width:100%;padding:12px;border:none;border-radius:10px;background:#2e7d32;color:#fff;font-size:16px;margin-top:8px;cursor:pointer}
   button.sec{background:#546e7a}
-  a.back{display:block;text-align:center;background:#37474f;color:#fff;text-decoration:none;
-         padding:10px;border-radius:10px;margin-bottom:12px;font-size:15px}
+  a.back{display:inline-block;background:#37474f;color:#fff;text-decoration:none;
+         padding:6px 12px;border-radius:8px;margin-bottom:10px;font-size:13px}
   select,textarea,input{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;font-size:15px;margin-top:8px;box-sizing:border-box}
   .log{font-size:13px;color:#444;border-top:1px dashed #ccc;padding:6px 0}
   .ok{color:#2e7d32;font-weight:bold}
@@ -23,6 +23,7 @@
   .grid div{background:#f8fafc;padding:8px;border-radius:6px;text-align:center;font-size:13px}
   .grid b{display:block;color:#2e7d32;font-size:16px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  hr{border:none;border-top:1px dashed #ccc;margin:12px 0}
 </style>
 </head>
 <body>
@@ -30,16 +31,22 @@
 <script>
 const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
 const STAFF_PASS = 'tree2026';
-
-const id = new URLSearchParams(location.search).get('id') || 'A001';
-let myLat=null, myLng=null, TREE=null;
-navigator.geolocation.getCurrentPosition(
-  function(p){myLat=p.coords.latitude; myLng=p.coords.longitude;},
-  function(){}, {enableHighAccuracy:true, timeout:8000});
-
 const $ = function(s){ return document.querySelector(s); };
+const id = new URLSearchParams(location.search).get('id') || 'A001';
+let TREE = null;
 
-/* ---------- 載入樹木 ---------- */
+/* 密碼 30 分鐘有效 */
+function staffOk(){
+  const until = +localStorage.getItem('tree_staff_until') || 0;
+  if(Date.now() < until) return true;
+  const p = prompt('請輸入工作人員密碼：');
+  if(p === STAFF_PASS){
+    localStorage.setItem('tree_staff_until', Date.now() + 30*60*1000);
+    return true;
+  }
+  alert('密碼錯誤'); return false;
+}
+
 fetch(API + '?action=tree&id=' + encodeURIComponent(id))
   .then(function(r){ return r.json(); })
   .then(function(res){
@@ -56,7 +63,8 @@ const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor'
 function render(t){
   const hasPhoto = t.photo_url && String(t.photo_url).indexOf('...') === -1;
   $('#app').innerHTML =
-  '<a class="back" href="index.html">⬅️ 返回地圖</a>' +
+  '<div class="wrap" style="padding:0">' +
+  '<a class="back" href="index.html">⬅ 地圖</a>' +
   '<div class="card">' +
     '<h1>' + t.tree_id + ' ' + t.name + '</h1>' +
     '<div class="sub"><i>' + t.species + '</i></div>' +
@@ -70,45 +78,41 @@ function render(t){
     '<div class="sub" style="margin-top:8px">' + (t.description||'') + '</div>' +
     '<div class="sub" style="margin-top:6px">📍 ' + t.lat + ', ' + t.lng + '</div>' +
   '</div>' +
-  '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員模式</button></div>' +
-  '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>';
+  '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員</button></div>' +
+  '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>' +
+  '</div>';
 }
 
-/* ---------- 工作人員模式 ---------- */
+/* 極簡工作人員面板：只有 3 顆按鈕 */
 function staffMode(){
-  if(prompt('請輸入工作人員密碼：') !== STAFF_PASS){ alert('密碼錯誤'); return; }
+  if(!staffOk()) return;
   $('#staffBox').innerHTML =
-    '<button onclick="checkin()">✅ 簽到（記錄人員／時間／GPS）</button>' +
+    '<button onclick="checkin()">✅ 簽到</button>' +
     '<hr><b>巡查記錄</b>' +
     '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
-    '<textarea id="note" rows="2" placeholder="備註：病蟲害、傾斜、需修剪等"></textarea>' +
+    '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
-    '<label style="display:block;margin-top:8px;font-size:14px"><input type="checkbox" id="updateLoc" style="width:auto"> 同時使用目前 GPS 更新樹木座標</label>' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
-    '<hr><b>✏️ 更新樹木資料</b>' +
+    '<hr><b>✏️ 樹木資料（含座標）</b>' +
     '<div class="row2"><input id="eName" placeholder="名稱"><input id="eSpecies" placeholder="樹種"></div>' +
     '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
     '<select id="eProject"></select>' +
     '<div class="row2"><input id="eHeight" placeholder="Height (m)"><input id="eSpread" placeholder="Spread (m)"></div>' +
     '<input id="eDbh" placeholder="DBH (cm)">' +
+    '<div class="row2"><input id="eLat" placeholder="Latitude"><input id="eLng" placeholder="Longitude"></div>' +
     '<textarea id="eDesc" rows="2" placeholder="簡介"></textarea>' +
-    '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>' +
-    '<hr><b>📍 修正樹木座標 (Manual write in)</b>' +
-    '<input type="text" id="mLat" placeholder="Latitude (緯度)">' +
-    '<input type="text" id="mLng" placeholder="Longitude (經度)">' +
-    '<button class="sec" onclick="fillCurrentGPS()">⬇️ 帶入目前手機 GPS</button>' +
-    '<button onclick="saveLocation()">💾 儲存新座標</button>';
+    '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
 
-  /* 帶入現有值 */
   $('#eName').value = TREE.name || '';
   $('#eSpecies').value = TREE.species || '';
   $('#eStatus').value = TREE.status || 'Normal';
   $('#eHeight').value = TREE.height || '';
   $('#eSpread').value = TREE.spread || '';
   $('#eDbh').value = TREE.dbh || '';
+  $('#eLat').value = TREE.lat || '';
+  $('#eLng').value = TREE.lng || '';
   $('#eDesc').value = TREE.description || '';
 
-  /* 載入工程下拉選單 */
   fetch(API + '?action=projects').then(function(r){ return r.json(); }).then(function(res){
     const opts = (res.data || []).map(function(p){
       return '<option value="' + p.project_id + '">🚩 ' + p.name + '</option>';
@@ -118,58 +122,35 @@ function staffMode(){
   });
 }
 
-/* ---------- 簽到 ---------- */
 async function checkin(){
   const staff = prompt('工作人員姓名：') || '未填';
-  const r = await post({type:'checkin', staff:staff, tree_id:id, lat:myLat, lng:myLng});
+  const r = await post({type:'checkin', staff:staff, tree_id:id});
   alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：' + r.error);
 }
 
-/* ---------- 上傳巡查 ---------- */
 async function submitInspection(){
   const staff  = prompt('工作人員姓名：') || '未填';
-  const health = $('#health').value;
-  const note   = $('#note').value;
-  const f      = $('#photo').files[0];
-  const b64    = f ? await compress(f) : '';
-  const updateLoc = $('#updateLoc').checked;
-  const r = await post({type:'inspection', staff:staff, tree_id:id, health:health,
-                        note:note, lat:myLat, lng:myLng,
-                        photo_base64:b64, update_location:updateLoc});
+  const f = $('#photo').files[0];
+  const b64 = f ? await compress(f) : '';
+  const r = await post({type:'inspection', staff:staff, tree_id:id,
+    health:$('#health').value, note:$('#note').value, photo_base64:b64});
   alert(r.ok ? '✅ 已上傳！主照片已自動更新' : '❌ 失敗：' + r.error);
   if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
 }
 
-/* ---------- 儲存樹木資料 ---------- */
 async function saveTreeInfo(){
   const r = await post({type:'update_tree', tree_id:id,
     name:$('#eName').value, species:$('#eSpecies').value, status:$('#eStatus').value,
-    project_id:$('#eProject').value,
-    height:$('#eHeight').value, spread:$('#eSpread').value, dbh:$('#eDbh').value,
-    description:$('#eDesc').value});
-  alert(r.ok ? '✅ 樹木資料已更新！' : '❌ 失敗：' + r.error);
+    project_id:$('#eProject').value, height:$('#eHeight').value,
+    spread:$('#eSpread').value, dbh:$('#eDbh').value,
+    lat:$('#eLat').value, lng:$('#eLng').value, description:$('#eDesc').value});
+  alert(r.ok ? '✅ 已更新！' : '❌ 失敗：' + r.error);
   if(r.ok) setTimeout(function(){ location.reload(); }, 800);
 }
 
-/* ---------- 座標 ---------- */
-async function saveLocation(){
-  const lat = $('#mLat').value, lng = $('#mLng').value;
-  if(!lat || !lng){ alert('請輸入完整的經緯度'); return; }
-  const r = await post({type:'update_location', tree_id:id, lat:lat, lng:lng});
-  alert(r.ok ? '✅ 座標已更新！' : '❌ 失敗：' + r.error);
-  if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
-}
-
-function fillCurrentGPS(){
-  if(myLat && myLng){ $('#mLat').value = myLat; $('#mLng').value = myLng; }
-  else alert('無法取得目前 GPS，請確認已開啟定位權限');
-}
-
-/* ---------- 共用 ---------- */
 function post(payload){
-  return fetch(API, {method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(payload)}).then(function(r){ return r.json(); });
+  return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(payload)}).then(r=>r.json());
 }
 
 async function compress(file, maxW, q){
