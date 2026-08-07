@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>樹木互動地圖</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<!-- Leaflet CSS：主 CDN + 備援 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
 <style>
   html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif}
   #map{height:100%}
@@ -28,7 +30,7 @@
                  border-radius:10px;border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);margin-bottom:2px;white-space:nowrap}
   .treeIcon .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
   .layerbar{background:#fff;border-radius:10px;padding:4px;display:flex;gap:4px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
-  .layerbar button{border:none;background:#eceff1;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .layerbar button{border:none;background:#eceff1;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
   .layerbar button.on{background:#4527a0;color:#fff}
 </style>
 </head>
@@ -41,12 +43,26 @@
 <div id="panel"><div id="panelContent"></div></div>
 <div id="status">🗺️ 載入中…</div>
 <div id="map"></div>
+
+<!-- Leaflet JS：三重 CDN 備援 -->
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
+<script>if(!window.L){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>');}</script>
+
 <script>
 const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
 const STAFF_PASS = 'tree2026';
 const statusEl = document.getElementById('status');
 const $ = function(s){ return document.querySelector(s); };
+
+/* 地圖元件完全載入不到 → 顯示明確錯誤，不再空白卡死 */
+if(!window.L){
+  statusEl.textContent = '❌ 地圖元件載入失敗：請檢查網路後重新整理';
+}else{
+  init();
+}
+
+function init(){
 
 function staffOk(){
   const until = +localStorage.getItem('tree_staff_until') || 0;
@@ -62,20 +78,27 @@ function staffOk(){
 let PROJECTS=[], TREES=[], curProject='';
 const map = L.map('map').setView([22.5,114.1], 11);
 
+/* ---------- 圖層：香港政府(預設)／衛星／地形／街道 ---------- */
+const hkBase  = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
+                {attribution:'© 地政總署 LandsD HKSAR', maxZoom:19});
+const hkLabel = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',
+                {maxZoom:19});
 const baseLayers = {
-  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-       {attribution:'© Esri World Imagery', maxZoom:19}),
-  topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-       {attribution:'© OpenTopoMap (CC-BY-SA)', maxZoom:17}),
+  hk:     L.layerGroup([hkBase, hkLabel]),
+  sat:    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            {attribution:'© Esri World Imagery', maxZoom:19}),
+  topo:   L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+            {attribution:'© OpenTopoMap (CC-BY-SA)', maxZoom:17}),
   street: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-       {attribution:'© OpenStreetMap', maxZoom:19})
+            {attribution:'© OpenStreetMap', maxZoom:19})
 };
-baseLayers.sat.addTo(map);
+baseLayers.hk.addTo(map);   // 預設：香港政府地圖
 
 const layerBar = L.control({position:'bottomleft'});
 layerBar.onAdd = function(){
   const div = L.DomUtil.create('div','layerbar');
-  div.innerHTML = '<button data-l="sat" class="on">衛星</button>' +
+  div.innerHTML = '<button data-l="hk" class="on">政府</button>' +
+                  '<button data-l="sat">衛星</button>' +
                   '<button data-l="topo">地形</button>' +
                   '<button data-l="street">街道</button>';
   L.DomEvent.disableClickPropagation(div);
@@ -226,6 +249,8 @@ function post(payload){
   return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify(payload)}).then(r=>r.json());
 }
+
+} /* init() 結束 */
 </script>
 </body>
 </html>
