@@ -79,8 +79,8 @@
   function f5(n){ return Number(n).toFixed(5); }
   
   const params = new URLSearchParams(location.search);
-  const id  = params.get('id') || 'A001';
-  const prj = params.get('prj') || '';
+  const id  = params.get('id') || params.get('tree_id') || 'A001';
+  const prj = params.get('prj') || params.get('project_id') || '';
   let TREE = null;
 
 function staffOk(){
