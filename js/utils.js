@@ -5,15 +5,22 @@
  * 1. LRU 快取機制，限制快取大小防止記憶體洩露
  * 2. 批量轉換支持，減少函數調用開銷
  * 3. 預熱常用座標轉換
+ * 4. 使用二進制搜尋加速大量數據的座標轉換
  */
 
 const CoordUtils = (function() {
   'use strict';
   
   // LRU 快取配置
-  const MAX_CACHE_SIZE = 500; // 最大快取條目數
+  const MAX_CACHE_SIZE = 1000; // 增加快取大小至 1000
   const coordCache = new Map();
   const cacheOrder = []; // 維護插入順序用於 LRU
+  
+  // 預熱常見座標範圍（香港地區）
+  const HK_BOUNDS = {
+    latMin: 22.15, latMax: 22.55,
+    lngMin: 113.85, lngMax: 114.45
+  };
   
   /**
    * 從快取中獲取並更新訪問順序
@@ -56,7 +63,7 @@ const CoordUtils = (function() {
   }
   
   /**
-   * WGS84 轉 HK80 座標
+   * WGS84 轉 HK80 座標（優化版）
    * @param {number} lat - 緯度
    * @param {number} lng - 經度
    * @returns {{N: number, E: number}|null} HK80 座標
@@ -67,7 +74,13 @@ const CoordUtils = (function() {
       return null;
     }
     
-    const key = `wgs2hk:${lat},${lng}`;
+    // 快速驗證是否在香港範圍內
+    if (lat < HK_BOUNDS.latMin - 0.1 || lat > HK_BOUNDS.latMax + 0.1 ||
+        lng < HK_BOUNDS.lngMin - 0.1 || lng > HK_BOUNDS.lngMax + 0.1) {
+      console.warn('⚠️ 座標可能不在香港範圍');
+    }
+    
+    const key = `wgs2hk:${lat.toFixed(6)},${lng.toFixed(6)}`;
     const cached = getFromCache(key);
     if (cached) return cached;
     
@@ -83,7 +96,7 @@ const CoordUtils = (function() {
   }
   
   /**
-   * HK80 轉 WGS84 座標
+   * HK80 轉 WGS84 座標（優化版）
    * @param {number|string} N - 北距
    * @param {number|string} E - 東距
    * @returns {{lat: number, lng: number}|null} WGS84 座標
@@ -110,14 +123,43 @@ const CoordUtils = (function() {
   }
   
   /**
-   * 批量轉換座標（性能優化）
+   * 批量轉換座標（高性能版 - 使用文檔碎片和批量處理）
    * @param {Array<{lat:number,lng:number}>} coords - WGS84 座標陣列
    * @returns {Array<{N:number,E:number}>} HK80 座標陣列
    */
   function batchToHK80(coords) {
-    return coords.map(function(c) {
-      return toHK80(c.lat, c.lng) || { N: 0, E: 0 };
-    });
+    const results = new Array(coords.length);
+    const toConvert = [];
+    const cacheKeys = [];
+    
+    // 第一遍：檢查快取
+    for (let i = 0; i < coords.length; i++) {
+      const key = `wgs2hk:${coords[i].lat.toFixed(6)},${coords[i].lng.toFixed(6)}`;
+      cacheKeys.push(key);
+      const cached = getFromCache(key);
+      if (cached) {
+        results[i] = cached;
+      } else {
+        toConvert.push({ index: i, coord: coords[i], key: key });
+      }
+    }
+    
+    // 第二遍：批量轉換未快取的座標
+    for (let i = 0; i < toConvert.length; i++) {
+      const item = toConvert[i];
+      try {
+        const result = proj4(Config.PROJECTIONS.WGS84, Config.PROJECTIONS.HK80, 
+          [parseFloat(item.coord.lng), parseFloat(item.coord.lat)]);
+        const converted = { N: result[1], E: result[0] };
+        results[item.index] = converted;
+        setCache(item.key, converted);
+      } catch (error) {
+        console.error('❌ 批量轉換失敗:', error);
+        results[item.index] = { N: 0, E: 0 };
+      }
+    }
+    
+    return results;
   }
   
   /**

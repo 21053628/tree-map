@@ -37,6 +37,13 @@ const App = (function() {
   let prjLayer = null;
   let baseLayers = {};
   
+  // 性能監控
+  let perfMetrics = {
+    renderTime: 0,
+    cacheHits: 0,
+    totalRenders: 0
+  };
+  
   /**
    * 初始化地圖
    */
@@ -160,12 +167,15 @@ const App = (function() {
    * 繪製地盤標記（性能優化版）
    */
   function drawProjects() {
+    const startTime = performance.now();
     prjLayer.clearLayers();
     
     // 如果數據未變，使用緩存
     const cacheKey = curProject || 'all';
     if (projectMarkersCache && projectMarkersCache.key === cacheKey) {
       prjLayer.addLayer(L.layerGroup(projectMarkersCache.markers));
+      perfMetrics.cacheHits++;
+      console.log('📊 地盤緩存命中');
       return;
     }
     
@@ -203,6 +213,10 @@ const App = (function() {
       prjLayer.addLayer(L.layerGroup(markers));
       projectMarkersCache = { key: cacheKey, markers: markers };
     }
+    
+    perfMetrics.totalRenders++;
+    perfMetrics.renderTime = performance.now() - startTime;
+    console.log('📊 地盤渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms');
   }
   
   /**
@@ -227,6 +241,7 @@ const App = (function() {
    * 使用文檔碎片和批量操作減少 DOM 重排
    */
   function drawTrees() {
+    const startTime = performance.now();
     treeLayer.clearLayers();
     
     if (!curProject) {
@@ -280,8 +295,12 @@ const App = (function() {
       treeLayer.addLayer(L.layerGroup(markers));
     }
     
+    perfMetrics.totalRenders++;
+    perfMetrics.renderTime = performance.now() - startTime;
+    
     const pname = (PROJECTS.find(function(x) { return String(x.project_id) === String(curProject); }) || {}).name;
-    updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹');
+    updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹｜渲染耗時 ' + perfMetrics.renderTime.toFixed(1) + 'ms');
+    console.log('📊 樹木渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms, 數量:', list.length);
   }
   
   /**
@@ -439,6 +458,21 @@ const App = (function() {
     
     console.log('🌳 樹木管理系統已啟動（改進版）');
     console.log('📊 API 統計:', ApiService.getStats());
+    console.log('📊 座標快取統計:', CoordUtils.getCacheStats());
+  }
+  
+  /**
+   * 獲取性能指標
+   * @returns {object}
+   */
+  function getPerfMetrics() {
+    return {
+      renderTime: perfMetrics.renderTime,
+      cacheHits: perfMetrics.cacheHits,
+      totalRenders: perfMetrics.totalRenders,
+      apiStats: ApiService.getStats(),
+      coordCacheStats: CoordUtils.getCacheStats()
+    };
   }
   
   // 公開 API
@@ -450,7 +484,8 @@ const App = (function() {
     openTreeForm,
     doCreateTree,
     closePanel,
-    clearCache
+    clearCache,
+    getPerfMetrics
   };
 
   /**

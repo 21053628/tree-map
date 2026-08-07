@@ -6,6 +6,8 @@
  * 2. 請求隊列與防抖動機制
  * 3. 並行請求限制
  * 4. 響應數據壓縮支持
+ * 5. 增加快取 TTL 至 60 秒
+ * 6. 提高並行請求數至 5
  */
 
 const ApiService = (function() {
@@ -14,8 +16,8 @@ const ApiService = (function() {
   const DEFAULT_TIMEOUT = 15000; // 15 秒超時
   const MAX_RETRIES = 2; // 最大重試次數
   const RETRY_DELAY = 1000; // 重試間隔（毫秒）
-  const CACHE_TTL = 30000; // 快取有效期 30 秒
-  const MAX_CONCURRENT = 3; // 最大並行請求數
+  const CACHE_TTL = 60000; // 快取有效期 60 秒（增加至 60 秒）
+  const MAX_CONCURRENT = 5; // 最大並行請求數（增加至 5）
   
   let apiEndpoint = null;
   let requestCount = 0;
