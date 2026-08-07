@@ -146,6 +146,8 @@ const App = (function() {
       
       const stats = ApiService.getStats();
       console.log('✅ 資料載入完成', stats);
+      // 返回 Promise 以便鏈式調用
+      return Promise.resolve();
     } catch (error) {
       updateStatus('❌ 後端連線失敗：' + error.message);
       console.error('載入失敗:', error);
@@ -453,12 +455,71 @@ const App = (function() {
     statusEl = document.getElementById('status');
     
     if (initMap()) {
-      load();
+      load().then(function() {
+        // 檢查 URL 是否有 tree_id 參數（來自 NFC 掃描）
+        checkURLParams();
+      });
     }
     
     console.log('🌳 樹木管理系統已啟動（改進版）');
     console.log('📊 API 統計:', ApiService.getStats());
     console.log('📊 座標快取統計:', CoordUtils.getCacheStats());
+  }
+  
+  /**
+   * 檢查 URL 參數，支援 NFC 掃描跳轉
+   */
+  function checkURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    const treeId = params.get('tree_id');
+    const projectId = params.get('project_id');
+    
+    if (treeId) {
+      // 如果有 tree_id 參數，自動定位到該樹木
+      setTimeout(function() {
+        locateTree(treeId, projectId);
+      }, 500);
+    }
+  }
+  
+  /**
+   * 定位到特定樹木
+   */
+  function locateTree(treeId, projectId) {
+    // 如果提供了 project_id，先選擇地盤
+    if (projectId && String(curProject) !== String(projectId)) {
+      selectProject(projectId);
+    }
+    
+    // 尋找樹木
+    const tree = TREES.find(function(t) { return String(t.tree_id) === String(treeId); });
+    if (!tree) {
+      updateStatus('❌ 找不到樹木：' + treeId);
+      return;
+    }
+    
+    // 如果樹木不在當前選中的地盤，切換到該地盤
+    if (String(tree.project_id) !== String(curProject)) {
+      selectProject(tree.project_id);
+    }
+    
+    // 飛到樹木位置
+    map.flyTo([+tree.lat, +tree.lng], 19);
+    
+    // 找到對應的 marker 並開啟 popup
+    const marker = treesCache.get(treeId);
+    if (marker) {
+      setTimeout(function() {
+        marker.openPopup();
+        updateStatus('✅ 已定位到樹木：' + treeId);
+      }, 1000);
+    }
+    
+    // 清除 URL 參數（避免重新整理時重複執行）
+    if (window.history && window.history.replaceState) {
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    }
   }
   
   /**
@@ -485,7 +546,8 @@ const App = (function() {
     doCreateTree,
     closePanel,
     clearCache,
-    getPerfMetrics
+    getPerfMetrics,
+    locateTree
   };
 
   /**
