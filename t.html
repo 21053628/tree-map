@@ -14,23 +14,26 @@
   img.tree{width:100%;border-radius:10px;margin-top:8px}
   button{width:100%;padding:12px;border:none;border-radius:10px;background:#2e7d32;color:#fff;font-size:16px;margin-top:8px;cursor:pointer}
   button.sec{background:#546e7a}
+  a.back{display:block;text-align:center;background:#37474f;color:#fff;text-decoration:none;
+         padding:10px;border-radius:10px;margin-bottom:12px;font-size:15px}
   select,textarea,input{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;font-size:15px;margin-top:8px;box-sizing:border-box}
   .log{font-size:13px;color:#444;border-top:1px dashed #ccc;padding:6px 0}
   .ok{color:#2e7d32;font-weight:bold}
   .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
   .grid div{background:#f8fafc;padding:8px;border-radius:6px;text-align:center;font-size:13px}
   .grid b{display:block;color:#2e7d32;font-size:16px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"><div class="card">載入中…</div></div>
 <script>
-const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec'; // ← 確認這是你的網址
-const STAFF_PASS = 'tree2026'; 
+const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
+const STAFF_PASS = 'tree2026';
 
 const id = new URLSearchParams(location.search).get('id') || 'A001';
-let myLat=null, myLng=null;
-navigator.geolocation.getCurrentPosition(p=>{myLat=p.coords.latitude; myLng=p.coords.longitude;},()=>{},{enableHighAccuracy:true, timeout:8000});
+let myLat=null, myLng=null, TREE=null;
+navigator.geolocation.getCurrentPosition(p=>{myLat=p.coords.latitude;myLng=p.coords.longitude;},()=>{},{enableHighAccuracy:true,timeout:8000});
 
 const $ = s => document.querySelector(s);
 
@@ -38,7 +41,7 @@ fetch(API + '?action=tree&id=' + encodeURIComponent(id))
   .then(r=>r.json()).then(res=>{
     const t = res.data;
     if(!t){ $('#app').innerHTML = '<div class="card">找不到樹木編號：' + id + '</div>'; return; }
-    render(t); loadLogs();
+    TREE = t; render(t); loadLogs();
   }).catch(err=>{ $('#app').innerHTML = '<div class="card">❌ 後端連線失敗：' + err.message + '</div>'; });
 
 const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828'};
@@ -46,6 +49,7 @@ const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor'
 function render(t){
   const hasPhoto = t.photo_url && String(t.photo_url).indexOf('...') === -1;
   $('#app').innerHTML =
+  '<a class="back" href="index.html">⬅️ 返回地圖</a>' +
   '<div class="card">' +
     '<h1>' + t.tree_id + ' ' + t.name + '</h1>' +
     '<div class="sub"><i>' + t.species + '</i></div>' +
@@ -71,13 +75,39 @@ function staffMode(){
     '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
     '<textarea id="note" rows="2" placeholder="備註：病蟲害、傾斜、需修剪等"></textarea>' +
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
-    '<label style="display:block;margin-top:8px;font-size:14px"><input type="checkbox" id="updateLoc"> 同時使用目前 GPS 更新樹木座標</label>' +
+    '<label style="display:block;margin-top:8px;font-size:14px"><input type="checkbox" id="updateLoc" style="width:auto"> 同時使用目前 GPS 更新樹木座標</label>' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
+    '<hr><b>✏️ 更新樹木資料</b>' +
+    '<div class="row2"><input id="eName" placeholder="名稱"><input id="eSpecies" placeholder="樹種"></div>' +
+    '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
+    '<div class="row2"><input id="eHeight" placeholder="Height (m)"><input id="eSpread" placeholder="Spread (m)"></div>' +
+    '<input id="eDbh" placeholder="DBH (cm)">' +
+    '<textarea id="eDesc" rows="2" placeholder="簡介"></textarea>' +
+    '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>' +
     '<hr><b>📍 修正樹木座標 (Manual write in)</b>' +
     '<input type="text" id="mLat" placeholder="Latitude (緯度)">' +
     '<input type="text" id="mLng" placeholder="Longitude (經度)">' +
     '<button class="sec" onclick="fillCurrentGPS()">⬇️ 帶入目前手機 GPS</button>' +
     '<button onclick="saveLocation()">💾 儲存新座標</button>';
+
+  /* 帶入目前資料，方便修改 */
+  $('#eName').value = TREE.name || '';
+  $('#eSpecies').value = TREE.species || '';
+  $('#eStatus').value = TREE.status || 'Normal';
+  $('#eHeight').value = TREE.height || '';
+  $('#eSpread').value = TREE.spread || '';
+  $('#eDbh').value = TREE.dbh || '';
+  $('#eDesc').value = TREE.description || '';
+}
+
+/* 【新增】儲存樹木資料 */
+async function saveTreeInfo(){
+  const r = await post({type:'update_tree', tree_id:id,
+    name:$('#eName').value, species:$('#eSpecies').value, status:$('#eStatus').value,
+    height:$('#eHeight').value, spread:$('#eSpread').value, dbh:$('#eDbh').value,
+    description:$('#eDesc').value});
+  alert(r.ok ? '✅ 樹木資料已更新！' : '❌ 失敗：' + r.error);
+  if(r.ok) setTimeout(()=>location.reload(), 800);
 }
 
 async function checkin(){
@@ -93,17 +123,14 @@ async function submitInspection(){
   const f      = $('#photo').files[0];
   const b64    = f ? await compress(f) : '';
   const updateLoc = $('#updateLoc').checked;
-  
   const r = await post({type:'inspection', staff, tree_id:id, health, note,
                         lat:myLat, lng:myLng, photo_base64:b64, update_location:updateLoc});
-  alert(r.ok ? '✅ 已上傳！(若勾選更新座標/有新照片，資料庫已自動同步)' : '❌ 失敗：' + r.error);
-  if(r.ok) setTimeout(()=>location.reload(), 1000); // 重新整理以顯示最新照片
+  alert(r.ok ? '✅ 已上傳！' : '❌ 失敗：' + r.error);
+  if(r.ok) setTimeout(()=>location.reload(), 1000);
 }
 
-// 手動儲存座標
 async function saveLocation(){
-  const lat = $('#mLat').value;
-  const lng = $('#mLng').value;
+  const lat = $('#mLat').value, lng = $('#mLng').value;
   if(!lat || !lng){ alert('請輸入完整的經緯度'); return; }
   const r = await post({type:'update_location', tree_id:id, lat, lng});
   alert(r.ok ? '✅ 座標已更新！' : '❌ 失敗：' + r.error);
@@ -111,14 +138,13 @@ async function saveLocation(){
 }
 
 function fillCurrentGPS(){
-  if(myLat && myLng){
-    $('#mLat').value = myLat;
-    $('#mLng').value = myLng;
-  } else { alert('無法取得目前 GPS，請確認已開啟定位權限'); }
+  if(myLat && myLng){ $('#mLat').value = myLat; $('#mLng').value = myLng; }
+  else alert('無法取得目前 GPS，請確認已開啟定位權限');
 }
 
 function post(payload){
-  return fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload)}).then(r=>r.json());
+  return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(payload)}).then(r=>r.json());
 }
 
 async function compress(file, maxW, q){
@@ -126,9 +152,9 @@ async function compress(file, maxW, q){
   const img = await createImageBitmap(file);
   const s = Math.min(1, maxW / img.width);
   const c = document.createElement('canvas');
-  c.width = img.width * s; c.height = img.height * s;
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', q).split(',')[1];
+  c.width = img.width*s; c.height = img.height*s;
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',q).split(',')[1];
 }
 
 function loadLogs(){
@@ -136,12 +162,12 @@ function loadLogs(){
     .then(r=>r.json()).then(res=>{
       const data = res.data || [];
       if(!data.length){ $('#logs').innerHTML = '<div class="log">尚無記錄</div>'; return; }
-      $('#logs').innerHTML = data.reverse().map(r=>{
+      $('#logs').innerHTML = data.reverse().map(function(r){
         return '<div class="log"><span class="ok">' + r.health + '</span>｜' + r.staff +
                '｜' + String(r.time).slice(0,16) + '<br>' + (r.note||'') +
                (r.photo_url ? '<img class="tree" src="' + r.photo_url + '">' : '') + '</div>';
       }).join('');
-    });
+    }).catch(function(){ $('#logs').innerHTML = '<div class="log">載入失敗</div>'; });
 }
 </script>
 </body>
