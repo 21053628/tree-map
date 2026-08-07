@@ -288,13 +288,6 @@ async function submitInspection(){
     const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
       health:$('#health').value, note:$('#note').value, photo_base64:b64});
     alert(r.ok ? '✅ 已上傳！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
-    if(r.ok && f){
-      // 提供巡查照片下載
-      const link = document.createElement('a');
-      link.href = 'data:image/jpeg;base64,' + b64;
-      link.download = 'inspection_' + id + '_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.jpg';
-      link.click();
-    }
     if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
   } catch(err) {
     console.error('Submit inspection error:', err);
@@ -354,9 +347,13 @@ function loadLogs(){
       const data = res.data || [];
       if(!data.length){ $('#logs').innerHTML = '<div class="log">尚無記錄</div>'; return; }
       $('#logs').innerHTML = data.reverse().map(function(r){
-        return '<div class="log"><span class="ok">' + escapeHtml(r.health) + '</span>｜' + 
-               escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') +
-               (r.photo_url ? '<img class="tree zoomable-img" src="' + escapeHtml(r.photo_url) + '" loading="lazy" onclick="zoomImage(this.src)" title="點擊放大">' : '') + '</div>';
+        var photoHtml = '';
+        if(r.photo_url){
+          photoHtml = '<br><img class="tree zoomable-img" src="' + escapeHtml(r.photo_url) + '" loading="lazy" onclick="zoomImage(this.src)" title="點擊放大">' +
+                      '<button style="width:auto;padding:6px 12px;margin-top:6px;font-size:13px;background:#546e7a;color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="downloadPhoto(\'' + escapeHtml(r.photo_url) + '\', \'' + escapeHtml(r.tree_id||id) + '\', \'' + fmtTime(r.time).replace(/'/g,"\\'") + '\')">⬇️ 下載巡查照片</button>';
+        }
+        return '<div class="log"><span class="ok">' + escapeHtml(r.health) + '</span>｜' +
+               escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>');
       }).join('');
     })
     .catch(function(err){ 
@@ -381,6 +378,23 @@ window.zoomImage = function(src){
 
 window.closeZoom = function(){
   document.getElementById('imgModal').classList.remove('show');
+};
+
+// 下載巡查照片功能
+window.downloadPhoto = function(url, treeId, timeStr){
+  fetch(url)
+    .then(function(r){ return r.blob(); })
+    .then(function(blob){
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'inspection_' + treeId + '_' + timeStr.replace(/[: ]/g,'-') + '.jpg';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    })
+    .catch(function(err){
+      console.error('Download error:', err);
+      alert('❌ 下載失敗：' + err.message);
+    });
 };
 
 })();
