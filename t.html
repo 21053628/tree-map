@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>樹木資訊</title>
+<style>
+  body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#f1f5f1;color:#222}
+  .wrap{max-width:560px;margin:0 auto;padding:14px}
+  .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:#666;font-size:13px}
+  .badge{display:inline-block;padding:2px 10px;border-radius:999px;color:#fff;font-size:12px}
+  img.tree{width:100%;border-radius:10px;margin-top:8px}
+  button{width:100%;padding:12px;border:none;border-radius:10px;background:#2e7d32;
+         color:#fff;font-size:16px;margin-top:8px;cursor:pointer}
+  button.sec{background:#546e7a}
+  select,textarea,input{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;
+         font-size:15px;margin-top:8px;box-sizing:border-box}
+  .log{font-size:13px;color:#444;border-top:1px dashed #ccc;padding:6px 0}
+  .ok{color:#2e7d32;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="card">載入中…</div></div>
+<script>
+/* ===== 設定 ===== */
+const API = 'https://script.google.com/macros/s/XXXX/exec'; // ← 換成你的 /exec 網址
+const STAFF_PASS = 'tree2026';                              // ← 工作人員密碼，自行修改
+
+const id = new URLSearchParams(location.search).get('id') || 'A001';
+let myLat=null, myLng=null;
+navigator.geolocation.getCurrentPosition(
+  p=>{myLat=p.coords.latitude; myLng=p.coords.longitude;},
+  ()=>{}, {enableHighAccuracy:true, timeout:8000});
+
+const $ = s => document.querySelector(s);
+
+/* 載入樹木資料 */
+fetch(`${API}?action=tree&id=${encodeURIComponent(id)}`)
+  .then(r=>r.json())
+  .then(({data:t})=>{
+    if(!t){ $('#app').innerHTML = `<div class="card">找不到樹木編號：${id}</div>`; return; }
+    render(t); loadLogs();
+  });
+
+const badgeColor = s => s==='正常' ? '#2e7d32' : s==='注意' ? '#f9a825' : '#c62828';
+
+function render(t){
+  $('#app').innerHTML = `
+  <div class="card">
+    <h1>${t.tree_id} ${t.name}</h1>
+    <div class="sub"><i>${t.species}</i></div>
+    <div style="margin-top:8px">
+      <span class="badge" style="background:${badgeColor(t.status)}">狀態：${t.status}</span>
+      <span class="badge" style="background:#607d8b">風險：${t.risk}</span>
+    </div>
+    <div class="sub" style="margin-top:8px">${t.description||''}</div>
+    ${t.photo_url && !t.photo_url.includes('...') ? `<img class="tree" src="${t.photo_url}">` : ''}
+    <div class="sub" style="margin-top:6px">📍 ${t.lat}, ${t.lng}</div>
+  </div>
+  <div class="card" id="staffBox">
+    <button class="sec" onclick="staffMode()">🔑 工作人員模式（簽到／巡查）</button>
+  </div>
+  <div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>`;
+}
+
+/* ===== 工作人員模式 ===== */
+function staffMode(){
+  if(prompt('請輸入工作人員密碼：') !== STAFF_PASS){ alert('密碼錯誤'); return; }
+  $('#staffBox').innerHTML = `
+    <button onclick="checkin()">✅ 簽到（記錄人員／時間／GPS）</button>
+    <hr>
+    <b>巡查記錄</b>
+    <select id="health"><option>正常</option><option>注意</option><option>異常</option></select>
+    <textarea id="note" rows="2" placeholder="備註：病蟲害、傾斜、需修剪等"></textarea>
+    <input type="file" id="photo" accept="image/*" capture="environment">
+    <button onclick="submitInspection()">📤 上傳巡查記錄</button>`;
+}
+
+/* 簽到 */
+async function checkin(){
+  const staff = prompt('工作人員姓名：') || '未填';
+  const r = await post({type:'checkin', staff, tree_id:id, lat:myLat, lng:myLng});
+  alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：'+r.error);
+}
+
+/* 上傳巡查 */
+async function submitInspection(){
+  const staff  = prompt('工作人員姓名：') || '未填';
+  const health = $('#health').value;
+  const note   = $('#note').value;
+  const f      = $('#photo').files[0];
+  const b64    = f ? await compress(f) : '';
+  const r = await post({type:'inspection', staff, tree_id:id, health, note,
+                        lat:myLat, lng:myLng, photo_base64:b64});
+  alert(r.ok ? '✅ 已上傳！照片已存入 Tree Photo 資料夾' : '❌ 失敗：'+r.error);
+  if(r.ok) loadLogs();
+}
+
+/* POST（text/plain 避免 CORS preflight） */
+function post(payload){
+  return fetch(API,{method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)}).then(r=>r.json());
+}
+
+/* 照片壓縮 → base64 */
+async function compress(file, maxW=1200, q=.8){
+  const img = await createImageBitmap(file);
+  const s = Math.min(1, maxW/img.width);
+  const c = document.createElement('canvas');
+  c.width = img.width*s; c.height = img.height*s;
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',q).split(',')[1];
+}
+
+/* 巡查歷史 */
+function loadLogs(){
+  fetch(`${API}?action=inspections&id=${encodeURIComponent(id)}`)
+    .then(r=>r.json()).then(({data})=>{
+      if(!data.length){ $('#logs').innerHTML='<div class="log">尚無記錄</div>'; return; }
+      $('#logs').innerHTML = data.reverse().map(r=>`
+        <div class="log"><span class="ok">${r.health}</span>｜${r.staff}｜${String(r.time).slice(0,16)}<br>
+        ${r.note||''}
+        ${r.photo_url ? `<img class="tree" src="${r.photo_url}">` : ''}</div>`).join('');
+    });
+}
+</script>
+</body>
+</html>
