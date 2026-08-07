@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>樹木互動地圖</title>
-<!-- Leaflet CSS：主 CDN + 備援 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
 <style>
@@ -44,7 +43,6 @@
 <div id="status">🗺️ 載入中…</div>
 <div id="map"></div>
 
-<!-- Leaflet JS：三重 CDN 備援 -->
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
 <script>if(!window.L){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>');}</script>
@@ -54,16 +52,68 @@ const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877
 const STAFF_PASS = 'tree2026';
 const statusEl = document.getElementById('status');
 const $ = function(s){ return document.querySelector(s); };
+const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828'};
 
-/* 地圖元件完全載入不到 → 顯示明確錯誤，不再空白卡死 */
-if(!window.L){
-  statusEl.textContent = '❌ 地圖元件載入失敗：請檢查網路後重新整理';
+let PROJECTS=[], TREES=[], curProject='';
+let map=null, treeLayer=null, prjLayer=null, baseLayers={};
+
+/* ---------- 初始化地圖（含香港政府免費圖層） ---------- */
+if(window.L){
+  map = L.map('map').setView([22.5,114.1], 11);
+
+  const hkBase = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
+                 {attribution:'© 地政總署 LandsD HKSAR', maxZoom:19});
+  const hkLabel = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',
+                 {maxZoom:19});
+  baseLayers = {
+    hk:     L.layerGroup([hkBase, hkLabel]),
+    sat:    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+              {attribution:'© Esri World Imagery', maxZoom:19}),
+    topo:   L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+              {attribution:'© OpenTopoMap (CC-BY-SA)', maxZoom:17}),
+    street: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              {attribution:'© OpenStreetMap', maxZoom:19})
+  };
+  baseLayers.hk.addTo(map);
+
+  const layerBar = L.control({position:'bottomleft'});
+  layerBar.onAdd = function(){
+    const div = L.DomUtil.create('div','layerbar');
+    div.innerHTML = '<button data-l="hk" class="on">政府</button>' +
+                    '<button data-l="sat">衛星</button>' +
+                    '<button data-l="topo">地形</button>' +
+                    '<button data-l="street">街道</button>';
+    L.DomEvent.disableClickPropagation(div);
+    div.querySelectorAll('button').forEach(function(b){
+      b.onclick = function(){
+        Object.keys(baseLayers).forEach(function(k){ map.removeLayer(baseLayers[k]); });
+        baseLayers[b.dataset.l].addTo(map);
+        div.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
+      };
+    });
+    return div;
+  };
+  layerBar.addTo(map);
+
+  treeLayer = L.layerGroup().addTo(map);
+  prjLayer  = L.layerGroup().addTo(map);
+
+  const legend = L.control({position:'bottomright'});
+  legend.onAdd = function(){
+    const d = L.DomUtil.create('div','legend');
+    d.innerHTML = '<b>🚩 工程｜● Tree Status</b><br><span style="color:#2e7d32">●</span> Normal ' +
+      '<span style="color:#f9a825">●</span> Fair <span style="color:#ef6c00">●</span> Poor ' +
+      '<span style="color:#c62828">●</span> Very Poor';
+    return d;
+  };
+  legend.addTo(map);
+
+  load();
 }else{
-  init();
+  statusEl.textContent = '❌ 地圖元件載入失敗：請檢查網路後重新整理';
 }
 
-function init(){
-
+/* ---------- 密碼 30 分鐘 ---------- */
 function staffOk(){
   const until = +localStorage.getItem('tree_staff_until') || 0;
   if(Date.now() < until) return true;
@@ -75,63 +125,11 @@ function staffOk(){
   alert('密碼錯誤'); return false;
 }
 
-let PROJECTS=[], TREES=[], curProject='';
-const map = L.map('map').setView([22.5,114.1], 11);
-
-/* ---------- 圖層：香港政府(預設)／衛星／地形／街道 ---------- */
-const hkBase  = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
-                {attribution:'© 地政總署 LandsD HKSAR', maxZoom:19});
-const hkLabel = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',
-                {maxZoom:19});
-const baseLayers = {
-  hk:     L.layerGroup([hkBase, hkLabel]),
-  sat:    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            {attribution:'© Esri World Imagery', maxZoom:19}),
-  topo:   L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-            {attribution:'© OpenTopoMap (CC-BY-SA)', maxZoom:17}),
-  street: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            {attribution:'© OpenStreetMap', maxZoom:19})
-};
-baseLayers.hk.addTo(map);   // 預設：香港政府地圖
-
-const layerBar = L.control({position:'bottomleft'});
-layerBar.onAdd = function(){
-  const div = L.DomUtil.create('div','layerbar');
-  div.innerHTML = '<button data-l="hk" class="on">政府</button>' +
-                  '<button data-l="sat">衛星</button>' +
-                  '<button data-l="topo">地形</button>' +
-                  '<button data-l="street">街道</button>';
-  L.DomEvent.disableClickPropagation(div);
-  div.querySelectorAll('button').forEach(function(b){
-    b.onclick = function(){
-      Object.keys(baseLayers).forEach(k=>map.removeLayer(baseLayers[k]));
-      baseLayers[b.dataset.l].addTo(map);
-      div.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
-    };
-  });
-  return div;
-};
-layerBar.addTo(map);
-
-const treeLayer = L.layerGroup().addTo(map);
-const prjLayer  = L.layerGroup().addTo(map);
-const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828'};
-
-const legend = L.control({position:'bottomright'});
-legend.onAdd = function(){
-  const d = L.DomUtil.create('div','legend');
-  d.innerHTML = '<b>🚩 工程｜● Tree Status</b><br><span style="color:#2e7d32">●</span> Normal '+
-    '<span style="color:#f9a825">●</span> Fair <span style="color:#ef6c00">●</span> Poor '+
-    '<span style="color:#c62828">●</span> Very Poor';
-  return d;
-};
-legend.addTo(map);
-
-load();
+/* ---------- 載入資料 ---------- */
 function load(){
   Promise.all([
-    fetch(API+'?action=projects').then(r=>r.json()),
-    fetch(API+'?action=trees').then(r=>r.json())
+    fetch(API+'?action=projects').then(function(r){ return r.json(); }),
+    fetch(API+'?action=trees').then(function(r){ return r.json(); })
   ]).then(function(res){
     PROJECTS = res[0].data || [];
     TREES = res[1].data || [];
@@ -142,18 +140,19 @@ function load(){
 function buildSelect(){
   const sel = $('#projSel');
   sel.innerHTML = '<option value="">🗂️ 全部工程</option>' +
-    PROJECTS.map(p=>'<option value="'+p.project_id+'">🚩 '+p.name+'</option>').join('');
+    PROJECTS.map(function(p){ return '<option value="'+p.project_id+'">🚩 '+p.name+'</option>'; }).join('');
   sel.value = curProject;
   $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
 }
 
+/* ---------- 工程旗標 ---------- */
 function drawProjects(){
   prjLayer.clearLayers();
   PROJECTS.forEach(function(p){
     if(String(p.project_id) === String(curProject)) return;
     const lat=+p.lat, lng=+p.lng;
     if(!lat||!lng) return;
-    const count = TREES.filter(t=>String(t.project_id)===String(p.project_id)).length;
+    const count = TREES.filter(function(t){ return String(t.project_id)===String(p.project_id); }).length;
     L.marker([lat,lng],{icon:L.divIcon({className:'',html:'<div class="prjIcon">🚩</div>',iconSize:[34,24],iconAnchor:[17,12]})})
       .addTo(prjLayer)
       .bindPopup('<b>🚩 '+p.name+'</b><br>此工程樹木：'+count+' 棵<br>'+
@@ -166,15 +165,16 @@ function selectProject(pid){
   map.closePopup();
   buildSelect();
   if(pid){
-    const p = PROJECTS.find(x=>String(x.project_id)===String(pid));
+    const p = PROJECTS.find(function(x){ return String(x.project_id)===String(pid); });
     if(p) map.flyTo([+p.lat, +p.lng], 18);
   }
   drawProjects(); drawTrees();
 }
 
+/* ---------- 樹木標記（編號氣球） ---------- */
 function drawTrees(){
   treeLayer.clearLayers();
-  const list = curProject ? TREES.filter(t=>String(t.project_id)===String(curProject)) : TREES;
+  const list = curProject ? TREES.filter(function(t){ return String(t.project_id)===String(curProject); }) : TREES;
   list.forEach(function(t){
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
@@ -182,7 +182,7 @@ function drawTrees(){
     const html = '<div class="treeIcon"><span class="lbl">' + t.tree_id +
                  '</span><span class="dot" style="background:' + color + '"></span></div>';
     L.marker([lat,lng],{icon:L.divIcon({className:'', html:html,
-      iconSize:[70,42], iconAnchor:[35,40], popupAnchor:[0,-34])})
+      iconSize:[70,42], iconAnchor:[35,40], popupAnchor:[0,-34]})})
     .addTo(treeLayer).bindPopup(
       '<b>'+t.tree_id+' '+t.name+'</b><br><i>'+t.species+'</i><br>'+
       '<b>Status:</b> '+t.status+'<br>'+
@@ -191,10 +191,11 @@ function drawTrees(){
       ((t.photo_url && String(t.photo_url).indexOf('...')===-1) ? '<img class="popup-img" src="'+t.photo_url+'"><br>' : '')+
       '<a href="t.html?id='+encodeURIComponent(t.tree_id)+'&prj='+encodeURIComponent(t.project_id||'')+'">📋 樹木頁（巡查／簽到）</a>');
   });
-  const pname = curProject ? (PROJECTS.find(x=>String(x.project_id)===String(curProject))||{}).name : '全部';
+  const pname = curProject ? (PROJECTS.find(function(x){ return String(x.project_id)===String(curProject); })||{}).name : '全部';
   statusEl.textContent = '✅ 工程：' + pname + '｜顯示 ' + list.length + ' 棵樹';
 }
 
+/* ---------- 面板表單 ---------- */
 function showPanel(html){ $('#panelContent').innerHTML = html; $('#panel').style.display='block'; }
 function closePanel(){ $('#panel').style.display='none'; }
 
@@ -247,10 +248,8 @@ function doCreateTree(){
 
 function post(payload){
   return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(payload)}).then(r=>r.json());
+    body:JSON.stringify(payload)}).then(function(r){ return r.json(); });
 }
-
-} /* init() 結束 */
 </script>
 </body>
 </html>
