@@ -153,10 +153,12 @@ const App = (function() {
   }
   
   /**
-   * 繪製地盤標記
+   * 繪製地盤標記（性能優化版）
    */
   function drawProjects() {
     prjLayer.clearLayers();
+    const markers = [];
+    
     PROJECTS.forEach(function(p) {
       if (String(p.project_id) === String(curProject)) return;
       const lat = +p.lat, lng = +p.lng;
@@ -165,22 +167,29 @@ const App = (function() {
       const hk = CoordUtils.toHK80(lat, lng);
       const count = TREES.filter(function(t) { return String(t.project_id) === String(p.project_id); }).length;
       
-      L.marker([lat, lng], {
+      const marker = L.marker([lat, lng], {
         icon: L.divIcon({
           className: '',
           html: '<div class="prjIcon">🚩</div>',
           iconSize: [34, 24],
           iconAnchor: [17, 12]
         })
-      })
-      .addTo(prjLayer)
-      .bindPopup(
+      });
+      
+      marker.bindPopup(
         '<b>🚩 ' + p.name + '</b><br>' +
         '此地盤樹木：' + count + ' 棵<br>' +
         (hk ? 'HK80：N ' + CoordUtils.format1(hk.N) + ' / E ' + CoordUtils.format1(hk.E) + '<br>' : '') +
         '<button onclick="App.selectProject(\'' + p.project_id + '\')">📍 前往地盤查看樹木</button>'
       );
+      
+      markers.push(marker);
     });
+    
+    // 批量添加到圖層
+    if (markers.length > 0) {
+      prjLayer.addLayer(L.layerGroup(markers));
+    }
   }
   
   /**
@@ -201,7 +210,8 @@ const App = (function() {
   }
   
   /**
-   * 繪製樹木標記
+   * 繪製樹木標記（性能優化版）
+   * 使用文檔碎片和批量操作減少 DOM 重排
    */
   function drawTrees() {
     treeLayer.clearLayers();
@@ -212,7 +222,9 @@ const App = (function() {
     }
     
     const list = TREES.filter(function(t) { return String(t.project_id) === String(curProject); });
+    const markers = [];
     
+    // 批量創建標記
     list.forEach(function(t) {
       const lat = +t.lat, lng = +t.lng;
       if (!lat || !lng) return;
@@ -225,7 +237,7 @@ const App = (function() {
                    '<span class="dot" style="background:' + color + '"></span>' +
                    '</div>';
       
-      L.marker([lat, lng], {
+      const marker = L.marker([lat, lng], {
         icon: L.divIcon({
           className: '',
           html: html,
@@ -233,9 +245,9 @@ const App = (function() {
           iconAnchor: [35, 40],
           popupAnchor: [0, -34]
         })
-      })
-      .addTo(treeLayer)
-      .bindPopup(
+      });
+      
+      marker.bindPopup(
         '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
         '<i>' + t.species + '</i><br>' +
         '<b>Status:</b> ' + t.status + '<br>' +
@@ -245,7 +257,14 @@ const App = (function() {
         ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '"><br>' : '') +
         '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>'
       );
+      
+      markers.push(marker);
     });
+    
+    // 批量添加到圖層
+    if (markers.length > 0) {
+      treeLayer.addLayer(L.layerGroup(markers));
+    }
     
     const pname = (PROJECTS.find(function(x) { return String(x.project_id) === String(curProject); }) || {}).name;
     updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹');
