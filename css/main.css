@@ -1,0 +1,46 @@
+html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif;
+          -webkit-tap-highlight-color:transparent}
+#map{height:100%}
+button{touch-action:manipulation}
+#bar{position:absolute;top:8px;right:8px;z-index:999;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#bar select{padding:10px;border-radius:8px;border:1px solid #bbb;font-size:15px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);max-width:46vw}
+#bar button{padding:10px 12px;border-radius:8px;border:none;font-size:15px;background:#2e7d32;color:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+#bar button.blue{background:#1565c0}
+#panel{display:none;position:absolute;top:52px;right:8px;z-index:1200;background:#fff;border-radius:12px;
+       padding:12px;width:290px;box-shadow:0 2px 10px rgba(0,0,0,.3);max-height:80vh;overflow:auto}
+#panel input,#panel select{width:100%;padding:10px;margin-top:6px;border:1px solid #bbb;border-radius:8px;font-size:15px;box-sizing:border-box}
+#panel button{width:100%;padding:12px;margin-top:8px;border:none;border-radius:8px;background:#2e7d32;color:#fff;font-size:16px;cursor:pointer}
+#panel .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#panel .x{background:#90a4ae}
+#status{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:999;background:#fff;
+        padding:6px 12px;border-radius:8px;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.2);max-width:85%;white-space:nowrap}
+.popup-img{width:160px;border-radius:6px;margin:4px 0}
+.legend{background:#fff;padding:8px 12px;border-radius:8px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.25);line-height:1.7}
+.prjIcon{background:#1565c0;color:#fff;border-radius:6px;padding:2px 6px;font-size:13px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.treeIcon{display:flex;flex-direction:column;align-items:center}
+.treeIcon .lbl{background:#263238;color:#ffd54f;font-weight:bold;font-size:11px;padding:2px 8px;
+               border-radius:10px;border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);margin-bottom:2px;white-space:nowrap}
+.treeIcon .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.layerbar{background:#fff;border-radius:10px;padding:4px;display:flex;gap:4px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
+.layerbar button{border:none;background:#eceff1;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer}
+.layerbar button.on{background:#4527a0;color:#fff}
+.leaflet-popup-content{font-size:14px;line-height:1.5}
+.leaflet-popup-content button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;margin-top:4px}
+
+/* ================= 手機優化 ================= */
+@media (max-width:600px){
+  #bar{left:8px;right:8px;flex-wrap:nowrap;gap:4px}
+  #bar select{flex:1;min-width:0;max-width:none;font-size:16px;padding:9px 6px}
+  #bar button{flex:0 0 auto;padding:10px 10px;font-size:13px;white-space:nowrap}
+  .leaflet-top.leaflet-left{top:60px;left:6px}
+  .leaflet-control-zoom a{width:38px;height:38px;line-height:38px;font-size:20px}
+  .legend{display:none}
+  body.panel-open .layerbar{display:none}
+  #panel{position:fixed;top:auto;bottom:0;left:0;right:0;width:auto;max-height:80vh;
+         border-radius:16px 16px 0 0;padding:10px 14px calc(14px + env(safe-area-inset-bottom))}
+  #panel::before{content:'';display:block;width:44px;height:4px;background:#ccc;border-radius:2px;margin:2px auto 8px}
+  #panel input,#panel select{font-size:16px;padding:12px}
+  #panel button{padding:14px;font-size:16px}
+  #status{font-size:12px;bottom:8px;max-width:92%}
+  .layerbar button{padding:10px 14px}
+}
