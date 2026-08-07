@@ -45,6 +45,13 @@
   #minimap{height:180px;border-radius:10px;margin-top:8px;border:1px solid #e0e0e0}
   .loading{display:flex;align-items:center;justify-content:center;min-height:100px;color:var(--muted)}
   .error{background:#ffebee;color:#c62828;padding:12px;border-radius:8px;margin:12px 0}
+  /* 圖片縮放功能 */
+  .zoomable-img{cursor:zoom-in;transition:transform .2s}
+  .zoomable-img:hover{transform:scale(1.02)}
+  .modal{display:none;position:fixed;z-index:9999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.9);align-items:center;justify-content:center}
+  .modal.show{display:flex}
+  .modal img{max-width:90%;max-height:90%;object-fit:contain;cursor:zoom-out}
+  .modal-close{position:absolute;top:20px;right:30px;color:#fff;font-size:40px;cursor:pointer}
   @media (max-width:600px){
     .wrap{padding:10px}
     .card{padding:12px}
@@ -183,7 +190,7 @@ function render(t){
     '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
     '<div class="sub"><i>' + escapeHtml(t.species) + '</i></div>' +
     '<div style="margin-top:8px"><span class="badge" style="background:' + (COLORS[t.status]||'#757575') + '">Status: ' + escapeHtml(t.status) + '</span></div>' +
-    (hasPhoto ? '<img class="tree" src="' + escapeHtml(t.photo_url) + '" alt="' + escapeHtml(t.name) + '" loading="lazy">' : '') +
+    (hasPhoto ? '<img class="tree zoomable-img" src="' + escapeHtml(t.photo_url) + '" alt="' + escapeHtml(t.name) + '" loading="lazy" onclick="zoomImage(this.src)">' : '') +
     '<div class="grid">' +
       '<div>Height<b>' + (t.height||'-') + ' m</b></div>' +
       '<div>Spread<b>' + (t.spread||'-') + ' m</b></div>' +
@@ -195,7 +202,12 @@ function render(t){
     '<div id="minimap"></div>' +
   '</div>' +
   '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員</button></div>' +
-  '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>';
+  '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>' +
+  '<!-- 圖片縮放 Modal -->' +
+  '<div id="imgModal" class="modal" onclick="closeZoom()">' +
+    '<span class="modal-close">&times;</span>' +
+    '<img id="modalImg" src="" alt="放大圖片">' +
+  '</div>';
 }
 
 function escapeHtml(str){
@@ -276,6 +288,13 @@ async function submitInspection(){
     const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
       health:$('#health').value, note:$('#note').value, photo_base64:b64});
     alert(r.ok ? '✅ 已上傳！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
+    if(r.ok && f){
+      // 提供巡查照片下載
+      const link = document.createElement('a');
+      link.href = 'data:image/jpeg;base64,' + b64;
+      link.download = 'inspection_' + id + '_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.jpg';
+      link.click();
+    }
     if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
   } catch(err) {
     console.error('Submit inspection error:', err);
@@ -337,7 +356,7 @@ function loadLogs(){
       $('#logs').innerHTML = data.reverse().map(function(r){
         return '<div class="log"><span class="ok">' + escapeHtml(r.health) + '</span>｜' + 
                escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') +
-               (r.photo_url ? '<img class="tree" src="' + escapeHtml(r.photo_url) + '" loading="lazy">' : '') + '</div>';
+               (r.photo_url ? '<img class="tree zoomable-img" src="' + escapeHtml(r.photo_url) + '" loading="lazy" onclick="zoomImage(this.src)" title="點擊放大">' : '') + '</div>';
       }).join('');
     })
     .catch(function(err){ 
@@ -351,6 +370,18 @@ window.staffMode = staffMode;
 window.checkin = checkin;
 window.submitInspection = submitInspection;
 window.saveTreeInfo = saveTreeInfo;
+
+// 圖片縮放功能
+window.zoomImage = function(src){
+  const modal = document.getElementById('imgModal');
+  const modalImg = document.getElementById('modalImg');
+  modalImg.src = src;
+  modal.classList.add('show');
+};
+
+window.closeZoom = function(){
+  document.getElementById('imgModal').classList.remove('show');
+};
 
 })();
 </script>
