@@ -12,42 +12,36 @@
   .sub{color:#666;font-size:13px}
   .badge{display:inline-block;padding:2px 10px;border-radius:999px;color:#fff;font-size:12px}
   img.tree{width:100%;border-radius:10px;margin-top:8px}
-  button{width:100%;padding:12px;border:none;border-radius:10px;background:#2e7d32;
-         color:#fff;font-size:16px;margin-top:8px;cursor:pointer}
+  button{width:100%;padding:12px;border:none;border-radius:10px;background:#2e7d32;color:#fff;font-size:16px;margin-top:8px;cursor:pointer}
   button.sec{background:#546e7a}
-  select,textarea,input{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;
-         font-size:15px;margin-top:8px;box-sizing:border-box}
+  select,textarea,input{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;font-size:15px;margin-top:8px;box-sizing:border-box}
   .log{font-size:13px;color:#444;border-top:1px dashed #ccc;padding:6px 0}
   .ok{color:#2e7d32;font-weight:bold}
+  .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+  .grid div{background:#f8fafc;padding:8px;border-radius:6px;text-align:center;font-size:13px}
+  .grid b{display:block;color:#2e7d32;font-size:16px}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"><div class="card">載入中…</div></div>
 <script>
-const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec'; // ← 一定要換
-const STAFF_PASS = 'tree2026';                              // ← 自行修改
+const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec'; // ← 確認這是你的網址
+const STAFF_PASS = 'tree2026'; 
 
 const id = new URLSearchParams(location.search).get('id') || 'A001';
 let myLat=null, myLng=null;
-navigator.geolocation.getCurrentPosition(
-  function(p){myLat=p.coords.latitude; myLng=p.coords.longitude;},
-  function(){}, {enableHighAccuracy:true, timeout:8000});
+navigator.geolocation.getCurrentPosition(p=>{myLat=p.coords.latitude; myLng=p.coords.longitude;},()=>{},{enableHighAccuracy:true, timeout:8000});
 
-const $ = function(s){ return document.querySelector(s); };
+const $ = s => document.querySelector(s);
 
 fetch(API + '?action=tree&id=' + encodeURIComponent(id))
-  .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-  .then(function(res){
+  .then(r=>r.json()).then(res=>{
     const t = res.data;
     if(!t){ $('#app').innerHTML = '<div class="card">找不到樹木編號：' + id + '</div>'; return; }
     render(t); loadLogs();
-  })
-  .catch(function(err){
-    $('#app').innerHTML = '<div class="card">❌ 後端連線失敗：' + err.message +
-      '<br><br>請確認 t.html 裡的 <b>API</b> 常數已換成你的 /exec 網址。</div>';
-  });
+  }).catch(err=>{ $('#app').innerHTML = '<div class="card">❌ 後端連線失敗：' + err.message + '</div>'; });
 
-function badgeColor(s){ return s==='正常' ? '#2e7d32' : s==='注意' ? '#f9a825' : '#c62828'; }
+const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828'};
 
 function render(t){
   const hasPhoto = t.photo_url && String(t.photo_url).indexOf('...') === -1;
@@ -55,33 +49,40 @@ function render(t){
   '<div class="card">' +
     '<h1>' + t.tree_id + ' ' + t.name + '</h1>' +
     '<div class="sub"><i>' + t.species + '</i></div>' +
-    '<div style="margin-top:8px">' +
-      '<span class="badge" style="background:' + badgeColor(t.status) + '">狀態：' + t.status + '</span> ' +
-      '<span class="badge" style="background:#607d8b">風險：' + t.risk + '</span>' +
+    '<div style="margin-top:8px"><span class="badge" style="background:' + (COLORS[t.status]||'#757575') + '">Status: ' + t.status + '</span></div>' +
+    (hasPhoto ? '<img class="tree" src="' + t.photo_url + '">' : '') +
+    '<div class="grid">' +
+      '<div>Height<b>' + (t.height||'-') + ' m</b></div>' +
+      '<div>Spread<b>' + (t.spread||'-') + ' m</b></div>' +
+      '<div>DBH<b>' + (t.dbh||'-') + ' cm</b></div>' +
     '</div>' +
     '<div class="sub" style="margin-top:8px">' + (t.description||'') + '</div>' +
-    (hasPhoto ? '<img class="tree" src="' + t.photo_url + '">' : '') +
     '<div class="sub" style="margin-top:6px">📍 ' + t.lat + ', ' + t.lng + '</div>' +
   '</div>' +
-  '<div class="card" id="staffBox">' +
-    '<button class="sec" onclick="staffMode()">🔑 工作人員模式（簽到／巡查）</button>' +
-  '</div>' +
+  '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員模式</button></div>' +
   '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>';
 }
 
 function staffMode(){
   if(prompt('請輸入工作人員密碼：') !== STAFF_PASS){ alert('密碼錯誤'); return; }
   $('#staffBox').innerHTML =
-    '<button onclick="checkin()">✅ 簽到（記錄人員／時間／GPS）</button><hr><b>巡查記錄</b>' +
-    '<select id="health"><option>正常</option><option>注意</option><option>異常</option></select>' +
+    '<button onclick="checkin()">✅ 簽到（記錄人員／時間／GPS）</button>' +
+    '<hr><b>巡查記錄</b>' +
+    '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option></select>' +
     '<textarea id="note" rows="2" placeholder="備註：病蟲害、傾斜、需修剪等"></textarea>' +
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
-    '<button onclick="submitInspection()">📤 上傳巡查記錄</button>';
+    '<label style="display:block;margin-top:8px;font-size:14px"><input type="checkbox" id="updateLoc"> 同時使用目前 GPS 更新樹木座標</label>' +
+    '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
+    '<hr><b>📍 修正樹木座標 (Manual write in)</b>' +
+    '<input type="text" id="mLat" placeholder="Latitude (緯度)">' +
+    '<input type="text" id="mLng" placeholder="Longitude (經度)">' +
+    '<button class="sec" onclick="fillCurrentGPS()">⬇️ 帶入目前手機 GPS</button>' +
+    '<button onclick="saveLocation()">💾 儲存新座標</button>';
 }
 
 async function checkin(){
   const staff = prompt('工作人員姓名：') || '未填';
-  const r = await post({type:'checkin', staff:staff, tree_id:id, lat:myLat, lng:myLng});
+  const r = await post({type:'checkin', staff, tree_id:id, lat:myLat, lng:myLng});
   alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：' + r.error);
 }
 
@@ -91,16 +92,33 @@ async function submitInspection(){
   const note   = $('#note').value;
   const f      = $('#photo').files[0];
   const b64    = f ? await compress(f) : '';
-  const r = await post({type:'inspection', staff:staff, tree_id:id, health:health,
-                        note:note, lat:myLat, lng:myLng, photo_base64:b64});
-  alert(r.ok ? '✅ 已上傳！照片已存入 Tree Photo 資料夾' : '❌ 失敗：' + r.error);
-  if(r.ok) loadLogs();
+  const updateLoc = $('#updateLoc').checked;
+  
+  const r = await post({type:'inspection', staff, tree_id:id, health, note,
+                        lat:myLat, lng:myLng, photo_base64:b64, update_location:updateLoc});
+  alert(r.ok ? '✅ 已上傳！(若勾選更新座標/有新照片，資料庫已自動同步)' : '❌ 失敗：' + r.error);
+  if(r.ok) setTimeout(()=>location.reload(), 1000); // 重新整理以顯示最新照片
+}
+
+// 手動儲存座標
+async function saveLocation(){
+  const lat = $('#mLat').value;
+  const lng = $('#mLng').value;
+  if(!lat || !lng){ alert('請輸入完整的經緯度'); return; }
+  const r = await post({type:'update_location', tree_id:id, lat, lng});
+  alert(r.ok ? '✅ 座標已更新！' : '❌ 失敗：' + r.error);
+  if(r.ok) setTimeout(()=>location.reload(), 1000);
+}
+
+function fillCurrentGPS(){
+  if(myLat && myLng){
+    $('#mLat').value = myLat;
+    $('#mLng').value = myLng;
+  } else { alert('無法取得目前 GPS，請確認已開啟定位權限'); }
 }
 
 function post(payload){
-  return fetch(API, {method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(payload)}).then(function(r){ return r.json(); });
+  return fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload)}).then(r=>r.json());
 }
 
 async function compress(file, maxW, q){
@@ -115,17 +133,15 @@ async function compress(file, maxW, q){
 
 function loadLogs(){
   fetch(API + '?action=inspections&id=' + encodeURIComponent(id))
-    .then(function(r){ return r.json(); })
-    .then(function(res){
+    .then(r=>r.json()).then(res=>{
       const data = res.data || [];
       if(!data.length){ $('#logs').innerHTML = '<div class="log">尚無記錄</div>'; return; }
-      $('#logs').innerHTML = data.reverse().map(function(r){
+      $('#logs').innerHTML = data.reverse().map(r=>{
         return '<div class="log"><span class="ok">' + r.health + '</span>｜' + r.staff +
                '｜' + String(r.time).slice(0,16) + '<br>' + (r.note||'') +
                (r.photo_url ? '<img class="tree" src="' + r.photo_url + '">' : '') + '</div>';
       }).join('');
-    })
-    .catch(function(){ $('#logs').innerHTML = '<div class="log">載入失敗</div>'; });
+    });
 }
 </script>
 </body>
