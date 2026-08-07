@@ -38,18 +38,13 @@
 
   /* ================= 手機優化 ================= */
   @media (max-width:600px){
-    /* 頂欄單行、不換行 */
     #bar{left:8px;right:8px;flex-wrap:nowrap;gap:4px}
     #bar select{flex:1;min-width:0;max-width:none;font-size:16px;padding:9px 6px}
     #bar button{flex:0 0 auto;padding:10px 10px;font-size:13px;white-space:nowrap}
-    /* 縮放鈕移到頂欄下方＋加大觸控 */
     .leaflet-top.leaflet-left{top:60px;left:6px}
     .leaflet-control-zoom a{width:38px;height:38px;line-height:38px;font-size:20px}
-    /* 手機隱藏圖例（彈窗內仍有狀態顏色） */
     .legend{display:none}
-    /* 開抽屜時隱藏圖層列，避免擋按鈕 */
     body.panel-open .layerbar{display:none}
-    /* 底部抽屜＋iPhone 安全區 */
     #panel{position:fixed;top:auto;bottom:0;left:0;right:0;width:auto;max-height:80vh;
            border-radius:16px 16px 0 0;padding:10px 14px calc(14px + env(safe-area-inset-bottom))}
     #panel::before{content:'';display:block;width:44px;height:4px;background:#ccc;border-radius:2px;margin:2px auto 8px}
@@ -93,13 +88,14 @@ function toWGS(N,E){
   if(!window.proj4) return null;
   try{ const r = proj4(HK80, WGS84, [+E, +N]); return {lat:r[1], lng:r[0]}; }catch(e){ return null; }
 }
-function f2(n){ return Number(n).toFixed(1); }   // HK80：小數 1 位
+function f2(n){ return Number(n).toFixed(1); }
 
 let PROJECTS=[], TREES=[], curProject='';
 let map=null, treeLayer=null, prjLayer=null, baseLayers={};
 
 if(window.L){
-  map = L.map('map').setView([22.5,114.1], 11);
+  /* ✅ 修正：以香港為中心 */
+  map = L.map('map').setView([22.40, 114.18], 11);
 
   const hkBase = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
                  {attribution:'© 地政總署 LandsD HKSAR', maxZoom:19});
@@ -240,7 +236,6 @@ function drawTrees(){
   statusEl.textContent = '✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹';
 }
 
-/* ---------- 面板（含手機 body class） ---------- */
 function showPanel(html){
   $('#panelContent').innerHTML = html;
   $('#panel').style.display = 'block';
