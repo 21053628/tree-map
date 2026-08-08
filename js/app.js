@@ -257,7 +257,7 @@ const App = (function() {
   }
   
   /**
-   * 繪製樹木標記（性能優化版）
+   * 繪製樹木標記（性能優化版 + 自動偏移重疊標記）
    * 使用文檔碎片和批量操作減少 DOM 重排
    */
   function drawTrees() {
@@ -272,10 +272,47 @@ const App = (function() {
     const list = TREES.filter(function(t) { return String(t.project_id) === String(curProject); });
     const markers = [];
     
-    // 批量創建標記
+    // 第一步：按座標分組，找出重疊的樹木
+    const coordGroups = new Map(); // key: "lat,lng", value: [trees]
     list.forEach(function(t) {
       const lat = +t.lat, lng = +t.lng;
       if (!lat || !lng) return;
+      const key = lat.toFixed(6) + ',' + lng.toFixed(6);
+      if (!coordGroups.has(key)) {
+        coordGroups.set(key, []);
+      }
+      coordGroups.get(key).push(t);
+    });
+    
+    // 第二步：為每棵樹計算偏移後的座標
+    const offsetMap = new Map(); // key: tree_id, value: [lat, lng]
+    const offsetRadius = 0.00005; // 約 5 米偏移
+    
+    coordGroups.forEach(function(trees, key) {
+      if (trees.length === 1) {
+        // 只有一棵樹，不需要偏移
+        const t = trees[0];
+        offsetMap.set(t.tree_id, [+t.lat, +t.lng]);
+      } else {
+        // 多棵樹在同一位置，排列成圓形
+        const baseLat = +trees[0].lat;
+        const baseLng = +trees[0].lng;
+        const angleStep = (2 * Math.PI) / trees.length;
+        
+        trees.forEach(function(t, index) {
+          const angle = index * angleStep;
+          const offsetLat = baseLat + offsetRadius * Math.cos(angle);
+          const offsetLng = baseLng + offsetRadius * Math.sin(angle);
+          offsetMap.set(t.tree_id, [offsetLat, offsetLng]);
+        });
+      }
+    });
+    
+    // 第三步：批量創建標記（使用偏移後的座標）
+    list.forEach(function(t) {
+      const coords = offsetMap.get(t.tree_id);
+      if (!coords) return;
+      const lat = coords[0], lng = coords[1];
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       const hk = CoordUtils.toHK80(lat, lng);
