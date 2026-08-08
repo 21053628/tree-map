@@ -1,17 +1,13 @@
 /**
- * 樹木管理系統 - 主應用程式模組（改進版）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版）
  * 
- * 性能優化重點：
- * 1. 模組化架構，避免全域變數污染
- * 2. 使用 Config、CoordUtils、ApiService、AuthService 模組
- * 3. 完整的錯誤處理和載入狀態反馈
- * 4. 程式碼重構，提升可維護性
- * 5. 空間索引加速碰撞檢測 (O(n²) → O(n))
- * 6. LRU 座標快取機制
- * 7. API 請求隊列與快取
- * 8. 防抖動與 requestIdleCallback 優化
- * 9. 批量 DOM 操作減少重繪
- * 10. 事件委託減少監聽器數量
+ * 🚀 本次優化重點：
+ * 1. [殺手1] Popup 懶載入 (Lazy Load)：避免 1000 次 DOMPurify 阻塞主線程
+ * 2. [殺手2] 修正 removeOutsideVisibleBounds：恢復 MarkerCluster 真正效能
+ * 3. [殺手3] 預先計算 treeCountMap / treeMap：O(N²) 降至 O(1)
+ * 4. [殺手4] 空間索引距離計算加入緯度 cos 修正，解決東西方向偏差
+ * 5. [體驗] mouseout 延遲從 1500ms 縮短至 300ms，提升響應感
+ * 6. [體驗] 底圖切換優化，避免不必要嘅迴圈
  */
 
 const App = (function() {
@@ -33,6 +29,10 @@ const App = (function() {
   let TREES = [];
   let curProject = '';
   
+  // 🔥 優化：預先計算嘅 Map，避免 O(N) 同 O(N²) 查找
+  let treeCountMap = new Map(); // key: project_id, value: count
+  let treeMap = new Map();      // key: tree_id, value: tree object
+  
   // 標記緩存（性能優化）
   let projectMarkersCache = null;
   let treesCache = new Map(); // key: tree_id, value: marker
@@ -47,6 +47,7 @@ const App = (function() {
   let prjLayer = null;
   let baseLayers = {};
   let markerCluster = null;
+  let currentBaseLayer = null; // 🔥 優化：記錄當前底圖
   
   // 性能監控
   let perfMetrics = {
@@ -80,7 +81,7 @@ const App = (function() {
     
     // 根據設備類型調整地圖設置
     const mapOptions = {
-      zoomControl: !isMobile, // 在手機上隱藏默認 zoom 控制，使用自定義控制
+      zoomControl: !isMobile,
       attributionControl: true,
       zoomAnimation: !isMobile,
       fadeAnimation: !isMobile,
@@ -119,8 +120,9 @@ const App = (function() {
     };
     
     baseLayers.hk.addTo(map);
+    currentBaseLayer = baseLayers.hk; // 🔥 優化：記錄初始底圖
     
-    // 圖層切換控制 - 在手機上改為右下角，避免與 zoom 控制重疊
+    // 圖層切換控制
     const layerBar = L.control({position: isMobile ? 'bottomright' : 'bottomleft'});
     layerBar.onAdd = function() {
       const div = L.DomUtil.create('div', 'layerbar');
@@ -129,14 +131,15 @@ const App = (function() {
                       '<button data-l="topo">地形</button>' +
                       '<button data-l="street">街道</button>';
       L.DomEvent.disableClickPropagation(div);
-      // 同時支持點擊和觸摸事件
+      
       div.querySelectorAll('button').forEach(function(b) {
         b.onclick = function() {
-          Object.keys(baseLayers).forEach(function(k) { map.removeLayer(baseLayers[k]); });
-          baseLayers[b.dataset.l].addTo(map);
+          // 🔥 優化：直接切換 currentBaseLayer，避免遍歷 Object.keys
+          if (currentBaseLayer) map.removeLayer(currentBaseLayer);
+          currentBaseLayer = baseLayers[b.dataset.l];
+          currentBaseLayer.addTo(map);
           div.querySelectorAll('button').forEach(function(x) { x.classList.toggle('on', x===b); });
         };
-        // 為觸摸設備添加 touchstart 支持
         if (isTouch) {
           b.addEventListener('touchstart', function(e) {
             e.preventDefault();
@@ -148,13 +151,13 @@ const App = (function() {
     };
     layerBar.addTo(map);
     
-    // 樹木和地盤圖層（使用 MarkerCluster + 懸停散開效果）
+    // 樹木和地盤圖層
     markerCluster = L.markerClusterGroup({
       showCoverageOnHover: false,
       zoomToBoundsOnClick: true,
-      spiderfyOnMaxZoom: false, // 禁用預設蜘蛛腿，用我們自定義的懸停散開效果
-      removeOutsideVisibleBounds: false, // 確保所有標記都在 DOM 中，方便懸停檢測
-      disableClusteringAtZoom: 16, // 放大到 16 級後關閉聚類，顯示真實位置
+      spiderfyOnMaxZoom: false,
+      removeOutsideVisibleBounds: true, // 🔥 [殺手2] 改回 true！恢復 MarkerCluster 真正效能，避免視口外 DOM 堆積
+      disableClusteringAtZoom: 16,
       maxClusterRadius: 20,
       iconCreateFunction: function(cluster) {
         var count = cluster.getChildCount();
@@ -186,9 +189,6 @@ const App = (function() {
     return true;
   }
   
-  /**
-   * 更新狀態顯示
-   */
   function updateStatus(message) {
     if (statusEl) {
       statusEl.textContent = message;
@@ -212,6 +212,15 @@ const App = (function() {
       PROJECTS = projectsRes.data || [];
       TREES = treesRes.data || [];
       
+      // 🔥 [殺手3] 預先計算 Map，將後續嘅 O(N) 同 O(N²) 查找降至 O(1)
+      treeCountMap.clear();
+      treeMap.clear();
+      TREES.forEach(function(t) {
+        const pid = String(t.project_id || '');
+        treeCountMap.set(pid, (treeCountMap.get(pid) || 0) + 1);
+        treeMap.set(String(t.tree_id), t);
+      });
+      
       // 重置緩存和狀態
       projectMarkersCache = null;
       treesCache.clear();
@@ -222,7 +231,6 @@ const App = (function() {
       
       const stats = ApiService.getStats();
       console.log('✅ 資料載入完成', stats);
-      // 返回 Promise 以便鏈式調用
       return Promise.resolve();
     } catch (error) {
       updateStatus('❌ 後端連線失敗：' + error.message);
@@ -230,9 +238,6 @@ const App = (function() {
     }
   }
   
-  /**
-   * 建立地盤選擇器
-   */
   function buildSelect() {
     const sel = $('#projSel');
     sel.innerHTML = '<option value="">🗂️ 全部地盤</option>' +
@@ -242,13 +247,11 @@ const App = (function() {
   }
   
   /**
-   * 繪製地盤標記（性能優化版）
+   * 繪製地盤標記
    */
   function drawProjects() {
     const startTime = performance.now();
     prjLayer.clearLayers();
-    
-    // 重置緩存 - 確保每次切換地盤時都重新渲染
     projectMarkersCache = null;
     
     const markers = [];
@@ -259,7 +262,9 @@ const App = (function() {
       if (!lat || !lng) return;
       
       const hk = CoordUtils.toHK80(lat, lng);
-      const count = TREES.filter(function(t) { return String(t.project_id) === String(p.project_id); }).length;
+      
+      // 🔥 [殺手3] O(1) 讀取數量，取代原本嘅 TREES.filter(...).length
+      const count = treeCountMap.get(String(p.project_id)) || 0;
       
       const marker = L.marker([lat, lng], {
         icon: L.divIcon({
@@ -288,7 +293,6 @@ const App = (function() {
       markers.push(marker);
     });
     
-    // 批量添加到圖層
     if (markers.length > 0) {
       prjLayer.addLayer(L.layerGroup(markers));
     }
@@ -298,84 +302,41 @@ const App = (function() {
     console.log('📊 地盤渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms');
   }
   
-  /**
-   * 選擇地盤（優化動畫效果）
-   */
   function selectProject(pid) {
     curProject = pid;
-    
-    // 更新按鈕顯示狀態
     buildSelect();
     
-    // 先關閉 popup，避免干擾地圖操作
     if (map) {
       map.closePopup();
-      // 等待 popup 完全關閉後再執行飛行動畫
-      setTimeout(function() {
-        performFlyTo(pid);
-      }, 50);
+      setTimeout(function() { performFlyTo(pid); }, 50);
     } else {
       performFlyTo(pid);
     }
   }
   
-  /**
-   * 執行飛行動畫
-   */
   function performFlyTo(pid) {
-    // 清空樹木緩存，確保切換地盤時不會殘留舊標記
     treesCache.clear();
-    
-    // 先清除舊的地盤標記，避免動畫期間顯示錯誤位置
     prjLayer.clearLayers();
     
     if (pid) {
       const p = PROJECTS.find(function(x) { return String(x.project_id) === String(pid); });
       if (p) {
-        // 使用 flyTo 實現平滑飛行動畫，縮放到最大可用級別
-        map.flyTo([+p.lat, +p.lng], Config.MAP.MAX_ZOOM, {
-          duration: 1.2, // 動畫持續時間（秒）
-          easeLineProxy: 0.25 // 平滑曲線
-        });
-        
-        // 等待飛行動動畫完成後才繪製地盤和樹木
-        map.once('moveend', function() {
-          drawProjects();
-          drawTrees();
-        });
+        map.flyTo([+p.lat, +p.lng], Config.MAP.MAX_ZOOM, { duration: 1.2, easeLineProxy: 0.25 });
+        map.once('moveend', function() { drawProjects(); drawTrees(); });
         return;
       }
     } else {
-      // 如果選擇「全部地盤」，縮放到默認視圖
-      map.flyTo(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM, {
-        duration: 1.0,
-        easeLineProxy: 0.25
-      });
-      
-      // 等待飛行動動畫完成後才繪製地盤
-      map.once('moveend', function() {
-        drawProjects();
-        drawTrees();
-      });
+      map.flyTo(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM, { duration: 1.0, easeLineProxy: 0.25 });
+      map.once('moveend', function() { drawProjects(); drawTrees(); });
       return;
     }
     
-    // 如果無需動畫（例如已經在目標位置），立即繪製
     drawProjects();
     drawTrees();
   }
   
   /**
-   * 繪製樹木標記（真實位置顯示 + 懸停自動散開效果）
-   * 所有樹木永遠顯示在真實 HK80 座標上，滑鼠移到重疊區域時自動散開
-   * 
-   * 性能優化重點：
-   * 1. 使用空間索引加速距離計算 - 從 O(n²) 降至 O(n)
-   * 2. 預先計算群組關係，避免重複查找
-   * 3. 使用事件委託減少監聽器數量
-   * 4. 防抖處理 mouseout 事件
-   * 5. 緩存空間索引結果，避免重複計算
-   * 6. 批量添加標記到圖層
+   * 繪製樹木標記
    */
   function drawTrees() {
     const startTime = performance.now();
@@ -389,36 +350,29 @@ const App = (function() {
     const list = TREES.filter(function(t) { return String(t.project_id) === String(curProject); });
     const markers = [];
     
-    // 檢查是否可以使用緩存的群組結果（同一地盤）
     const cacheKey = curProject;
     let coordGroups, offsetMap, treeToGroupMap;
     
     if (coordGroupsCache && coordGroupsCache.key === cacheKey) {
-      // 使用緩存的群組結果
       perfMetrics.cacheHits++;
       coordGroups = coordGroupsCache.coordGroups;
       offsetMap = coordGroupsCache.offsetMap;
       treeToGroupMap = coordGroupsCache.treeToGroupMap;
-      console.log('📊 使用緩存的空間索引結果');
     } else {
-      // 重建空間索引和群組
       buildSpatialIndex(list);
       coordGroups = spatialIndexCache.coordGroups;
       offsetMap = spatialIndexCache.offsetMap;
       treeToGroupMap = spatialIndexCache.treeToGroupMap;
     }
     
-    // 第三步：批量創建標記（使用原始座標，保證位置準確）
     list.forEach(function(t) {
       const coords = offsetMap.get(t.tree_id);
       if (!coords) return;
       
-      // 永遠使用原始座標渲染標記
       const lat = coords.original[0];
       const lng = coords.original[1];
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
-      const hk = CoordUtils.toHK80(lat, lng);
       
       const html = '<div class="treeIcon">' +
                    '<span class="lbl">' + t.tree_id + '</span>' +
@@ -435,19 +389,13 @@ const App = (function() {
         })
       });
       
-      // 儲存偏移資訊到 marker 物件
       marker._originalPos = coords.original;
       marker._offsetPos = coords.offset;
       marker._isOffset = false;
-      marker._groupId = treeToGroupMap.get(t.tree_id); // 預先儲存群組 ID
+      marker._groupId = treeToGroupMap.get(t.tree_id);
       
-      // 優化 5: 簡化事件處理，使用預存的群組 ID
       marker.on('mouseover', function(e) {
-        // 清除任何待處理的收回計時器
-        if (mouseOutTimer) {
-          clearTimeout(mouseOutTimer);
-          mouseOutTimer = null;
-        }
+        if (mouseOutTimer) { clearTimeout(mouseOutTimer); mouseOutTimer = null; }
         
         if (marker._offsetPos && !marker._isOffset && marker._groupId !== null) {
           const groupId = marker._groupId;
@@ -456,9 +404,7 @@ const App = (function() {
             group.forEach(function(tree) {
               const m = treesCache.get(tree.tree_id);
               if (m && m._offsetPos && !m._isOffset) {
-                if (m._icon) {
-                  L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
-                }
+                if (m._icon) L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
                 m.setLatLng(m._offsetPos);
                 m._isOffset = true;
               }
@@ -470,24 +416,28 @@ const App = (function() {
       
       marker.on('mouseout', handleMouseOut);
       
-      // 在 popup 中顯示原始座標（真實 HK80 座標）
-      const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
+      // 🔥 [殺手1] Popup 懶載入 (Lazy Load)
+      // 唔好喺迴圈入面執行 DOMPurify，改做點擊時先生成，大幅減少主線程阻塞
+      marker.bindPopup('<div style="text-align:center;padding:10px;color:#666;">載入中...</div>');
       
-      marker.bindPopup(DOMPurify.sanitize(
-        '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
-        '<b>Status:</b> ' + t.status + '<br>' +
-        '<b>DBH:</b> ' + (t.dbh || '-') + ' cm | <b>Height:</b> ' + (t.height || '-') + ' m<br>' +
-        '<b>Spread:</b> ' + (t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
-        (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
-        ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '"><br>' : '') +
-        '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>'
-      ));
+      marker.on('popupopen', function(e) {
+        const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
+        const popupHtml = 
+          '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
+          '<b>Status:</b> ' + t.status + '<br>' +
+          '<b>DBH:</b> ' + (t.dbh || '-') + ' cm | <b>Height:</b> ' + (t.height || '-') + ' m<br>' +
+          '<b>Spread:</b> ' + (t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
+          (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
+          ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '"><br>' : '') +
+          '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
+        
+        e.popup.setContent(DOMPurify.sanitize(popupHtml));
+      });
       
       markers.push(marker);
       treesCache.set(t.tree_id, marker);
     });
     
-    // 批量添加到圖層（MarkerClusterGroup 直接加 marker）
     if (markers.length > 0) {
       treeLayer.addLayers(markers);
     }
@@ -497,22 +447,18 @@ const App = (function() {
     
     const pname = (PROJECTS.find(function(x) { return String(x.project_id) === String(curProject); }) || {}).name;
     updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹｜渲染耗時 ' + perfMetrics.renderTime.toFixed(1) + 'ms');
-    console.log('📊 樹木渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms, 數量:', list.length, '群組數:', coordGroups.length);
   }
   
   /**
-   * 建立空間索引和群組（提取為獨立函數以便緩存）
-   * @param {Array} list - 樹木列表
+   * 建立空間索引和群組
    */
   function buildSpatialIndex(list) {
     const startTime = performance.now();
     
-    // 優化 1: 使用網格空間索引加速距離計算
-    const gridSize = 0.00002; // 約 2 米網格
+    const gridSize = 0.00002;
     const gridMap = new Map();
     
-    // 建立空間索引
-    const treeCoords = []; // 預先計算座標，避免重複存取
+    const treeCoords = [];
     for (let i = 0; i < list.length; i++) {
       const t = list[i];
       const lat = +t.lat;
@@ -520,15 +466,16 @@ const App = (function() {
       treeCoords.push({ lat, lng });
       
       const gridKey = Math.floor(lat / gridSize) + '_' + Math.floor(lng / gridSize);
-      if (!gridMap.has(gridKey)) {
-        gridMap.set(gridKey, []);
-      }
+      if (!gridMap.has(gridKey)) gridMap.set(gridKey, []);
       gridMap.get(gridKey).push(i);
     }
     
-    // 優化 2: 只檢查相鄰網格，大幅減少距離計算次數
+    // 🔥 [殺手4] 加入緯度修正，解決東西方向距離計算偏差
+    const avgLat = list.length > 0 ? list.reduce((sum, t) => sum + (+t.lat), 0) / list.length : 22.3;
+    const lngFactor = Math.cos(avgLat * Math.PI / 180);
+    
     const coordGroups = [];
-    const used = new Uint8Array(list.length); // 使用 TypedArray 節省記憶體
+    const used = new Uint8Array(list.length);
     
     for (let i = 0; i < list.length; i++) {
       if (used[i]) continue;
@@ -537,11 +484,9 @@ const App = (function() {
       used[i] = 1;
       const center = treeCoords[i];
       
-      // 計算中心點所在網格
       const centerGridX = Math.floor(center.lat / gridSize);
       const centerGridY = Math.floor(center.lng / gridSize);
       
-      // 只檢查相鄰 9 個網格
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
           const neighborKey = (centerGridX + dx) + '_' + (centerGridY + dy);
@@ -552,12 +497,10 @@ const App = (function() {
             if (used[idx]) continue;
             
             const other = treeCoords[idx];
-            // 使用簡化的距離公式（避免調用 map.distance 的開銷）
             const dLat = center.lat - other.lat;
-            const dLng = center.lng - other.lng;
-            const dist = Math.sqrt(dLat * dLat + dLng * dLng) * 111320; // 轉換為米
+            const dLng = (center.lng - other.lng) * lngFactor; // 加入修正
+            const dist = Math.sqrt(dLat * dLat + dLng * dLng) * 111319.5; 
             
-            // 增加距離閾值到 5 米，讓更多相近的樹木可以被歸為同一群組
             if (dist < 5) {
               group.push(list[idx]);
               used[idx] = 1;
@@ -568,29 +511,20 @@ const App = (function() {
       coordGroups.push(group);
     }
     
-    // 優化 3: 預先建立 tree_id 到群組的映射，避免重複查找
     const treeToGroupMap = new Map();
     coordGroups.forEach(function(trees, groupIndex) {
-      trees.forEach(function(t) {
-        treeToGroupMap.set(t.tree_id, groupIndex);
-      });
+      trees.forEach(function(t) { treeToGroupMap.set(t.tree_id, groupIndex); });
     });
     
-    // 第二步：為每棵樹計算偏移後的座標（用於懸停散開）
-    const offsetMap = new Map(); // key: tree_id, value: {original: [lat, lng], offset: [lat, lng]}
-    const offsetRadius = 0.00012; // 約 12 米偏移半徑，增加散開範圍讓樹木更容易被看到
+    const offsetMap = new Map();
+    const offsetRadius = 0.00012;
     
     for (let g = 0; g < coordGroups.length; g++) {
       const trees = coordGroups[g];
       if (trees.length === 1) {
-        // 只有一棵樹，不需要偏移
         const t = trees[0];
-        offsetMap.set(t.tree_id, {
-          original: [+t.lat, +t.lng],
-          offset: null // 無須偏移
-        });
+        offsetMap.set(t.tree_id, { original: [+t.lat, +t.lng], offset: null });
       } else {
-        // 多棵樹重疊，計算圓形排列座標
         const baseLat = +trees[0].lat;
         const baseLng = +trees[0].lng;
         const angleStep = (2 * Math.PI) / trees.length;
@@ -600,25 +534,16 @@ const App = (function() {
           const angle = i * angleStep;
           const offsetLat = baseLat + offsetRadius * Math.cos(angle);
           const offsetLng = baseLng + offsetRadius * Math.sin(angle);
-          offsetMap.set(t.tree_id, {
-            original: [+t.lat, +t.lng],
-            offset: [offsetLat, offsetLng]
-          });
+          offsetMap.set(t.tree_id, { original: [+t.lat, +t.lng], offset: [offsetLat, offsetLng] });
         }
       }
     }
     
-    // 更新全局群組引用，供 mouseover/mouseout 使用
     coordGroupsRef = coordGroups;
     
-    // 優化 4: 使用事件委託，減少監聽器數量
-    // activeGroupId 和 mouseOutTimer 已在模組層級宣告，這裡不需要重複宣告
-    
-    // 全局 mouseout 處理函數
     window.handleMouseOut = function() {
-      if (mouseOutTimer) {
-        clearTimeout(mouseOutTimer);
-      }
+      if (mouseOutTimer) clearTimeout(mouseOutTimer);
+      // 🔥 [體驗優化] 從 1500ms 縮短至 300ms，提升響應感
       mouseOutTimer = setTimeout(function() {
         if (activeGroupId !== -1) {
           const group = coordGroupsRef[activeGroupId];
@@ -626,9 +551,7 @@ const App = (function() {
             group.forEach(function(tree) {
               const m = treesCache.get(tree.tree_id);
               if (m && m._isOffset) {
-                if (m._icon) {
-                  L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
-                }
+                if (m._icon) L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
                 m.setLatLng(m._originalPos);
                 m._isOffset = false;
               }
@@ -636,53 +559,32 @@ const App = (function() {
           }
           activeGroupId = -1;
         }
-      }, 1500);
+      }, 300);
     };
     
-    // 儲存結果到緩存
-    spatialIndexCache = {
-      coordGroups: coordGroups,
-      offsetMap: offsetMap,
-      treeToGroupMap: treeToGroupMap
-    };
-    coordGroupsCache = {
-      key: curProject,
-      coordGroups: coordGroups,
-      offsetMap: offsetMap,
-      treeToGroupMap: treeToGroupMap
-    };
+    spatialIndexCache = { coordGroups, offsetMap, treeToGroupMap };
+    coordGroupsCache = { key: curProject, coordGroups, offsetMap, treeToGroupMap };
     
     perfMetrics.spatialIndexBuildTime = performance.now() - startTime;
-    console.log('📊 空間索引建立耗時:', perfMetrics.spatialIndexBuildTime.toFixed(2), 'ms, 群組數:', coordGroups.length);
   }
   
-  // findGroupId 函數已移除，改用 treeToGroupMap 進行 O(1) 查找
-  
-  /**
-   * 顯示面板
-   */
   function showPanel(html) {
     const panelContent = $('#panelContent');
-    panelContent.innerHTML = DOMPurify.sanitize(html, {
-      ADD_ATTR: ['onclick']
-    });
+    panelContent.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['onclick'] });
     $('#panel').style.display = 'block';
     document.body.classList.add('panel-open');
   }
   
-  /**
-   * 關閉面板
-   */
   function closePanel() {
     $('#panel').style.display = 'none';
     document.body.classList.remove('panel-open');
   }
   
-  /**
-   * 開啟地盤建立表單
-   */
   async function openProjectForm() {
-    if (!await AuthService.promptAuth()) return;
+    // 兼容同步/非同步嘅 AuthService.promptAuth
+    const authResult = AuthService.promptAuth();
+    if (authResult instanceof Promise) { if (!await authResult) return; }
+    else { if (!authResult) return; }
     
     showPanel(
       '<b>＋ 建立地盤</b>' +
@@ -693,60 +595,39 @@ const App = (function() {
     );
   }
   
-  /**
-   * 建立地盤
-   */
   async function doCreateProject() {
     const name = $('#pName').value;
     const N = $('#pN').value;
     const E = $('#pE').value;
     
-    if (!name || !N || !E) {
-      alert('請填寫完整');
-      return;
-    }
+    if (!name || !N || !E) { alert('請填寫完整'); return; }
     
     const w = CoordUtils.toWGS84(N, E);
-    if (!w) {
-      alert('HK80 座標轉換失敗');
-      return;
-    }
+    if (!w) { alert('HK80 座標轉換失敗'); return; }
     
     try {
       const r = await ApiService.post({
-        type: 'create_project',
-        name: name,
-        lat: w.lat.toFixed(6),
-        lng: w.lng.toFixed(6)
+        type: 'create_project', name: name,
+        lat: w.lat.toFixed(6), lng: w.lng.toFixed(6)
       });
       
       alert(r.ok ? '✅ 地盤已建立！' : '❌ ' + r.error);
       if (r.ok) {
         closePanel();
-        // 清空緩存並重新載入，確保新地盤正確顯示
         projectMarkersCache = null;
         treesCache.clear();
         load();
       }
-    } catch (error) {
-      alert('❌ 請求失敗：' + error.message);
-    }
+    } catch (error) { alert('❌ 請求失敗：' + error.message); }
   }
   
-  /**
-   * 開啟樹木新增表單
-   */
-  /**
-   * 開啟新增樹木表單（加入樹木選擇器）
-   */
   async function openTreeForm() {
-    if (!curProject) {
-      alert('請先選擇地盤');
-      return;
-    }
-    if (!await AuthService.promptAuth()) return;
+    if (!curProject) { alert('請先選擇地盤'); return; }
     
-    // 載入樹木清單到 datalist（使用 trees_data.json）
+    const authResult = AuthService.promptAuth();
+    if (authResult instanceof Promise) { if (!await authResult) return; }
+    else { if (!authResult) return; }
+    
     if (!window.allTreesLoaded) {
       fetch('data/trees_data.json')
         .then(function(r) { return r.json(); })
@@ -770,133 +651,83 @@ const App = (function() {
       '<input id="tId" placeholder="樹木編號（留空自動）">' +
       '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）...">' +
       '<datalist id="tree_datalist"></datalist>' +
-      '<select id="tStatus">' +
-        '<option>Normal</option><option>Fair</option><option>Poor</option>' +
-        '<option>Very Poor</option><option>Dead</option>' +
-      '</select>' +
-      '<div class="row2"><input id="tHeight" placeholder="Height (m)" inputmode="decimal">' +
-      '<input id="tSpread" placeholder="Spread (m)" inputmode="decimal"></div>' +
+      '<select id="tStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
+      '<div class="row2"><input id="tHeight" placeholder="Height (m)" inputmode="decimal"><input id="tSpread" placeholder="Spread (m)" inputmode="decimal"></div>' +
       '<input id="tDbh" placeholder="DBH (cm)" inputmode="decimal">' +
-      '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal">' +
-      '<input id="tE" placeholder="HK80 E" inputmode="decimal"></div>' +
+      '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal"><input id="tE" placeholder="HK80 E" inputmode="decimal"></div>' +
       '<input id="tLevel" placeholder="Level (m)" inputmode="decimal">' +
       '<button onclick="App.doCreateTree()">💾 建立樹木</button>' +
       '<button class="x" onclick="App.closePanel()">✖ 關閉</button>'
     );
   }
   
-  
-  /**
-   * 建立樹木
-   */
   async function doCreateTree() {
     const N = $('#tN').value;
     const E = $('#tE').value;
     
-    if (!N || !E) {
-      alert('請填寫 HK80 座標 N/E');
-      return;
-    }
+    if (!N || !E) { alert('請填寫 HK80 座標 N/E'); return; }
     
     const w = CoordUtils.toWGS84(N, E);
-    if (!w) {
-      alert('HK80 座標轉換失敗');
-      return;
-    }
+    if (!w) { alert('HK80 座標轉換失敗'); return; }
     
     try {
       const r = await ApiService.post({
         type: 'create_tree',
-        tree_id: $('#tId').value,
-        project_id: curProject,
-        name: $('#tName').value,  // tName 現在包含樹種資料（如 "Acacia dealbata 銀荊"）
-        status: $('#tStatus').value,
-        height: $('#tHeight').value,
-        spread: $('#tSpread').value,
-        dbh: $('#tDbh').value,
-        level: $('#tLevel').value,
-        lat: w.lat.toFixed(6),
-        lng: w.lng.toFixed(6)
+        tree_id: $('#tId').value, project_id: curProject,
+        name: $('#tName').value, status: $('#tStatus').value,
+        height: $('#tHeight').value, spread: $('#tSpread').value,
+        dbh: $('#tDbh').value, level: $('#tLevel').value,
+        lat: w.lat.toFixed(6), lng: w.lng.toFixed(6)
       });
       
       alert(r.ok ? '✅ 樹木 ' + r.tree_id + ' 已建立' : '❌ ' + r.error);
       if (r.ok) {
         closePanel();
-        // 清空緩存並重新載入，確保新樹木正確顯示
         treesCache.clear();
         load();
       }
-    } catch (error) {
-      alert('❌ 請求失敗：' + error.message);
-    }
+    } catch (error) { alert('❌ 請求失敗：' + error.message); }
   }
   
-  /**
-   * 初始化應用
-   */
   function init() {
     statusEl = document.getElementById('status');
     
     if (initMap()) {
-      // 預熱座標快取（非阻塞）
       if ('requestIdleCallback' in window) {
-        requestIdleCallback(function() {
-          CoordUtils.preheatCache();
-        });
+        requestIdleCallback(function() { CoordUtils.preheatCache(); });
       } else {
-        setTimeout(function() {
-          CoordUtils.preheatCache();
-        }, 100);
+        setTimeout(function() { CoordUtils.preheatCache(); }, 100);
       }
       
-      load().then(function() {
-        // 檢查 URL 是否有 tree_id 參數（來自 NFC 掃描）
-        checkURLParams();
-      });
+      load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（改進版）');
-    console.log('📊 API 統計:', ApiService.getStats());
-    console.log('📊 座標快取統計:', CoordUtils.getCacheStats());
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版）');
   }
   
-  /**
-   * 檢查 URL 參數，支援 NFC 掃描跳轉
-   */
   function checkURLParams() {
     const params = new URLSearchParams(window.location.search);
     const treeId = params.get('tree_id');
     const projectId = params.get('project_id');
     
     if (treeId) {
-      // 如果有 tree_id 參數，自動定位到該樹木
-      setTimeout(function() {
-        locateTree(treeId, projectId);
-      }, 500);
+      setTimeout(function() { locateTree(treeId, projectId); }, 500);
     }
   }
   
-  /**
-   * 定位到特定樹木
-   */
   function locateTree(treeId, projectId) {
-    // 如果提供了 project_id，先選擇地盤
     if (projectId && String(curProject) !== String(projectId)) {
       selectProject(projectId);
     }
     
-    // 尋找樹木：優先使用 tree_id + project_id 組合匹配
+    // 🔥 優化：使用 treeMap 進行 O(1) 查找，取代原本嘅 TREES.find (O(N))
     let tree = null;
     if (projectId) {
-      // 如果有 project_id，精確匹配 tree_id 和 project_id
-      tree = TREES.find(function(t) { 
-        return String(t.tree_id) === String(treeId) && String(t.project_id) === String(projectId); 
-      });
+      const t = treeMap.get(String(treeId));
+      if (t && String(t.project_id) === String(projectId)) tree = t;
     }
-    
-    // 如果沒找到或沒有提供 project_id，只匹配 tree_id
     if (!tree) {
-      tree = TREES.find(function(t) { return String(t.tree_id) === String(treeId); });
+      tree = treeMap.get(String(treeId)) || null;
     }
     
     if (!tree) {
@@ -904,18 +735,12 @@ const App = (function() {
       return;
     }
     
-    // 如果樹木不在當前選中的地盤，切換到該地盤
     if (String(tree.project_id) !== String(curProject)) {
       selectProject(tree.project_id);
     }
     
-    // 飛到樹木位置（優化動畫）
-    map.flyTo([+tree.lat, +tree.lng], 19, {
-      duration: 1.2,
-      easeLinearity: 0.25
-    });
+    map.flyTo([+tree.lat, +tree.lng], 19, { duration: 1.2, easeLinearity: 0.25 });
     
-    // 找到對應的 marker 並開啟 popup
     const marker = treesCache.get(treeId);
     if (marker) {
       setTimeout(function() {
@@ -924,17 +749,11 @@ const App = (function() {
       }, 1200);
     }
     
-    // 清除 URL 參數（避免重新整理時重複執行）
     if (window.history && window.history.replaceState) {
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, '', cleanUrl);
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }
   
-  /**
-   * 獲取性能指標
-   * @returns {object}
-   */
   function getPerfMetrics() {
     return {
       renderTime: perfMetrics.renderTime,
@@ -945,29 +764,19 @@ const App = (function() {
     };
   }
   
-  // 公開 API
-  return {
-    init,
-    selectProject,
-    openProjectForm,
-    doCreateProject,
-    openTreeForm,
-    doCreateTree,
-    closePanel,
-    clearCache,
-    getPerfMetrics,
-    locateTree
-  };
-
-  /**
-   * 清除緩存（用於數據更新後）
-   */
   function clearCache() {
     projectMarkersCache = null;
     treesCache.clear();
+    treeCountMap.clear();
+    treeMap.clear();
     console.log('🗑️ 緩存已清除');
   }
+  
+  return {
+    init, selectProject, openProjectForm, doCreateProject,
+    openTreeForm, doCreateTree, closePanel, clearCache,
+    getPerfMetrics, locateTree
+  };
 })();
 
-// 啟動應用
 document.addEventListener('DOMContentLoaded', App.init);
