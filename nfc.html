@@ -115,11 +115,6 @@
 </div>
 
 <div class="card">
-  <h2>📋 現有樹木列表</h2>
-  <div id="treeList" class="info">載入中...</div>
-</div>
-
-<div class="card">
   <h2>❓ 常見問題</h2>
   <p><strong>Q: 需要安裝 App 才能掃描嗎？</strong><br>
   A: 不需要！現代智慧型手機（iPhone 和 Android）都內建 NFC 讀取功能，直接靠近即可。</p>
@@ -153,46 +148,6 @@ function generateURL() {
   document.getElementById('generatedURL').textContent = url;
   document.getElementById('urlResult').style.display = 'block';
 }
-
-// 載入樹木列表
-function loadTreeList() {
-  // 改為讀取本地 JSON 文件，避免 CORS 問題
-  fetch('data/trees.json')
-    .then(function(r) { return r.json(); })
-    .then(function(trees) {
-      if (!trees || trees.length === 0) {
-        document.getElementById('treeList').innerHTML = '暫無樹木資料';
-        return;
-      }
-      
-      let html = '<select id="treeSelect" onchange="autoFill()">';
-      html += '<option value="">-- 選擇樹木 --</option>';
-      trees.forEach(function(t) {
-        html += '<option value="' + t.tree_id + '" data-prj="' + (t.project_id||'') + '">' + 
-                t.tree_id + ' - ' + t.name + ' (' + t.species + ')</option>';
-      });
-      html += '</select>';
-      html += '<p class="info">💡 選擇樹木後，上方表單會自動填寫</p>';
-      document.getElementById('treeList').innerHTML = html;
-    })
-    .catch(function(err) {
-      console.error('Load error:', err);
-      document.getElementById('treeList').innerHTML = '載入失敗：請確保 data/trees.json 存在';
-    });
-}
-
-// 自動填寫表單
-function autoFill() {
-  const select = document.getElementById('treeSelect');
-  const option = select.options[select.selectedIndex];
-  if (option.value) {
-    document.getElementById('treeId').value = option.value;
-    document.getElementById('projectId').value = option.getAttribute('data-prj') || '';
-  }
-}
-
-// 初始化
-loadTreeList();
 </script>
 
 </body>
