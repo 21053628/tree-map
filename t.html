@@ -122,7 +122,7 @@ fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURICom
 const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828','Dead':'#424242'};
 
 function render(t){
-  const hasPhoto = t.photo_url && String(t.photo_url).indexOf('...') === -1;
+  // 支援樹木主相片為陣列或單張
   const hk = toHK(t.lat, t.lng);
   var html = '<a class="back" href="index.html">⬅ 地圖</a>' +
   '<div class="card">' +
@@ -131,8 +131,19 @@ function render(t){
   if(t.project_id){
     html += '<div style="margin-top:6px"><span class="badge" style="background:#1976d2">🚩 地盤：<b>' + escapeHtml(t.project_id) + '</b></span> <span style="font-size:12px;color:#666;margin-left:6px">(NFC 用)</span></div>';
   }
-  if(hasPhoto){
-    html += '<img class="tree zoomable-img" src="' + escapeHtml(t.photo_url) + '" alt="' + escapeHtml(t.name) + '" loading="lazy" decoding="async" onclick="zoomImage(this.src)">';
+  // 支援樹木主相片為陣列或單張
+  var mainPhotos = t.photo_url;
+  if(mainPhotos){
+    if(typeof mainPhotos === 'string' && mainPhotos.indexOf('...') !== -1){
+      mainPhotos = null;
+    } else if(typeof mainPhotos === 'string'){
+      mainPhotos = [mainPhotos];
+    }
+  }
+  if(mainPhotos && mainPhotos.length > 0){
+    for(var i = 0; i < mainPhotos.length; i++){
+      html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" loading="lazy" decoding="async" onclick="zoomImage(this.src)">';
+    }
   }
   html += '<div class="grid">' +
       '<div>Height<b>' + (t.height||'-') + ' m</b></div>' +
@@ -180,7 +191,7 @@ function staffMode(){
     '<hr><div class="section-title">📝 巡查記錄（狀態會自動同步樹木資料）</div>' +
     '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
     '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
-    '<input type="file" id="photo" accept="image/*" capture="environment">' +
+    '<input type="file" id="photo" accept="image/*" capture="environment" multiple>' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
     '<hr><div class="section-title">✏️ 樹木資料（HK80 座標／Level／地盤）</div>' +
     '<div class="form-group"><label class="form-label">🌳 樹種</label><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
@@ -242,12 +253,39 @@ async function checkin(){
 
 async function submitInspection(){
   const staff  = prompt('工作人員姓名：') || '未填';
-  const f = $('#photo').files[0];
+  const fileInput = $('#photo');
+  const files = fileInput.files;
+  
+  if(files.length === 0){
+    try {
+      const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
+        health:$('#health').value, note:$('#note').value, photo_base64:''});
+      alert(r.ok ? '✅ 已上傳！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
+      if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
+    } catch(err) {
+      console.error('Submit inspection error:', err);
+      alert('❌ 連線錯誤：' + err.message);
+    }
+    return;
+  }
+  
+  // 處理多張相片
+  const photosData = [];
+  for(let i = 0; i < files.length; i++){
+    try {
+      const b64 = await compress(files[i]);
+      photosData.push(b64);
+    } catch(err) {
+      console.error('Compress error for file ' + i + ':', err);
+      alert('❌ 壓縮圖片失敗：' + err.message);
+      return;
+    }
+  }
+  
   try {
-    const b64 = f ? await compress(f) : '';
     const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
-      health:$('#health').value, note:$('#note').value, photo_base64:b64});
-    alert(r.ok ? '✅ 已上傳！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
+      health:$('#health').value, note:$('#note').value, photo_base64: photosData});
+    alert(r.ok ? '✅ 已上傳 ' + files.length + ' 張相片！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
     if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
   } catch(err) {
     console.error('Submit inspection error:', err);
@@ -309,14 +347,24 @@ function loadLogs(){
       var html = '';
       data.reverse().forEach(function(r){
         var photoHtml = '';
-        if(r.photo_url){
+        // 支援多張相片 (photo_url 可能是陣列)
+        var photos = r.photo_url;
+        if(!photos){ photos = []; }
+        else if(typeof photos === 'string'){ photos = [photos]; }
+        
+        if(photos && photos.length > 0){
           var timeStr = fmtTime(r.time);
-          var photoUrlEscaped = escapeHtml(r.photo_url);
           var treeIdEscaped = escapeHtml(r.tree_id||id);
-          photoHtml = '<br><img class="tree zoomable-img" src="' + photoUrlEscaped + '" loading="lazy" decoding="async" onclick="zoomImage(this.src)" title="點擊放大">' +
-                      '<button style="width:auto;padding:6px 12px;margin-top:6px;font-size:13px;background:#546e7a;color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="downloadPhoto(&apos;' + photoUrlEscaped + '&apos;, &apos;' + treeIdEscaped + '&apos;, &apos;' + timeStr.replace(/&/g,'&amp;').replace(/'/g,'&apos;') + '&apos;)">⬇️ 下載巡查照片</button>';
+          var timeStrForDownload = timeStr.replace(/&/g,'&amp;').replace(/'/g,'&apos;');
+          
+          for(var i = 0; i < photos.length; i++){
+            var photoUrlEscaped = escapeHtml(photos[i]);
+            var photoIndex = i + 1;
+            photoHtml += '<br><div style=\"margin-bottom:8px\"><img class=\"tree zoomable-img\" src=\"' + photoUrlEscaped + '\" loading=\"lazy\" decoding=\"async\" onclick=\"zoomImage(this.src)\" title=\"點擊放大\">' +
+                        '<button style=\"width:auto;padding:6px 12px;margin-top:6px;font-size:13px;background:#546e7a;color:#fff;border:none;border-radius:6px;cursor:pointer\" onclick=\"downloadPhoto(&apos;' + photoUrlEscaped + '&apos;, &apos;' + treeIdEscaped + '&apos;, &apos;' + timeStrForDownload + '&apos;, ' + photoIndex + ')\">⬇️ 下載巡查照片 #' + photoIndex + '</button></div>';
+          }
         }
-        html += '<div class="log"><span class="ok">' + escapeHtml(r.health) + '</span>｜' +
+        html += '<div class=\"log\"><span class=\"ok">' + escapeHtml(r.health) + '</span>｜' +
                escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>';
       });
       $('#logs').innerHTML = html;
@@ -346,13 +394,14 @@ window.closeZoom = function(){
 };
 
 // 下載巡查照片功能
-window.downloadPhoto = function(url, treeId, timeStr){
+window.downloadPhoto = function(url, treeId, timeStr, photoIndex){
   fetch(url)
     .then(function(r){ return r.blob(); })
     .then(function(blob){
       var link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = 'inspection_' + treeId + '_' + timeStr.replace(/[: ]/g,'-') + '.jpg';
+      var suffix = photoIndex ? '_' + photoIndex : '';
+      link.download = 'inspection_' + treeId + '_' + timeStr.replace(/[: ]/g,'-') + suffix + '.jpg';
       link.click();
       URL.revokeObjectURL(link.href);
     })
