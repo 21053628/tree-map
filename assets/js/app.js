@@ -272,6 +272,9 @@ const App = (function() {
     // 清空樹木緩存，確保切換地盤時不會殘留舊標記
     treesCache.clear();
     
+    // 先清除舊的地盤標記，避免動畫期間顯示錯誤位置
+    prjLayer.clearLayers();
+    
     if (pid) {
       const p = PROJECTS.find(function(x) { return String(x.project_id) === String(pid); });
       if (p) {
@@ -280,6 +283,13 @@ const App = (function() {
           duration: 1.2, // 動畫持續時間（秒）
           easeLineProxy: 0.25 // 平滑曲線
         });
+        
+        // 等待飛行動動畫完成後才繪製地盤和樹木
+        map.once('moveend', function() {
+          drawProjects();
+          drawTrees();
+        });
+        return;
       }
     } else {
       // 如果選擇「全部地盤」，縮放到默認視圖
@@ -287,9 +297,16 @@ const App = (function() {
         duration: 1.0,
         easeLineProxy: 0.25
       });
+      
+      // 等待飛行動動畫完成後才繪製地盤
+      map.once('moveend', function() {
+        drawProjects();
+        drawTrees();
+      });
+      return;
     }
     
-    // 先繪製地盤，再繪製樹木，確保層級正確
+    // 如果無需動畫（例如已經在目標位置），立即繪製
     drawProjects();
     drawTrees();
   }
