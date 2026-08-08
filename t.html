@@ -19,10 +19,9 @@
 
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
-<link rel="preload" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" as="style" crossorigin>
-<link rel="preload" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" as="script" crossorigin>
-<link rel="preload" href="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" as="script" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin>
+<!-- 🔥 修正：移除 crossorigin/preload，避免 PWA 快取 CORS 衝突導致 CSS 被瀏覽器拒絕套用 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
 <!-- DOMPurify for XSS protection -->
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" crossorigin></script>
 <style>

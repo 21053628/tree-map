@@ -1,5 +1,5 @@
 /* 樹木管理系統 - Service Worker (PWA 離線模式) */
-const VERSION = 'v1.0.1'; // 🔥 升咗版本，自動清舊快取
+const VERSION = 'v1.0.2'; // 🔥 升咗版本，自動清舊快取
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
