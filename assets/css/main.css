@@ -29,34 +29,34 @@ button{touch-action:manipulation}
 .leaflet-popup-content button:hover{background:#0d47a1}
 .leaflet-popup-content button:active{transform:scale(0.98)}
 
-/* 樹木標記平滑動畫效果 - 優化過渡效果 */
+/* 樹木標記平滑動畫效果 - 優化響應速度 */
 .leaflet-marker-icon {
-  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .leaflet-marker-dragging {
-  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 地盤旗幟圖標動畫 */
+/* 地盤旗幟圖標動畫 - 快速響應 */
 .prjIcon {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
 }
 
 .prjIcon:hover {
-  transform: scale(1.15);
+  transform: scale(1.08);
 }
 
-/* 樹木圖標動畫 */
+/* 樹木圖標動畫 - 自然過渡 */
 .treeIcon {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
 }
 
 .treeIcon:hover {
-  transform: scale(1.1);
+  transform: scale(1.06);
 }
 
-/* 地圖飛行動畫優化 */
+/* 地圖飛行動畫優化 - 提升渲染性能 */
 .leaflet-fade-anim .leaflet-map-pane {
   will-change: transform;
 }
@@ -65,33 +65,69 @@ button{touch-action:manipulation}
   will-change: transform;
 }
 
-/* 面板滑入動畫 */
+/* 面板滑入動畫 - 快速流暢 */
 #panel {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  transform: translateY(-10px);
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+  transform: translateY(-8px);
   opacity: 0;
+  pointer-events: none;
 }
 
 #panel[style*="display: block"] {
   transform: translateY(0);
   opacity: 1;
+  pointer-events: auto;
 }
 
-/* 按鈕點擊反饋動畫 */
+/* 按鈕點擊反饋動畫 - 即時回應 */
 #bar button:active {
-  transform: scale(0.95);
-  transition: transform 0.1s ease;
+  transform: scale(0.96);
+  transition: transform 0.08s ease;
 }
 
-/* 選擇器動畫 */
+/* 選擇器動畫 - 細膩過渡 */
 #bar select {
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 #bar select:focus {
   border-color: #1565c0;
-  box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.2);
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.15);
   outline: none;
+}
+
+/* 輸入框動畫優化 */
+#panel input:focus,
+#panel select:focus {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 面板按鈕點擊反饋 */
+#panel button:active {
+  transform: scale(0.97);
+  transition: transform 0.08s ease;
+}
+
+/* Leaflet popup 按鈕動畫 */
+.leaflet-popup-content button {
+  transition: background-color 0.2s ease, transform 0.08s ease;
+}
+
+.leaflet-popup-content button:hover {
+  background: #0d47a1;
+}
+
+.leaflet-popup-content button:active {
+  transform: scale(0.96);
+}
+
+/* 層級按鈕動畫 - 清晰反饋 */
+.layerbar button {
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+}
+
+.layerbar button:active {
+  transform: scale(0.95);
 }
 
 /* ================= 手機優化 ================= */
