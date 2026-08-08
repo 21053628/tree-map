@@ -491,8 +491,20 @@ const App = (function() {
       selectProject(projectId);
     }
     
-    // 尋找樹木
-    const tree = TREES.find(function(t) { return String(t.tree_id) === String(treeId); });
+    // 尋找樹木：優先使用 tree_id + project_id 組合匹配
+    let tree = null;
+    if (projectId) {
+      // 如果有 project_id，精確匹配 tree_id 和 project_id
+      tree = TREES.find(function(t) { 
+        return String(t.tree_id) === String(treeId) && String(t.project_id) === String(projectId); 
+      });
+    }
+    
+    // 如果沒找到或沒有提供 project_id，只匹配 tree_id
+    if (!tree) {
+      tree = TREES.find(function(t) { return String(t.tree_id) === String(treeId); });
+    }
+    
     if (!tree) {
       updateStatus('❌ 找不到樹木：' + treeId);
       return;
