@@ -1,7 +1,7 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.1）
  * 
- * 🚀 本次優化重點：
+ * 🚀 優化重點：
  * 1. [殺手1] Popup 懶載入 (Lazy Load)：避免 1000 次 DOMPurify 阻塞主線程
  * 2. [殺手2] 修正 removeOutsideVisibleBounds：恢復 MarkerCluster 真正效能
  * 3. [殺手3] 預先計算 treeCountMap / treeMap：O(N²) 降至 O(1)
@@ -9,6 +9,7 @@
  * 5. [體驗] mouseout 延遲從 1500ms 縮短至 300ms，提升響應感
  * 6. [體驗] 底圖切換優化，避免不必要嘅迴圈
  * 7. [UI] 移除狀態列的「渲染耗時」顯示，保持畫面簡潔
+ * 8. [v2.1] 新增樹木即刻顯示：清空空間索引 + 自動飛去新樹位置，零 refresh
  */
 
 const App = (function() {
@@ -157,7 +158,7 @@ const App = (function() {
       showCoverageOnHover: false,
       zoomToBoundsOnClick: true,
       spiderfyOnMaxZoom: false,
-      removeOutsideVisibleBounds: true, // 🔥 [殺手2] 改回 true！恢復 MarkerCluster 真正效能，避免視口外 DOM 堆積
+      removeOutsideVisibleBounds: true, // 🔥 [殺手2] 改回 true！恢復 MarkerCluster 真正效能
       disableClusteringAtZoom: 16,
       maxClusterRadius: 20,
       iconCreateFunction: function(cluster) {
@@ -225,6 +226,8 @@ const App = (function() {
       // 重置緩存和狀態
       projectMarkersCache = null;
       treesCache.clear();
+      spatialIndexCache = null;   // 🔥 [v2.1] 清空空間索引，新樹先至有座標
+      coordGroupsCache = null;    // 🔥 [v2.1] 清空群組快取，新樹先至會畫出嚟
       
       buildSelect();
       drawProjects();
@@ -367,8 +370,8 @@ const App = (function() {
     }
     
     list.forEach(function(t) {
-      const coords = offsetMap.get(t.tree_id);
-      if (!coords) return;
+      // 🔥 [v2.1] 保險：就算快取舊咗搵唔到新樹座標，都照用真實座標畫出嚟
+      const coords = offsetMap.get(t.tree_id) || { original: [+t.lat, +t.lng], offset: null };
       
       const lat = coords.original[0];
       const lng = coords.original[1];
@@ -617,6 +620,8 @@ const App = (function() {
         closePanel();
         projectMarkersCache = null;
         treesCache.clear();
+        spatialIndexCache = null;
+        coordGroupsCache = null;
         load();
       }
     } catch (error) { alert('❌ 請求失敗：' + error.message); }
@@ -685,7 +690,18 @@ const App = (function() {
       if (r.ok) {
         closePanel();
         treesCache.clear();
-        load();
+        spatialIndexCache = null;
+        coordGroupsCache = null;
+        await load();
+        
+        // 🔥 [v2.1] 即刻飛去新樹位置 + 自動彈出資料框，完全唔使 refresh
+        const nt = TREES.find(function(t){ return String(t.tree_id) === String(r.tree_id); });
+        if (nt) {
+          map.flyTo([+nt.lat, +nt.lng], Math.max(map.getZoom(), 18), { duration: 0.8 });
+          const m = treesCache.get(nt.tree_id);
+          if (m) setTimeout(function(){ m.openPopup(); }, 900);
+          updateStatus('✅ 已定位到新樹木：' + r.tree_id);
+        }
       }
     } catch (error) { alert('❌ 請求失敗：' + error.message); }
   }
@@ -703,7 +719,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.1）');
   }
   
   function checkURLParams() {
@@ -770,6 +786,8 @@ const App = (function() {
     treesCache.clear();
     treeCountMap.clear();
     treeMap.clear();
+    spatialIndexCache = null;
+    coordGroupsCache = null;
     console.log('🗑️ 緩存已清除');
   }
   
