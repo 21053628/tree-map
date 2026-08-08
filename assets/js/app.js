@@ -54,7 +54,33 @@ const App = (function() {
       return false;
     }
     
-    map = L.map('map').setView(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM);
+    // 檢測是否為移動設備
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    // 根據設備類型調整地圖設置
+    const mapOptions = {
+      zoomControl: !isMobile, // 在手機上隱藏默認 zoom 控制，使用自定義控制
+      attributionControl: true,
+      zoomAnimation: !isMobile,
+      fadeAnimation: !isMobile,
+      markerZoomAnimation: !isMobile,
+      tap: isTouch,
+      tapTolerance: 15
+    };
+    
+    map = L.map('map', mapOptions).setView(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM);
+    
+    // 在手機上添加放大的 zoom 控制
+    if (isMobile) {
+      L.control.zoom({
+        position: 'topleft',
+        zoomInText: '+',
+        zoomOutText: '−',
+        zoomInTitle: '放大',
+        zoomOutTitle: '縮小'
+      }).addTo(map);
+    }
     
     // 底圖圖層
     const hkBase = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
@@ -74,8 +100,8 @@ const App = (function() {
     
     baseLayers.hk.addTo(map);
     
-    // 圖層切換控制
-    const layerBar = L.control({position:'bottomleft'});
+    // 圖層切換控制 - 在手機上改為右下角，避免與 zoom 控制重疊
+    const layerBar = L.control({position: isMobile ? 'bottomright' : 'bottomleft'});
     layerBar.onAdd = function() {
       const div = L.DomUtil.create('div', 'layerbar');
       div.innerHTML = '<button data-l="hk" class="on">政府</button>' +
@@ -83,12 +109,20 @@ const App = (function() {
                       '<button data-l="topo">地形</button>' +
                       '<button data-l="street">街道</button>';
       L.DomEvent.disableClickPropagation(div);
+      // 同時支持點擊和觸摸事件
       div.querySelectorAll('button').forEach(function(b) {
         b.onclick = function() {
           Object.keys(baseLayers).forEach(function(k) { map.removeLayer(baseLayers[k]); });
           baseLayers[b.dataset.l].addTo(map);
           div.querySelectorAll('button').forEach(function(x) { x.classList.toggle('on', x===b); });
         };
+        // 為觸摸設備添加 touchstart 支持
+        if (isTouch) {
+          b.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            b.click();
+          }, {passive: false});
+        }
       });
       return div;
     };

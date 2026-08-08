@@ -1,6 +1,6 @@
 html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif;
-          -webkit-tap-highlight-color:transparent}
-#map{height:100%}
+          -webkit-tap-highlight-color:transparent;overflow:hidden}
+#map{height:100%;width:100%}
 button{touch-action:manipulation}
 #bar{position:absolute;top:8px;right:8px;z-index:999;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 #bar select{padding:10px;border-radius:8px;border:1px solid #bbb;font-size:15px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);max-width:46vw}
@@ -132,18 +132,65 @@ button{touch-action:manipulation}
 
 /* ================= 手機優化 ================= */
 @media (max-width:600px){
-  #bar{left:8px;right:8px;flex-wrap:nowrap;gap:4px}
+  #bar{left:8px;right:8px;top:6px;flex-wrap:nowrap;gap:4px}
   #bar select{flex:1;min-width:0;max-width:none;font-size:16px;padding:9px 6px}
   #bar button{flex:0 0 auto;padding:10px 10px;font-size:13px;white-space:nowrap}
-  .leaflet-top.leaflet-left{top:60px;left:6px}
+  .leaflet-top.leaflet-left{top:56px;left:6px}
+  .leaflet-bottom.leaflet-right{bottom:40px;right:6px}
   .leaflet-control-zoom a{width:38px;height:38px;line-height:38px;font-size:20px}
   .legend{display:none}
   body.panel-open .layerbar{display:none}
-  #panel{position:fixed;top:auto;bottom:0;left:0;right:0;width:auto;max-height:80vh;
+  #panel{position:fixed;top:auto;bottom:0;left:0;right:0;width:auto;max-height:75vh;
          border-radius:16px 16px 0 0;padding:10px 14px calc(14px + env(safe-area-inset-bottom))}
   #panel::before{content:'';display:block;width:44px;height:4px;background:#ccc;border-radius:2px;margin:2px auto 8px}
   #panel input,#panel select{font-size:16px;padding:12px}
   #panel button{padding:14px;font-size:16px}
   #status{font-size:12px;bottom:8px;max-width:92%}
-  .layerbar button{padding:10px 14px}
+  .layerbar button{padding:10px 14px;font-size:12px}
+  .popup-img{width:100%;max-width:280px}
+  .leaflet-popup-content-wrapper{border-radius:12px;padding:0}
+  .leaflet-popup-content{margin:12px;font-size:14px;line-height:1.6}
+  .leaflet-popup-tip-container{width:30px;height:15px}
+  #panel{z-index:1300}
 }
+
+/* 平板電腦優化 */
+@media (min-width:601px) and (max-width:1024px){
+  #bar{left:12px;right:12px;top:10px}
+  #bar select{font-size:16px;padding:11px}
+  #bar button{padding:11px 14px;font-size:15px}
+  #panel{width:320px;top:58px;right:12px}
+  .leaflet-control-zoom a{width:42px;height:42px;line-height:42px;font-size:22px}
+}
+
+/* 確保 Leaflet 控制項在手機上正確顯示 */
+.leaflet-touch .leaflet-bar{
+  border-radius:8px;
+}
+
+.leaflet-touch .leaflet-bar a{
+  width:38px;
+  height:38px;
+  line-height:38px;
+}
+
+/* 防止地圖被意外拖動時觸發瀏覽器手勢 */
+.leaflet-container{
+  touch-action: none;
+}
+
+/* 確保 popup 在手機上不會超出視窗 */
+.leaflet-popup-content-wrapper{
+  max-width: calc(100vw - 24px);
+}
+
+/* 優化按鈕點擊區域，方便手指操作 */
+@media (pointer:coarse){
+  #bar button,
+  #bar select,
+  .layerbar button,
+  #panel button{
+    min-height:44px;
+  }
+}
+
