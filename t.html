@@ -284,7 +284,7 @@ async function submitInspection(){
   
   try {
     const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
-      health:$('#health').value, note:$('#note').value, photo_base64: photosData});
+      health:$('#health').value, note:$('#note').value, photo_base64: JSON.stringify(photosData)});
     alert(r.ok ? '✅ 已上傳 ' + files.length + ' 張相片！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
     if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
   } catch(err) {
@@ -348,7 +348,7 @@ function loadLogs(){
       data.reverse().forEach(function(r){
         var photoHtml = '';
         // 支援多張相片 (photo_url 可能是陣列)
-        var photos = r.photo_url;
+        var photos = r.photo_urls || r.photo_url;
         if(!photos){ photos = []; }
         else if(typeof photos === 'string'){ photos = [photos]; }
         
@@ -357,12 +357,13 @@ function loadLogs(){
           var treeIdEscaped = escapeHtml(r.tree_id||id);
           var timeStrForDownload = timeStr.replace(/&/g,'&amp;').replace(/'/g,'&apos;');
           
+          photoHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">';
           for(var i = 0; i < photos.length; i++){
             var photoUrlEscaped = escapeHtml(photos[i]);
             var photoIndex = i + 1;
-            photoHtml += '<br><div style=\"margin-bottom:8px\"><img class=\"tree zoomable-img\" src=\"' + photoUrlEscaped + '\" loading=\"lazy\" decoding=\"async\" onclick=\"zoomImage(this.src)\" title=\"點擊放大\">' +
-                        '<button style=\"width:auto;padding:6px 12px;margin-top:6px;font-size:13px;background:#546e7a;color:#fff;border:none;border-radius:6px;cursor:pointer\" onclick=\"downloadPhoto(&apos;' + photoUrlEscaped + '&apos;, &apos;' + treeIdEscaped + '&apos;, &apos;' + timeStrForDownload + '&apos;, ' + photoIndex + ')\">⬇️ 下載巡查照片 #' + photoIndex + '</button></div>';
+            photoHtml += '<div style="flex:0 0 calc(33.333% - 6px);min-width:100px;"><img class="tree zoomable-img" src="' + photoUrlEscaped + '" loading="lazy" decoding="async" onclick="zoomImage(this.src)" title="點擊放大" style="width:100%;height:100px;object-fit:cover;margin:0;"><button style="width:100%;padding:4px;margin-top:4px;font-size:12px;background:#546e7a;color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="downloadPhoto(\'' + photoUrlEscaped + '\', \'' + treeIdEscaped + '\', \'' + timeStrForDownload + '\', ' + photoIndex + ')">⬇️ #' + photoIndex + '</button></div>';
           }
+          photoHtml += '</div>';
         }
         html += '<div class=\"log\"><span class=\"ok">' + escapeHtml(r.health) + '</span>｜' +
                escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>';
