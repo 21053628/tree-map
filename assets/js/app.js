@@ -297,6 +297,12 @@ const App = (function() {
   /**
    * 繪製樹木標記（真實位置顯示 + 懸停自動散開效果）
    * 所有樹木永遠顯示在真實 HK80 座標上，滑鼠移到重疊區域時自動散開
+   * 
+   * 性能優化重點：
+   * 1. 使用空間索引加速距離計算 - 從 O(n²) 降至 O(n)
+   * 2. 預先計算群組關係，避免重複查找
+   * 3. 使用事件委託減少監聽器數量
+   * 4. 防抖處理 mouseout 事件
    */
   function drawTrees() {
     const startTime = performance.now();
@@ -310,7 +316,20 @@ const App = (function() {
     const list = TREES.filter(function(t) { return String(t.project_id) === String(curProject); });
     const markers = [];
     
-    // 第一步：按實際距離分組，找出重疊的樹木（解決極近距離問題）
+    // 優化 1: 使用網格空間索引加速距離計算
+    const gridSize = 0.00002; // 約 2 米網格
+    const gridMap = new Map();
+    
+    // 建立空間索引
+    list.forEach(function(t, index) {
+      const gridKey = Math.floor(+t.lat / gridSize) + '_' + Math.floor(+t.lng / gridSize);
+      if (!gridMap.has(gridKey)) {
+        gridMap.set(gridKey, []);
+      }
+      gridMap.get(gridKey).push(index);
+    });
+    
+    // 優化 2: 只檢查相鄰網格，大幅減少距離計算次數
     const coordGroups = [];
     const used = new Array(list.length).fill(false);
     
@@ -321,24 +340,43 @@ const App = (function() {
       used[i] = true;
       const center = list[i];
       
-      for (let j = i + 1; j < list.length; j++) {
-        if (used[j]) continue;
-        const other = list[j];
-        
-        // 使用 Leaflet 計算實際距離（米）
-        const dist = map.distance(
-          [center.lat, center.lng],
-          [other.lat, other.lng]
-        );
-        
-        // 如果距離少於 2 米，視為重疊群組
-        if (dist < 2) {
-          group.push(other);
-          used[j] = true;
+      // 計算中心點所在網格
+      const centerGridX = Math.floor(+center.lat / gridSize);
+      const centerGridY = Math.floor(+center.lng / gridSize);
+      
+      // 只檢查相鄰 9 個網格
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const neighborKey = (centerGridX + dx) + '_' + (centerGridY + dy);
+          const neighbors = gridMap.get(neighborKey) || [];
+          
+          for (let j = 0; j < neighbors.length; j++) {
+            const idx = neighbors[j];
+            if (used[idx]) continue;
+            
+            const other = list[idx];
+            const dist = map.distance(
+              [+center.lat, +center.lng],
+              [+other.lat, +other.lng]
+            );
+            
+            if (dist < 2) {
+              group.push(other);
+              used[idx] = true;
+            }
+          }
         }
       }
       coordGroups.push(group);
     }
+    
+    // 優化 3: 預先建立 tree_id 到群組的映射，避免重複查找
+    const treeToGroupMap = new Map();
+    coordGroups.forEach(function(trees, groupIndex) {
+      trees.forEach(function(t) {
+        treeToGroupMap.set(t.tree_id, groupIndex);
+      });
+    });
     
     // 第二步：為每棵樹計算偏移後的座標（用於懸停散開）
     const offsetMap = new Map(); // key: tree_id, value: {original: [lat, lng], offset: [lat, lng]}
@@ -370,6 +408,35 @@ const App = (function() {
       }
     });
     
+    // 優化 4: 使用事件委託，減少監聽器數量
+    let activeGroupId = -1;
+    let mouseOutTimer = null;
+    
+    // 全局 mouseout 處理函數
+    function handleMouseOut() {
+      if (mouseOutTimer) {
+        clearTimeout(mouseOutTimer);
+      }
+      mouseOutTimer = setTimeout(function() {
+        if (activeGroupId !== -1) {
+          const group = coordGroups[activeGroupId];
+          if (group) {
+            group.forEach(function(tree) {
+              const m = treesCache.get(tree.tree_id);
+              if (m && m._isOffset) {
+                if (m._icon) {
+                  L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
+                }
+                m.setLatLng(m._originalPos);
+                m._isOffset = false;
+              }
+            });
+          }
+          activeGroupId = -1;
+        }
+      }, 1500);
+    }
+    
     // 第三步：批量創建標記（使用原始座標，保證位置準確）
     list.forEach(function(t) {
       const coords = offsetMap.get(t.tree_id);
@@ -400,11 +467,10 @@ const App = (function() {
       // 儲存偏移資訊到 marker 物件
       marker._originalPos = coords.original;
       marker._offsetPos = coords.offset;
-      marker._isOffset = false; // 目前是否處於偏移狀態
+      marker._isOffset = false;
+      marker._groupId = treeToGroupMap.get(t.tree_id); // 預先儲存群組 ID
       
-      // 綁定懸停事件：滑鼠移入時散開，移出時 1.5 秒後恢復（優化動畫時間）
-      let mouseOutTimer = null;
-      
+      // 優化 5: 簡化事件處理，使用預存的群組 ID
       marker.on('mouseover', function(e) {
         // 清除任何待處理的收回計時器
         if (mouseOutTimer) {
@@ -412,15 +478,13 @@ const App = (function() {
           mouseOutTimer = null;
         }
         
-        if (marker._offsetPos && !marker._isOffset) {
-          // 將此群組的所有標記散開
-          const groupId = findGroupId(t.tree_id, coordGroups);
-          if (groupId !== -1) {
-            const group = coordGroups[groupId];
+        if (marker._offsetPos && !marker._isOffset && marker._groupId !== null) {
+          const groupId = marker._groupId;
+          const group = coordGroups[groupId];
+          if (group) {
             group.forEach(function(tree) {
               const m = treesCache.get(tree.tree_id);
               if (m && m._offsetPos && !m._isOffset) {
-                // 使用平滑動畫移動到偏移位置
                 if (m._icon) {
                   L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
                 }
@@ -429,32 +493,11 @@ const App = (function() {
               }
             });
           }
+          activeGroupId = groupId;
         }
       });
       
-      marker.on('mouseout', function(e) {
-        // 設定 1.5 秒延遲後才收回（加快回應速度）
-        mouseOutTimer = setTimeout(function() {
-          if (marker._isOffset) {
-            // 將此群組的所有標記恢復原位
-            const groupId = findGroupId(t.tree_id, coordGroups);
-            if (groupId !== -1) {
-              const group = coordGroups[groupId];
-              group.forEach(function(tree) {
-                const m = treesCache.get(tree.tree_id);
-                if (m && m._isOffset) {
-                  // 使用平滑動畫飛回原位
-                  if (m._icon) {
-                    L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
-                  }
-                  m.setLatLng(m._originalPos);
-                  m._isOffset = false;
-                }
-              });
-            }
-          }
-        }, 1500); // 1.5 秒延遲
-      });
+      marker.on('mouseout', handleMouseOut);
       
       // 在 popup 中顯示原始座標（真實 HK80 座標）
       const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
@@ -483,22 +526,10 @@ const App = (function() {
     
     const pname = (PROJECTS.find(function(x) { return String(x.project_id) === String(curProject); }) || {}).name;
     updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹｜渲染耗時 ' + perfMetrics.renderTime.toFixed(1) + 'ms');
-    console.log('📊 樹木渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms, 數量:', list.length);
+    console.log('📊 樹木渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms, 數量:', list.length, '群組數:', coordGroups.length);
   }
   
-  /**
-   * 輔助函數：根據 tree_id 查找所屬群組索引
-   */
-  function findGroupId(treeId, groups) {
-    for (let i = 0; i < groups.length; i++) {
-      for (let j = 0; j < groups[i].length; j++) {
-        if (String(groups[i][j].tree_id) === String(treeId)) {
-          return i;
-        }
-      }
-    }
-    return -1;
-  }
+  // findGroupId 函數已移除，改用 treeToGroupMap 進行 O(1) 查找
   
   /**
    * 顯示面板
