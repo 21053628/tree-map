@@ -561,32 +561,30 @@ const App = (function() {
     }
     if (!AuthService.promptAuth()) return;
     
-    // 獲取當前地盤的樹木列表作為模板選項
-    const templateTrees = TREES.filter(function(t) { 
-      return String(t.project_id) === String(curProject); 
-    });
-    
-    let treeOptions = '<option value="">-- 選擇一棵樹作為模板（可選） --</option>';
-    templateTrees.sort(function(a, b) {
-      const idA = String(a.tree_id || '');
-      const idB = String(b.tree_id || '');
-      return idA.localeCompare(idB);
-    }).forEach(function(t) {
-      treeOptions += '<option value="' + t.tree_id + '">' + t.tree_id + ' - ' + t.name + ' (' + t.species + ')</option>';
-    });
+    // 載入樹木清單到 datalist（使用 trees_data.json）
+    if (!window.allTreesLoaded) {
+      fetch('trees_data.json')
+        .then(function(r) { return r.json(); })
+        .then(function(trees) {
+          const dataList = document.getElementById('tree_datalist');
+          if (dataList) {
+            dataList.innerHTML = '';
+            trees.forEach(function(tree) {
+              const option = document.createElement('option');
+              option.value = tree.name;
+              dataList.appendChild(option);
+            });
+          }
+          window.allTreesLoaded = true;
+        })
+        .catch(function(err) { console.error('載入樹木資料失敗:', err); });
+    }
     
     showPanel(
       '<b>🌳 新增樹木</b>' +
-      '<div style="margin-bottom:12px;padding:10px;background:#e8f5e9;border-radius:8px">' +
-        '<label style="display:block;margin-bottom:6px;font-weight:600;color:#2e7d32">💡 快速方法：從現有樹木複製</label>' +
-        '<input type="text" id="treeSearch" placeholder="🔍 輸入關鍵字搜尋（樹種、編號、名稱）..." style="margin-bottom:8px">' +
-        '<select id="templateTree" onchange="App.fillTreeForm(this.value)" style="max-height:200px;overflow-y:auto">' +
-          treeOptions +
-        '</select>' +
-      '</div>' +
       '<input id="tId" placeholder="樹木編號（留空自動）">' +
-      '<input id="tName" placeholder="名稱">' +
-      '<input id="tSpecies" placeholder="樹種">' +
+      '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）...">' +
+      '<datalist id="tree_datalist"></datalist>' +
       '<select id="tStatus">' +
         '<option>Normal</option><option>Fair</option><option>Poor</option>' +
         '<option>Very Poor</option><option>Dead</option>' +
@@ -600,76 +598,8 @@ const App = (function() {
       '<button onclick="App.doCreateTree()">💾 建立樹木</button>' +
       '<button class="x" onclick="App.closePanel()">✖ 關閉</button>'
     );
-    
-    // 綁定搜尋事件
-    setTimeout(function() {
-      var searchInput = document.getElementById('treeSearch');
-      var selectBox = document.getElementById('templateTree');
-      if (searchInput && selectBox) {
-        searchInput.addEventListener('input', function() {
-          filterTreeOptions(this.value, selectBox);
-        });
-      }
-    }, 100);
   }
   
-  /**
-   * 篩選樹木選項（支援關鍵字搜尋）
-   */
-  function filterTreeOptions(keyword, selectBox) {
-    keyword = keyword.toLowerCase().trim();
-    var options = selectBox.getElementsByTagName('option');
-    
-    for (var i = 0; i < options.length; i++) {
-      var opt = options[i];
-      var text = opt.text.toLowerCase();
-      var shouldShow = !keyword || text.indexOf(keyword) > -1;
-      opt.style.display = shouldShow ? '' : 'none';
-      
-      // 如果當前選項被隱藏，重置為第一個可見選項
-      if (shouldShow && !selectBox.value) {
-        selectBox.value = opt.value;
-      }
-    }
-  }
-  
-  /**
-   * 用選擇的樹木填充表單
-   */
-  function fillTreeForm(treeId) {
-    if (!treeId) {
-      // 清空表單
-      document.getElementById('tId').value = '';
-      document.getElementById('tName').value = '';
-      document.getElementById('tSpecies').value = '';
-      document.getElementById('tStatus').value = 'Normal';
-      document.getElementById('tHeight').value = '';
-      document.getElementById('tSpread').value = '';
-      document.getElementById('tDbh').value = '';
-      document.getElementById('tLevel').value = '';
-      document.getElementById('tN').value = '';
-      document.getElementById('tE').value = '';
-      return;
-    }
-    
-    var tree = TREES.find(function(t) { return String(t.tree_id) === String(treeId); });
-    if (!tree) {
-      console.error('找不到樹木:', treeId);
-      return;
-    }
-    
-    // 填充資料（唔複製座標同編號）
-    document.getElementById('tName').value = tree.name || '';
-    document.getElementById('tSpecies').value = tree.species || '';
-    document.getElementById('tStatus').value = tree.status || 'Normal';
-    document.getElementById('tHeight').value = tree.height || '';
-    document.getElementById('tSpread').value = tree.spread || '';
-    document.getElementById('tDbh').value = tree.dbh || '';
-    document.getElementById('tLevel').value = tree.level || '';
-    
-    // 提示用戶輸入新座標
-    alert('✅ 已載入 "' + tree.tree_id + '" 的資料\n\n請填寫新樹木的 HK80 座標（N/E），其他資料可按需修改');
-  }
   
   /**
    * 建立樹木
@@ -694,8 +624,8 @@ const App = (function() {
         type: 'create_tree',
         tree_id: $('#tId').value,
         project_id: curProject,
-        name: $('#tName').value,
-        species: $('#tSpecies').value,
+        name: $('#tName').value,  // tName 現在包含樹種資料（如 "Acacia dealbata 銀荊"）
+        species: $('#tName').value,  // 使用相同的值作為 species
         status: $('#tStatus').value,
         height: $('#tHeight').value,
         spread: $('#tSpread').value,
