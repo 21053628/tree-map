@@ -681,8 +681,8 @@ const App = (function() {
   /**
    * 開啟地盤建立表單
    */
-  function openProjectForm() {
-    if (!AuthService.promptAuth()) return;
+  async function openProjectForm() {
+    if (!await AuthService.promptAuth()) return;
     
     showPanel(
       '<b>＋ 建立地盤</b>' +
@@ -739,12 +739,12 @@ const App = (function() {
   /**
    * 開啟新增樹木表單（加入樹木選擇器）
    */
-  function openTreeForm() {
+  async function openTreeForm() {
     if (!curProject) {
       alert('請先選擇地盤');
       return;
     }
-    if (!AuthService.promptAuth()) return;
+    if (!await AuthService.promptAuth()) return;
     
     // 載入樹木清單到 datalist（使用 trees_data.json）
     if (!window.allTreesLoaded) {
