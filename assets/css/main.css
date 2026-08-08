@@ -181,9 +181,24 @@ button{touch-action:manipulation}
   #status{font-size:12px;bottom:8px;max-width:92%}
   .layerbar button{padding:10px 14px;font-size:12px}
   .popup-img{width:100%;max-width:280px}
-  .leaflet-popup-content-wrapper{border-radius:12px;padding:0}
-  .leaflet-popup-content{margin:12px;font-size:14px;line-height:1.6}
-  .leaflet-popup-tip-container{width:30px;height:15px}
+  /* 手機版 Popup 完美置中與防出界 */
+  .leaflet-popup-content-wrapper{
+    border-radius: 14px !important;
+    padding: 0 !important; /* 保持 padding 0，但靠 content margin 撐開空間 */
+    max-width: calc(100vw - 24px) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25) !important;
+  }
+  .leaflet-popup-content{
+    margin: 16px 18px 18px 18px !important; /* 手機版留多啲空間俾關閉按鈕 */
+    font-size: 14px;
+    line-height: 1.6;
+    max-height: 60vh; /* 限制高度，防止內容太長擋住地圖 */
+    overflow-y: auto; /* 超長內容可以上下滑動 */
+  }
+  /* 手機版隱藏底部小三角（Tip），令 Popup 定位更準確，唔易出界 */
+  .leaflet-popup-tip-container{
+    display: none !important; 
+  }
   #panel{z-index:1300}
 }
 
@@ -212,9 +227,56 @@ button{touch-action:manipulation}
   touch-action: none;
 }
 
-/* 確保 popup 在手機上不會超出視窗 */
+/* ================= Popup 防出界與關閉按鈕優化 ================= */
 .leaflet-popup-content-wrapper{
-  max-width: calc(100vw - 24px);
+  max-width: calc(100vw - 32px) !important; /* 左右各留 16px 安全距離，防止出界 */
+  box-sizing: border-box;
+  overflow: hidden; /* 防止內部圖片撐爆圓角 */
+  border-radius: 12px !important;
+}
+
+.leaflet-popup-content{
+  margin: 14px 16px 16px 16px !important; /* 強制留出右上角空間俾關閉按鈕 */
+  line-height: 1.5;
+  word-wrap: break-word; /* 強制長文字換行，防止撐爆 */
+  overflow-wrap: break-word;
+}
+
+/* 放大並美化關閉按鈕（解決手機撳唔到／出界問題） */
+.leaflet-popup-close-button {
+  width: 32px !important;
+  height: 32px !important;
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 1000;
+  background: rgba(0,0,0,0.06) !important; /* 加個淺灰底色，更容易睇到同撳到 */
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 20px !important;
+  color: #555 !important;
+  padding: 0 !important;
+  transition: background 0.2s;
+}
+.leaflet-popup-close-button:hover {
+  background: rgba(0,0,0,0.15) !important;
+  color: #000 !important;
+}
+/* 修正關閉按鈕入面個 "×" 號嘅垂直置中 */
+.leaflet-popup-close-button span {
+  display: block;
+  margin-top: 2px; 
+  font-family: Arial, sans-serif;
+}
+
+/* 確保 Popup 入面嘅圖片唔會撐爆個框 */
+.popup-img{
+  max-width: 100% !important;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+  margin: 8px 0;
 }
 
 /* 優化按鈕點擊區域，方便手指操作 */
