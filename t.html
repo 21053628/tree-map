@@ -404,6 +404,7 @@ async function saveTreeInfo(){
   try {
     const r = await post({type:'update_tree', tree_id:id, prj:prj,
       name:$('#eName').value,
+      status:$('#eStatus').value,
       project_id:$('#eProject').value, height:$('#eHeight').value,
       spread:$('#eSpread').value, dbh:$('#eDbh').value, level:$('#eLevel').value,
       lat:lat, lng:lng, description:$('#eDesc').value});
