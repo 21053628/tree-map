@@ -27,6 +27,15 @@ button{touch-action:manipulation}
 .leaflet-popup-content{font-size:14px;line-height:1.5}
 .leaflet-popup-content button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;margin-top:4px}
 
+/* 樹木標記平滑動畫效果 */
+.leaflet-marker-icon {
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.leaflet-marker-dragging {
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* ================= 手機優化 ================= */
 @media (max-width:600px){
   #bar{left:8px;right:8px;flex-wrap:nowrap;gap:4px}
