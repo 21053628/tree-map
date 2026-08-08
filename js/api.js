@@ -242,7 +242,7 @@ const ApiService = (function() {
         fetchWithTimeout(apiEndpoint, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'text/plain;charset=utf-8', // 避免觸發 OPTIONS 預檢
             'Accept': 'application/json'
           },
           body: JSON.stringify(payload)
