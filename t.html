@@ -147,7 +147,7 @@ function render(t){
   }
   if(mainPhotos && mainPhotos.length > 0){
     for(var i = 0; i < mainPhotos.length; i++){
-      html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" loading="lazy" decoding="async" onclick="zoomImage(this.src)">';
+      html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="zoomImage(this.src)">';
     }
   }
   html += '<div class="grid">' +
@@ -165,7 +165,7 @@ function render(t){
   '<!-- 圖片縮放 Modal -->' +
   '<div id="imgModal" class="modal" onclick="closeZoom()">' +
     '<span class="modal-close">&times;</span>' +
-    '<img id="modalImg" src="" alt="放大圖片">' +
+    '<img id="modalImg" src="" alt="放大圖片" crossorigin="anonymous" referrerpolicy="no-referrer">' +
   '</div>';
   $('#app').innerHTML = html;
 }
@@ -411,7 +411,7 @@ function loadLogs(){
             var photoUrlEscaped = escapeHtml(photoUrl);
             var displayUrlEscaped = escapeHtml(displayUrl);
             var photoIndex = i + 1;
-            photoHtml += '<div class="inspection-photo-item"><img class="inspection-photo-thumb" src="' + displayUrlEscaped + '" loading="lazy" decoding="async" onclick="event.stopPropagation(); zoomImage(\'' + photoUrlEscaped + '\')" title="點擊放大" onerror="this.parentElement.style.display=\'none\'"><button class="inspection-photo-btn" onclick="event.stopPropagation(); downloadPhoto(\'' + photoUrlEscaped + '\', \'' + treeIdEscaped + '\', \'' + timeStrForDownload + '\', ' + photoIndex + ')">⬇️ #' + photoIndex + '</button></div>';
+            photoHtml += '<div class="inspection-photo-item"><img class="inspection-photo-thumb" src="' + displayUrlEscaped + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="event.stopPropagation(); zoomImage(\'' + photoUrlEscaped + '\')" title="點擊放大" onerror="this.parentElement.style.display=\'none\'"><button class="inspection-photo-btn" onclick="event.stopPropagation(); downloadPhoto(\'' + photoUrlEscaped + '\', \'' + treeIdEscaped + '\', \'' + timeStrForDownload + '\', ' + photoIndex + ')">⬇️ #' + photoIndex + '</button></div>';
           }
           photoHtml += '</div>';
         }
@@ -447,8 +447,12 @@ window.closeZoom = function(){
 
 // 下載巡查照片功能
 window.downloadPhoto = function(url, treeId, timeStr, photoIndex){
-  fetch(url)
-    .then(function(r){ return r.blob(); })
+  // 使用 fetch with no-cors mode 來處理跨域圖片下載
+  fetch(url, { mode: 'cors', credentials: 'omit' })
+    .then(function(r){ 
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.blob(); 
+    })
     .then(function(blob){
       var link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
@@ -459,7 +463,9 @@ window.downloadPhoto = function(url, treeId, timeStr, photoIndex){
     })
     .catch(function(err){
       console.error('Download error:', err);
-      alert('❌ 下載失敗：' + err.message);
+      // 如果 fetch 失敗，嘗試直接打開圖片讓用戶手動保存
+      window.open(url, '_blank');
+      alert('⚠️ 自動下載失敗，已在新分頁打開圖片，請手動右鍵保存。\n錯誤：' + err.message);
     });
 };
 
