@@ -109,6 +109,18 @@
   const prj = params.get('prj') || params.get('project_id') || '';
   let TREE = null;
 
+  // 🔥 修正：聰明返回地圖 —— 從地圖入嚟就原路返回（保留原本視野），NFC 直接開就先跳轉定位
+  window.goBackToMap = function(e){
+    try {
+      if (document.referrer && document.referrer.indexOf('index.html') !== -1 && history.length > 1) {
+        e.preventDefault();
+        history.back();
+        return false;
+      }
+    } catch(err){}
+    return true;
+  };
+
   async function staffOk(){
     const tokenData = localStorage.getItem('tree_staff_token');
     if(tokenData){
@@ -177,7 +189,8 @@
 
   function render(t){
     const hk = toHK(t.lat, t.lng);
-    var html = '<a class="back" href="index.html?tree_id=' + encodeURIComponent(t.tree_id) + '&project_id=' + encodeURIComponent(t.project_id || '') + '">⬅ 地圖</a>' +
+    // 🔥 修正：返回連結加入 lat/lng 雙保險，並使用聰明返回
+    var html = '<a class="back" href="index.html?tree_id=' + encodeURIComponent(t.tree_id) + '&project_id=' + encodeURIComponent(t.project_id || '') + '&lat=' + encodeURIComponent(t.lat) + '&lng=' + encodeURIComponent(t.lng) + '" onclick="return goBackToMap(event)">⬅ 地圖</a>' +
     '<div class="card">' +
       '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
       '<div style="margin-top:8px"><span class="badge" style="background:' + (COLORS[t.status]||'#757575') + '">Status: ' + escapeHtml(t.status) + '</span></div>';
@@ -230,13 +243,11 @@
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
 
-    // requestAnimationFrame 會等待瀏覽器準備好繪製下一幀畫面
     requestAnimationFrame(function() {
       requestAnimationFrame(function() {
         const minimapEl = document.getElementById('minimap');
         if (!minimapEl) return;
 
-        // 如果尺寸還是 0，用 setTimeout 兜底
         if (minimapEl.offsetWidth === 0 || minimapEl.offsetHeight === 0) {
           setTimeout(function(){ initMiniMap(t); }, 150);
           return;
@@ -250,7 +261,6 @@
         L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
           fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
         
-        // 強制刷新尺寸
         mm.invalidateSize();
       });
     });
@@ -274,7 +284,7 @@
       '<hr><div class="section-title">✏️ 樹木資料（HK80 座標／Level／地盤）</div>' +
       '<div class="form-group"><label class="form-label">🌳 樹種</label><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
       '<datalist id="tree_list"></datalist>' +
-      '<div class="form-group"><label class="form-label">📊 健康狀況</label><select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select></div>' +
+      '<div class="form-group"><label class="form-label">📊 健康狀況</label><select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
       '<div class="form-group"><label class="form-label">🚩 所屬地盤</label><select id="eProject"></select></div>' +
       '<div class="row2"><div class="form-group"><label class="form-label">Height (m)</label><input id="eHeight" placeholder="高度" inputmode="decimal"></div><div class="form-group"><label class="form-label">Spread (m)</label><input id="eSpread" placeholder="冠幅" inputmode="decimal"></div></div>' +
       '<div class="form-group"><label class="form-label">DBH (cm)</label><input id="eDbh" placeholder="胸徑" inputmode="decimal"></div>' +
