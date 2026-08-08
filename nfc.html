@@ -156,13 +156,11 @@ function generateURL() {
 
 // 載入樹木列表
 function loadTreeList() {
-  const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeokPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
-  
-  fetch(API + '?action=trees')
+  // 改為讀取本地 JSON 文件，避免 CORS 問題
+  fetch('data/trees.json')
     .then(function(r) { return r.json(); })
-    .then(function(res) {
-      const trees = res.data || [];
-      if (trees.length === 0) {
+    .then(function(trees) {
+      if (!trees || trees.length === 0) {
         document.getElementById('treeList').innerHTML = '暫無樹木資料';
         return;
       }
@@ -179,7 +177,7 @@ function loadTreeList() {
     })
     .catch(function(err) {
       console.error('Load error:', err);
-      document.getElementById('treeList').innerHTML = '載入失敗：' + err.message;
+      document.getElementById('treeList').innerHTML = '載入失敗：請確保 data/trees.json 存在';
     });
 }
 
