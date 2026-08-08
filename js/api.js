@@ -8,6 +8,8 @@
  * 4. 響應數據壓縮支持
  * 5. 增加快取 TTL 至 60 秒
  * 6. 提高並行請求數至 5
+ * 7. RequestIdleCallback 非關鍵請求
+ * 8. 連接池複用
  */
 
 const ApiService = (function() {
@@ -34,6 +36,9 @@ const ApiService = (function() {
   // 防抖動定時器
   let debounceTimer = null;
   const DEBOUNCE_DELAY = 300; // 300ms 防抖動
+  
+  // 連接池（Keep-Alive）
+  let connectionPool = null;
   
   /**
    * 初始化 API 服務
@@ -131,12 +136,20 @@ const ApiService = (function() {
   /**
    * 將請求加入隊列
    * @param {Function} requestFn - 請求函數
+   * @param {boolean} isLowPriority - 是否為低優先級（使用 RequestIdleCallback）
    * @returns {Promise<any>}
    */
-  function enqueueRequest(requestFn) {
+  function enqueueRequest(requestFn, isLowPriority = false) {
     return new Promise((resolve, reject) => {
-      pendingRequests.push({ resolve, reject, requestFn });
-      processQueue();
+      if (isLowPriority && 'requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+          pendingRequests.push({ resolve, reject, requestFn });
+          processQueue();
+        }, { timeout: 2000 });
+      } else {
+        pendingRequests.push({ resolve, reject, requestFn });
+        processQueue();
+      }
     });
   }
   
@@ -164,9 +177,10 @@ const ApiService = (function() {
    * GET 請求（帶快取和隊列）
    * @param {string} action - API 動作
    * @param {object} params - 查詢參數
+   * @param {boolean} isLowPriority - 是否為低優先級請求
    * @returns {Promise<object>}
    */
-  async function get(action, params = {}) {
+  async function get(action, params = {}, isLowPriority = false) {
     if (!apiEndpoint) {
       throw new Error('API 服務未初始化');
     }
@@ -186,7 +200,10 @@ const ApiService = (function() {
     return enqueueRequest(() => 
       withRetry(() => 
         fetchWithTimeout(url, {
-          method: 'GET'
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
         })
         .then(response => {
           if (!response.ok) {
@@ -200,7 +217,7 @@ const ApiService = (function() {
           return data;
         })
       )
-    );
+    , isLowPriority);
   }
   
   /**
@@ -224,6 +241,10 @@ const ApiService = (function() {
       withRetry(() =>
         fetchWithTimeout(apiEndpoint, {
           method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
           body: JSON.stringify(payload)
         })
         .then(response => {

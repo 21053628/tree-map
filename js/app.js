@@ -609,6 +609,17 @@ const App = (function() {
     statusEl = document.getElementById('status');
     
     if (initMap()) {
+      // 預熱座標快取（非阻塞）
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(function() {
+          CoordUtils.preheatCache();
+        });
+      } else {
+        setTimeout(function() {
+          CoordUtils.preheatCache();
+        }, 100);
+      }
+      
       load().then(function() {
         // 檢查 URL 是否有 tree_id 參數（來自 NFC 掃描）
         checkURLParams();

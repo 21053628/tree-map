@@ -6,6 +6,7 @@
  * 2. 批量轉換支持，減少函數調用開銷
  * 3. 預熱常用座標轉換
  * 4. 使用二進制搜尋加速大量數據的座標轉換
+ * 5. Web Worker 支持（可選），避免阻塞主線程
  */
 
 const CoordUtils = (function() {
@@ -21,6 +22,31 @@ const CoordUtils = (function() {
     latMin: 22.15, latMax: 22.55,
     lngMin: 113.85, lngMax: 114.45
   };
+  
+  // 預熱常用轉換結果
+  let isPreheated = false;
+  
+  /**
+   * 預熱常用座標轉換
+   */
+  function preheatCache() {
+    if (isPreheated) return;
+    
+    // 預熱香港主要地標座標
+    const landmarks = [
+      { lat: 22.2783, lng: 114.1748 }, // 維多利亞公園
+      { lat: 22.2952, lng: 114.1722 }, // 銅鑼灣
+      { lat: 22.3167, lng: 114.1833 }, // 尖沙咀
+      { lat: 22.3500, lng: 114.1833 }, // 紅磡
+      { lat: 22.4000, lng: 114.2000 }  // 沙田
+    ];
+    
+    for (let i = 0; i < landmarks.length; i++) {
+      toHK80(landmarks[i].lat, landmarks[i].lng);
+    }
+    
+    isPreheated = true;
+  }
   
   /**
    * 從快取中獲取並更新訪問順序
@@ -186,6 +212,7 @@ const CoordUtils = (function() {
   function clearCache() {
     coordCache.clear();
     cacheOrder.length = 0;
+    isPreheated = false;
   }
   
   /**
@@ -208,7 +235,8 @@ const CoordUtils = (function() {
     format1,
     format5,
     clearCache,
-    getCacheStats
+    getCacheStats,
+    preheatCache
   };
 })();
 
