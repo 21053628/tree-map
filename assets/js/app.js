@@ -501,7 +501,10 @@ const App = (function() {
    * 顯示面板
    */
   function showPanel(html) {
-    $('#panelContent').innerHTML = DOMPurify.sanitize(html);
+    const panelContent = $('#panelContent');
+    panelContent.innerHTML = DOMPurify.sanitize(html, {
+      ADD_ATTR: ['onclick']
+    });
     $('#panel').style.display = 'block';
     document.body.classList.add('panel-open');
   }
