@@ -26,6 +26,8 @@ button{touch-action:manipulation}
 .layerbar button.on{background:#4527a0;color:#fff}
 .leaflet-popup-content{font-size:14px;line-height:1.5}
 .leaflet-popup-content button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;margin-top:4px}
+.leaflet-popup-content button:hover{background:#0d47a1}
+.leaflet-popup-content button:active{transform:scale(0.98)}
 
 /* 樹木標記平滑動畫效果 - 優化過渡效果 */
 .leaflet-marker-icon {
