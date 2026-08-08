@@ -36,6 +36,7 @@ const App = (function() {
   let treeLayer = null;
   let prjLayer = null;
   let baseLayers = {};
+  let markerCluster = null;
   
   // 性能監控
   let perfMetrics = {
@@ -93,8 +94,25 @@ const App = (function() {
     };
     layerBar.addTo(map);
     
-    // 樹木和地盤圖層
-    treeLayer = L.layerGroup().addTo(map);
+    // 樹木和地盤圖層（使用 MarkerCluster 解決重疊問題）
+    markerCluster = L.markerClusterGroup({
+      showCoverageOnHover: true,
+      zoomToBoundsOnClick: true,
+      spiderfyOnMaxZoom: true,
+      removeOutsideVisibleBounds: false,
+      disableClusteringAtZoom: 19,
+      maxClusterRadius: 50,
+      iconCreateFunction: function(cluster) {
+        var count = cluster.getChildCount();
+        return L.divIcon({
+          html: '<div style="background:#e74c3c;color:white;border-radius:50%;width:36px;height:36px;line-height:36px;text-align:center;font-weight:bold;font-size:14px;">' + count + '</div>',
+          className: '',
+          iconSize: [36, 36]
+        });
+      }
+    });
+    treeLayer = markerCluster;
+    treeLayer.addTo(map);
     prjLayer  = L.layerGroup().addTo(map);
     
     // 圖例
@@ -292,9 +310,9 @@ const App = (function() {
       treesCache.set(t.tree_id, marker);
     });
     
-    // 批量添加到圖層
+    // 批量添加到圖層（MarkerClusterGroup 直接加 marker，唔使再包 layerGroup）
     if (markers.length > 0) {
-      treeLayer.addLayer(L.layerGroup(markers));
+      treeLayer.addLayers(markers);
     }
     
     perfMetrics.totalRenders++;
