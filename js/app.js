@@ -364,8 +364,16 @@ const App = (function() {
       marker._offsetPos = coords.offset;
       marker._isOffset = false; // 目前是否處於偏移狀態
       
-      // 綁定懸停事件：滑鼠移入時散開，移出時恢復
+      // 綁定懸停事件：滑鼠移入時散開，移出時 3 秒後恢復
+      let mouseOutTimer = null;
+      
       marker.on('mouseover', function(e) {
+        // 清除任何待處理的收回計時器
+        if (mouseOutTimer) {
+          clearTimeout(mouseOutTimer);
+          mouseOutTimer = null;
+        }
+        
         if (marker._offsetPos && !marker._isOffset) {
           // 將此群組的所有標記散開
           const groupId = findGroupId(t.tree_id, coordGroups);
@@ -374,6 +382,8 @@ const App = (function() {
             group.forEach(function(tree) {
               const m = treesCache.get(tree.tree_id);
               if (m && m._offsetPos && !m._isOffset) {
+                // 使用平滑動畫移動到偏移位置
+                L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
                 m.setLatLng(m._offsetPos);
                 m._isOffset = true;
               }
@@ -383,20 +393,25 @@ const App = (function() {
       });
       
       marker.on('mouseout', function(e) {
-        if (marker._isOffset) {
-          // 將此群組的所有標記恢復原位
-          const groupId = findGroupId(t.tree_id, coordGroups);
-          if (groupId !== -1) {
-            const group = coordGroups[groupId];
-            group.forEach(function(tree) {
-              const m = treesCache.get(tree.tree_id);
-              if (m && m._isOffset) {
-                m.setLatLng(m._originalPos);
-                m._isOffset = false;
-              }
-            });
+        // 設定 3 秒延遲後才收回
+        mouseOutTimer = setTimeout(function() {
+          if (marker._isOffset) {
+            // 將此群組的所有標記恢復原位
+            const groupId = findGroupId(t.tree_id, coordGroups);
+            if (groupId !== -1) {
+              const group = coordGroups[groupId];
+              group.forEach(function(tree) {
+                const m = treesCache.get(tree.tree_id);
+                if (m && m._isOffset) {
+                  // 使用平滑動畫飛回原位
+                  L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
+                  m.setLatLng(m._originalPos);
+                  m._isOffset = false;
+                }
+              });
+            }
           }
-        }
+        }, 3000); // 3 秒延遲
       });
       
       // 在 popup 中顯示原始座標（真實 HK80 座標）
