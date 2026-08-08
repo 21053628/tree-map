@@ -562,7 +562,7 @@ const App = (function() {
     
     // 載入樹木清單到 datalist（使用 trees_data.json）
     if (!window.allTreesLoaded) {
-      fetch('trees_data.json')
+      fetch('data/trees_data.json')
         .then(function(r) { return r.json(); })
         .then(function(trees) {
           const dataList = document.getElementById('tree_datalist');
