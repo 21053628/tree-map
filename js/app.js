@@ -772,8 +772,7 @@ const App = (function() {
     closePanel,
     clearCache,
     getPerfMetrics,
-    locateTree,
-    fillTreeForm
+    locateTree
   };
 
   /**
