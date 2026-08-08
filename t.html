@@ -347,14 +347,23 @@ function loadLogs(){
       var html = '';
       data.reverse().forEach(function(r){
         var photoHtml = '';
-        // 支援多張相片 (photo_url 可能是陣列或逗號分隔的字串)
+        // 支援多張相片 (photo_url 可能是陣列、JSON 字串或逗號分隔的字串)
         var photos = r.photo_urls || r.photo_url;
         if(!photos){ photos = []; }
         else if(typeof photos === 'string'){
+          // 嘗試解析 JSON 陣列字串
+          if(photos.indexOf('[') !== -1 && photos.indexOf(']') !== -1){
+            try {
+              photos = JSON.parse(photos);
+            } catch(e) {
+              // 如果不是有效的 JSON，繼續下面的逗號分隔處理
+              photos = photos.replace(/^\[|\]$/g, '');
+            }
+          }
           // 如果是逗號分隔的字串，分割成陣列
-          if(photos.indexOf(',') !== -1){
+          if(typeof photos === 'string' && photos.indexOf(',') !== -1){
             photos = photos.split(',').map(function(url){ return url.trim(); });
-          } else {
+          } else if(typeof photos === 'string') {
             photos = [photos];
           }
         }
