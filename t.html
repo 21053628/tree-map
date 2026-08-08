@@ -347,10 +347,17 @@ function loadLogs(){
       var html = '';
       data.reverse().forEach(function(r){
         var photoHtml = '';
-        // 支援多張相片 (photo_url 可能是陣列)
+        // 支援多張相片 (photo_url 可能是陣列或逗號分隔的字串)
         var photos = r.photo_urls || r.photo_url;
         if(!photos){ photos = []; }
-        else if(typeof photos === 'string'){ photos = [photos]; }
+        else if(typeof photos === 'string'){
+          // 如果是逗號分隔的字串，分割成陣列
+          if(photos.indexOf(',') !== -1){
+            photos = photos.split(',').map(function(url){ return url.trim(); });
+          } else {
+            photos = [photos];
+          }
+        }
         
         if(photos && photos.length > 0){
           var timeStr = fmtTime(r.time);
