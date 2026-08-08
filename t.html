@@ -39,7 +39,7 @@
   .log{font-size:14px;color:#444;border-top:1px dashed #ccc;padding:10px 0;margin-top:8px}.ok{color:var(--primary);font-weight:600}
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}.grid div{background:#f8fafc;padding:12px;border-radius:8px;text-align:center;font-size:14px}
   .grid b{display:block;color:var(--primary);font-size:17px;margin-top:3px;font-weight:600}.row2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-  hr{border:none;border-top:1px dashed #ccc;margin:14px 0}#minimap{height:200px;border-radius:10px;margin-top:10px;border:1px solid #e0e0e0;contain:layout}
+  hr{border:none;border-top:1px dashed #ccc;margin:14px 0}#minimap{height:200px;border-radius:10px;margin-top:10px;border:1px solid #e0e0e0;}
   .loading{display:flex;align-items:center;justify-content:center;min-height:120px;color:var(--muted)}.error{background:#ffebee;color:#c62828;padding:14px;border-radius:8px;margin:14px 0}
   .zoomable-img{cursor:zoom-in;transition:transform .2s}.zoomable-img:hover{transform:scale(1.02)}
   .modal{display:none;position:fixed;z-index:9999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.9);align-items:center;justify-content:center}
@@ -225,14 +225,29 @@
 
   // 🔥 修正 2：加入 setTimeout 同 invalidateSize，解決動態渲染尺寸為 0 嘅問題
   function initMiniMap(t){
-    if(!window.L) return;
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
     
-    setTimeout(function() {
+    let retries = 0;
+    const maxRetries = 30; // 最多等待 3 秒 (30 * 100ms)
+    
+    function tryInit() {
+      // 1. 等待 Leaflet (window.L) 真正載入完成
+      if (!window.L) {
+        if (retries < maxRetries) { retries++; setTimeout(tryInit, 100); }
+        return;
+      }
+      
       const minimapEl = document.getElementById('minimap');
       if (!minimapEl) return;
       
+      // 2. 等待 DOM 渲染完成，確保容器有實際尺寸 (唔係 0)
+      if (minimapEl.offsetWidth === 0 || minimapEl.offsetHeight === 0) {
+        if (retries < maxRetries) { retries++; setTimeout(tryInit, 100); }
+        return;
+      }
+
+      // 3. 初始化地圖
       const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
                      dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
                    .setView([lat,lng], 18);
@@ -241,9 +256,13 @@
       L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
         fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
       
-      // 強制 Leaflet 重新計算容器尺寸，確保瓦片正常加載
+      // 4. 強制重新計算尺寸（多次確保瀏覽器渲染管線完成）
       mm.invalidateSize();
-    }, 50);
+      setTimeout(function() { mm.invalidateSize(); }, 100);
+      setTimeout(function() { mm.invalidateSize(); }, 300);
+    }
+    
+    tryInit();
   }
 
   async function staffMode(){
