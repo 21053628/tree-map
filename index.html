@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:;">
 <title>樹木互動地圖（改進版）</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
@@ -31,6 +32,10 @@
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
 <script>if(!window.proj4){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"><\/script>');}</script>
 <script>if(!window.proj4){document.write('<script src="https://unpkg.com/proj4@2.9.2/dist/proj4.js"><\/script>');}</script>
+
+<!-- DOMPurify for XSS protection -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+<script>if(!window.DOMPurify){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"><\/script>');}</script>
 
 <script src="assets/js/config.js"></script>
 <script>
