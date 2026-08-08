@@ -96,12 +96,12 @@ const App = (function() {
     
     // 樹木和地盤圖層（使用 MarkerCluster 解決重疊問題）
     markerCluster = L.markerClusterGroup({
-      showCoverageOnHover: true,
+      showCoverageOnHover: false,
       zoomToBoundsOnClick: true,
       spiderfyOnMaxZoom: false, // 禁用蜘蛛腿，用我們自己的偏移算法
       removeOutsideVisibleBounds: false,
-      disableClusteringAtZoom: 0, // 完全禁用聚類，讓我們手動控制偏移
-      maxClusterRadius: 10,
+      disableClusteringAtZoom: 17, // 在 zoom 17 時禁用聚類，讓我們的手動散開效果更早生效
+      maxClusterRadius: 20,
       iconCreateFunction: function(cluster) {
         var count = cluster.getChildCount();
         return L.divIcon({
