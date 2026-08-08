@@ -94,13 +94,13 @@ const App = (function() {
     };
     layerBar.addTo(map);
     
-    // 樹木和地盤圖層（使用 MarkerCluster 解決重疊問題）
+    // 樹木和地盤圖層（使用 MarkerCluster + 懸停散開效果）
     markerCluster = L.markerClusterGroup({
       showCoverageOnHover: false,
       zoomToBoundsOnClick: true,
-      spiderfyOnMaxZoom: false, // 禁用蜘蛛腿，用我們自己的偏移算法
-      removeOutsideVisibleBounds: false,
-      disableClusteringAtZoom: 17, // 在 zoom 17 時禁用聚類，讓我們的手動散開效果更早生效
+      spiderfyOnMaxZoom: false, // 禁用預設蜘蛛腿，用我們自定義的懸停散開效果
+      removeOutsideVisibleBounds: false, // 確保所有標記都在 DOM 中，方便懸停檢測
+      disableClusteringAtZoom: 16, // 放大到 16 級後關閉聚類，顯示真實位置
       maxClusterRadius: 20,
       iconCreateFunction: function(cluster) {
         var count = cluster.getChildCount();
@@ -257,8 +257,8 @@ const App = (function() {
   }
   
   /**
-   * 繪製樹木標記（性能優化版 + 自動偏移重疊標記）
-   * 使用文檔碎片和批量操作減少 DOM 重排
+   * 繪製樹木標記（真實位置顯示 + 懸停自動散開效果）
+   * 所有樹木永遠顯示在真實 HK80 座標上，滑鼠移到重疊區域時自動散開
    */
   function drawTrees() {
     const startTime = performance.now();
@@ -293,8 +293,8 @@ const App = (function() {
           [other.lat, other.lng]
         );
         
-        // 如果距離少於 15 米，視為重疊群組
-        if (dist < 15) {
+        // 如果距離少於 2 米，視為重疊群組
+        if (dist < 2) {
           group.push(other);
           used[j] = true;
         }
@@ -302,17 +302,20 @@ const App = (function() {
       coordGroups.push(group);
     }
     
-    // 第二步：為每棵樹計算偏移後的座標
-    const offsetMap = new Map(); // key: tree_id, value: [lat, lng]
-    const offsetRadius = 0.00009; // 約 9 米偏移半徑
+    // 第二步：為每棵樹計算偏移後的座標（用於懸停散開）
+    const offsetMap = new Map(); // key: tree_id, value: {original: [lat, lng], offset: [lat, lng]}
+    const offsetRadius = 0.00008; // 約 8 米偏移半徑
     
     coordGroups.forEach(function(trees) {
       if (trees.length === 1) {
         // 只有一棵樹，不需要偏移
         const t = trees[0];
-        offsetMap.set(t.tree_id, [+t.lat, +t.lng]);
+        offsetMap.set(t.tree_id, {
+          original: [+t.lat, +t.lng],
+          offset: null // 無須偏移
+        });
       } else {
-        // 多棵樹在附近，排列成圓形
+        // 多棵樹重疊，計算圓形排列座標
         const baseLat = +trees[0].lat;
         const baseLng = +trees[0].lng;
         const angleStep = (2 * Math.PI) / trees.length;
@@ -321,16 +324,22 @@ const App = (function() {
           const angle = index * angleStep;
           const offsetLat = baseLat + offsetRadius * Math.cos(angle);
           const offsetLng = baseLng + offsetRadius * Math.sin(angle);
-          offsetMap.set(t.tree_id, [offsetLat, offsetLng]);
+          offsetMap.set(t.tree_id, {
+            original: [+t.lat, +t.lng],
+            offset: [offsetLat, offsetLng]
+          });
         });
       }
     });
     
-    // 第三步：批量創建標記（使用偏移後的座標）
+    // 第三步：批量創建標記（使用原始座標，保證位置準確）
     list.forEach(function(t) {
       const coords = offsetMap.get(t.tree_id);
       if (!coords) return;
-      const lat = coords[0], lng = coords[1];
+      
+      // 永遠使用原始座標渲染標記
+      const lat = coords.original[0];
+      const lng = coords.original[1];
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       const hk = CoordUtils.toHK80(lat, lng);
@@ -350,7 +359,47 @@ const App = (function() {
         })
       });
       
-      // 在 popup 中顯示原始座標（未偏移前）
+      // 儲存偏移資訊到 marker 物件
+      marker._originalPos = coords.original;
+      marker._offsetPos = coords.offset;
+      marker._isOffset = false; // 目前是否處於偏移狀態
+      
+      // 綁定懸停事件：滑鼠移入時散開，移出時恢復
+      marker.on('mouseover', function(e) {
+        if (marker._offsetPos && !marker._isOffset) {
+          // 將此群組的所有標記散開
+          const groupId = findGroupId(t.tree_id, coordGroups);
+          if (groupId !== -1) {
+            const group = coordGroups[groupId];
+            group.forEach(function(tree) {
+              const m = treesCache.get(tree.tree_id);
+              if (m && m._offsetPos && !m._isOffset) {
+                m.setLatLng(m._offsetPos);
+                m._isOffset = true;
+              }
+            });
+          }
+        }
+      });
+      
+      marker.on('mouseout', function(e) {
+        if (marker._isOffset) {
+          // 將此群組的所有標記恢復原位
+          const groupId = findGroupId(t.tree_id, coordGroups);
+          if (groupId !== -1) {
+            const group = coordGroups[groupId];
+            group.forEach(function(tree) {
+              const m = treesCache.get(tree.tree_id);
+              if (m && m._isOffset) {
+                m.setLatLng(m._originalPos);
+                m._isOffset = false;
+              }
+            });
+          }
+        }
+      });
+      
+      // 在 popup 中顯示原始座標（真實 HK80 座標）
       const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
       
       marker.bindPopup(
@@ -368,7 +417,7 @@ const App = (function() {
       treesCache.set(t.tree_id, marker);
     });
     
-    // 批量添加到圖層（MarkerClusterGroup 直接加 marker，唔使再包 layerGroup）
+    // 批量添加到圖層（MarkerClusterGroup 直接加 marker）
     if (markers.length > 0) {
       treeLayer.addLayers(markers);
     }
@@ -379,6 +428,20 @@ const App = (function() {
     const pname = (PROJECTS.find(function(x) { return String(x.project_id) === String(curProject); }) || {}).name;
     updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹｜渲染耗時 ' + perfMetrics.renderTime.toFixed(1) + 'ms');
     console.log('📊 樹木渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms, 數量:', list.length);
+  }
+  
+  /**
+   * 輔助函數：根據 tree_id 查找所屬群組索引
+   */
+  function findGroupId(treeId, groups) {
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = 0; j < groups[i].length; j++) {
+        if (String(groups[i][j].tree_id) === String(treeId)) {
+          return i;
+        }
+      }
+    }
+    return -1;
   }
   
   /**
