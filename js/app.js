@@ -98,10 +98,10 @@ const App = (function() {
     markerCluster = L.markerClusterGroup({
       showCoverageOnHover: true,
       zoomToBoundsOnClick: true,
-      spiderfyOnMaxZoom: true,
+      spiderfyOnMaxZoom: false, // 禁用蜘蛛腿，用我們自己的偏移算法
       removeOutsideVisibleBounds: false,
-      disableClusteringAtZoom: 19,
-      maxClusterRadius: 50,
+      disableClusteringAtZoom: 0, // 完全禁用聚類，讓我們手動控制偏移
+      maxClusterRadius: 10,
       iconCreateFunction: function(cluster) {
         var count = cluster.getChildCount();
         return L.divIcon({
@@ -272,12 +272,13 @@ const App = (function() {
     const list = TREES.filter(function(t) { return String(t.project_id) === String(curProject); });
     const markers = [];
     
-    // 第一步：按座標分組，找出重疊的樹木
+    // 第一步：按座標分組，找出重疊的樹木（使用更精確的比較）
     const coordGroups = new Map(); // key: "lat,lng", value: [trees]
     list.forEach(function(t) {
       const lat = +t.lat, lng = +t.lng;
       if (!lat || !lng) return;
-      const key = lat.toFixed(6) + ',' + lng.toFixed(6);
+      // 使用 5 位小數（約 1 米精度）來檢測重疊
+      const key = lat.toFixed(5) + ',' + lng.toFixed(5);
       if (!coordGroups.has(key)) {
         coordGroups.set(key, []);
       }
@@ -286,7 +287,7 @@ const App = (function() {
     
     // 第二步：為每棵樹計算偏移後的座標
     const offsetMap = new Map(); // key: tree_id, value: [lat, lng]
-    const offsetRadius = 0.00005; // 約 5 米偏移
+    const offsetRadius = 0.000045; // 約 4.5 米偏移
     
     coordGroups.forEach(function(trees, key) {
       if (trees.length === 1) {
@@ -332,13 +333,16 @@ const App = (function() {
         })
       });
       
+      // 在 popup 中顯示原始座標（未偏移前）
+      const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
+      
       marker.bindPopup(
         '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
         '<i>' + t.species + '</i><br>' +
         '<b>Status:</b> ' + t.status + '<br>' +
         '<b>DBH:</b> ' + (t.dbh || '-') + ' cm | <b>Height:</b> ' + (t.height || '-') + ' m<br>' +
         '<b>Spread:</b> ' + (t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
-        (hk ? '<b>HK80：</b>N ' + CoordUtils.format1(hk.N) + ' / E ' + CoordUtils.format1(hk.E) + '<br>' : '') +
+        (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
         ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '"><br>' : '') +
         '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>'
       );
