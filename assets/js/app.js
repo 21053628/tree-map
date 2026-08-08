@@ -250,6 +250,9 @@ const App = (function() {
   function selectProject(pid) {
     curProject = pid;
     
+    // 更新按鈕顯示狀態
+    buildSelect();
+    
     // 先關閉 popup，避免干擾地圖操作
     if (map) {
       map.closePopup();
