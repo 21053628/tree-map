@@ -225,7 +225,7 @@ function staffMode(){
 
   // 載入樹木清單到 datalist
   if(!window.allTreesLoaded){
-    fetch('trees_data.json')
+    fetch('data/trees_data.json')
       .then(function(r){ return r.json(); })
       .then(function(trees){
         const dataList = document.getElementById('tree_list');
