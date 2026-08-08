@@ -65,8 +65,10 @@
 <body>
 <div class="wrap" id="app"><div class="card loading">載入中…</div></div>
 
+<!-- 🔥 修正 1：移除多餘的 ></script>，確保 DOM 正常解析 -->
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
-<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" crossorigin></script>></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" crossorigin></script>
+
 <script>
 (function(){
   'use strict';
@@ -117,24 +119,19 @@
         if(data.token && data.until > Date.now()) return true;
       } catch(e){}
     }
-    
-    // 🔥 PWA 離線攔截：離線時無法驗證新密碼
     if(!navigator.onLine) {
       alert('📴 離線模式：登入已過期，請連接網路後重新驗證。');
       return false;
     }
-
     for(;;) {
       const p = prompt('🔒 請輸入工作人員密碼：');
       if(p === null) return false;
-      
       try {
         const res = await fetch(API, {
           method: 'POST',
           headers: {'Content-Type':'text/plain;charset=utf-8'},
           body: JSON.stringify({type: 'login', password: p})
         }).then(r => r.json());
-        
         if(res && res.ok && res.token){
           localStorage.setItem('tree_staff_token', JSON.stringify({
             token: res.token,
@@ -162,7 +159,6 @@
   fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
     .then(function(r){ return r.json(); })
     .then(function(res){
-      // 🔥 PWA 離線快取處理
       if(res && res.error === 'OFFLINE') {
         $('#app').innerHTML = '<div class="card error">📴 離線模式：暫無此樹木的快取資料，請連線後再試。</div>';
         return; 
@@ -227,17 +223,27 @@
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  // 🔥 修正 2：加入 setTimeout 同 invalidateSize，解決動態渲染尺寸為 0 嘅問題
   function initMiniMap(t){
     if(!window.L) return;
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
-    const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
-                   dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
-                 .setView([lat,lng], 18);
-    L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
-    L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
-    L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
-      fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
+    
+    setTimeout(function() {
+      const minimapEl = document.getElementById('minimap');
+      if (!minimapEl) return;
+      
+      const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
+                     dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
+                   .setView([lat,lng], 18);
+      L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+      L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+      L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
+        fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
+      
+      // 強制 Leaflet 重新計算容器尺寸，確保瓦片正常加載
+      mm.invalidateSize();
+    }, 50);
   }
 
   async function staffMode(){
@@ -431,7 +437,6 @@
     }
   }
 
-  // 🔥 最新後端 Token 驗證 + PWA 離線暫存 post 函數
   async function post(payload){
     let token = null;
     const tokenData = localStorage.getItem('tree_staff_token');
@@ -443,7 +448,6 @@
     }
     if(token) payload.token = token;
 
-    // 🔥 PWA 離線攔截
     if(!navigator.onLine) {
       if(window.OfflineQueue) {
         await window.OfflineQueue.push(payload);
@@ -467,7 +471,6 @@
       }
       return json;
     } catch(err) {
-      // 🔥 終極修正：只要係網絡層錯誤 (TypeError) 或 真斷網，一律離線暫存！
       if(window.OfflineQueue && (err instanceof TypeError || !navigator.onLine)) {
         await window.OfflineQueue.push(payload);
         if(window.pwaToast) window.pwaToast('📥 網路不穩，已離線暫存');
@@ -514,7 +517,6 @@
     fetch(API + '?action=inspections&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
       .then(function(r){ return r.json(); })
       .then(function(res){
-        // 🔥 PWA 離線快取處理
         if(res && res.error === 'OFFLINE') {
           $('#logs').innerHTML = '<div class="log">📴 離線模式：暫無巡查記錄快取</div>';
           return;
