@@ -1,1 +1,1 @@
-(js/app.js is just a source file modification, no build artifacts, dependencies, or temp files in the changes - according to rule 6, output nothing)
+(js/app.js is a source file modification, no build artifacts, dependencies, or temp files in the changes - no .gitignore needed)

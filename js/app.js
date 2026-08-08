@@ -272,30 +272,47 @@ const App = (function() {
     const list = TREES.filter(function(t) { return String(t.project_id) === String(curProject); });
     const markers = [];
     
-    // 第一步：按座標分組，找出重疊的樹木（使用更精確的比較）
-    const coordGroups = new Map(); // key: "lat,lng", value: [trees]
-    list.forEach(function(t) {
-      const lat = +t.lat, lng = +t.lng;
-      if (!lat || !lng) return;
-      // 使用 5 位小數（約 1 米精度）來檢測重疊
-      const key = lat.toFixed(5) + ',' + lng.toFixed(5);
-      if (!coordGroups.has(key)) {
-        coordGroups.set(key, []);
+    // 第一步：按實際距離分組，找出重疊的樹木（解決極近距離問題）
+    const coordGroups = [];
+    const used = new Array(list.length).fill(false);
+    
+    for (let i = 0; i < list.length; i++) {
+      if (used[i]) continue;
+      
+      const group = [list[i]];
+      used[i] = true;
+      const center = list[i];
+      
+      for (let j = i + 1; j < list.length; j++) {
+        if (used[j]) continue;
+        const other = list[j];
+        
+        // 使用 Leaflet 計算實際距離（米）
+        const dist = map.distance(
+          [center.lat, center.lng],
+          [other.lat, other.lng]
+        );
+        
+        // 如果距離少於 15 米，視為重疊群組
+        if (dist < 15) {
+          group.push(other);
+          used[j] = true;
+        }
       }
-      coordGroups.get(key).push(t);
-    });
+      coordGroups.push(group);
+    }
     
     // 第二步：為每棵樹計算偏移後的座標
     const offsetMap = new Map(); // key: tree_id, value: [lat, lng]
-    const offsetRadius = 0.000045; // 約 4.5 米偏移
+    const offsetRadius = 0.00009; // 約 9 米偏移半徑
     
-    coordGroups.forEach(function(trees, key) {
+    coordGroups.forEach(function(trees) {
       if (trees.length === 1) {
         // 只有一棵樹，不需要偏移
         const t = trees[0];
         offsetMap.set(t.tree_id, [+t.lat, +t.lng]);
       } else {
-        // 多棵樹在同一位置，排列成圓形
+        // 多棵樹在附近，排列成圓形
         const baseLat = +trees[0].lat;
         const baseLng = +trees[0].lng;
         const angleStep = (2 * Math.PI) / trees.length;
