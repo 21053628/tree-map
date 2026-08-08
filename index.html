@@ -30,8 +30,19 @@
 <script>if(!window.L || !L.MarkerClusterGroup){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"><\/script>');}</script>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
 <script>if(!window.proj4){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"><\/script>');}</script>
+<script>if(!window.proj4){document.write('<script src="https://unpkg.com/proj4@2.9.2/dist/proj4.js"><\/script>');}</script>
 
 <script src="../assets/js/config.js"></script>
+<script>
+// 確保 Config 和 proj4 已載入先至載入 utils.js
+if (!window.Config) {
+  console.error('❌ Config 模組載入失敗');
+}
+if (!window.proj4) {
+  console.error('❌ proj4 庫載入失敗，請檢查網路連接');
+  document.getElementById('status').textContent = '❌ 地圖元件載入失敗：請檢查網路後重新整理';
+}
+</script>
 <script src="../assets/js/utils.js"></script>
 <script src="../assets/js/api.js"></script>
 <script src="../assets/js/auth.js"></script>
