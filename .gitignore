@@ -1,1 +1,1 @@
-(empty)
+Nothing needs to be added to .gitignore since the changes only include HTML and JavaScript source files (test_cluster.html, index.html, js/app.js) which are legitimate source code files that should be tracked in version control.
