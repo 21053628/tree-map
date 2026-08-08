@@ -512,28 +512,34 @@ const App = (function() {
     const gridMap = new Map();
     
     // 建立空間索引
-    list.forEach(function(t, index) {
-      const gridKey = Math.floor(+t.lat / gridSize) + '_' + Math.floor(+t.lng / gridSize);
+    const treeCoords = []; // 預先計算座標，避免重複存取
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      const lat = +t.lat;
+      const lng = +t.lng;
+      treeCoords.push({ lat, lng });
+      
+      const gridKey = Math.floor(lat / gridSize) + '_' + Math.floor(lng / gridSize);
       if (!gridMap.has(gridKey)) {
         gridMap.set(gridKey, []);
       }
-      gridMap.get(gridKey).push(index);
-    });
+      gridMap.get(gridKey).push(i);
+    }
     
     // 優化 2: 只檢查相鄰網格，大幅減少距離計算次數
     const coordGroups = [];
-    const used = new Array(list.length).fill(false);
+    const used = new Uint8Array(list.length); // 使用 TypedArray 節省記憶體
     
     for (let i = 0; i < list.length; i++) {
       if (used[i]) continue;
       
       const group = [list[i]];
-      used[i] = true;
-      const center = list[i];
+      used[i] = 1;
+      const center = treeCoords[i];
       
       // 計算中心點所在網格
-      const centerGridX = Math.floor(+center.lat / gridSize);
-      const centerGridY = Math.floor(+center.lng / gridSize);
+      const centerGridX = Math.floor(center.lat / gridSize);
+      const centerGridY = Math.floor(center.lng / gridSize);
       
       // 只檢查相鄰 9 個網格
       for (let dx = -1; dx <= 1; dx++) {
@@ -545,16 +551,16 @@ const App = (function() {
             const idx = neighbors[j];
             if (used[idx]) continue;
             
-            const other = list[idx];
-            const dist = map.distance(
-              [+center.lat, +center.lng],
-              [+other.lat, +other.lng]
-            );
+            const other = treeCoords[idx];
+            // 使用簡化的距離公式（避免調用 map.distance 的開銷）
+            const dLat = center.lat - other.lat;
+            const dLng = center.lng - other.lng;
+            const dist = Math.sqrt(dLat * dLat + dLng * dLng) * 111320; // 轉換為米
             
             // 增加距離閾值到 5 米，讓更多相近的樹木可以被歸為同一群組
             if (dist < 5) {
-              group.push(other);
-              used[idx] = true;
+              group.push(list[idx]);
+              used[idx] = 1;
             }
           }
         }
@@ -574,7 +580,8 @@ const App = (function() {
     const offsetMap = new Map(); // key: tree_id, value: {original: [lat, lng], offset: [lat, lng]}
     const offsetRadius = 0.00012; // 約 12 米偏移半徑，增加散開範圍讓樹木更容易被看到
     
-    coordGroups.forEach(function(trees) {
+    for (let g = 0; g < coordGroups.length; g++) {
+      const trees = coordGroups[g];
       if (trees.length === 1) {
         // 只有一棵樹，不需要偏移
         const t = trees[0];
@@ -588,17 +595,18 @@ const App = (function() {
         const baseLng = +trees[0].lng;
         const angleStep = (2 * Math.PI) / trees.length;
         
-        trees.forEach(function(t, index) {
-          const angle = index * angleStep;
+        for (let i = 0; i < trees.length; i++) {
+          const t = trees[i];
+          const angle = i * angleStep;
           const offsetLat = baseLat + offsetRadius * Math.cos(angle);
           const offsetLng = baseLng + offsetRadius * Math.sin(angle);
           offsetMap.set(t.tree_id, {
             original: [+t.lat, +t.lng],
             offset: [offsetLat, offsetLng]
           });
-        });
+        }
       }
-    });
+    }
     
     // 更新全局群組引用，供 mouseover/mouseout 使用
     coordGroupsRef = coordGroups;
