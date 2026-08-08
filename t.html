@@ -127,6 +127,9 @@ function render(t){
     '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
     '<div class="sub"><i>' + escapeHtml(t.species) + '</i></div>' +
     '<div style="margin-top:8px"><span class="badge" style="background:' + (COLORS[t.status]||'#757575') + '">Status: ' + escapeHtml(t.status) + '</span></div>';
+  if(t.project_id){
+    html += '<div style="margin-top:6px"><span class="badge" style="background:#1976d2">🚩 地盤：<b>' + escapeHtml(t.project_id) + '</b></span> <span style="font-size:12px;color:#666;margin-left:6px">(NFC 用)</span></div>';
+  }
   if(hasPhoto){
     html += '<img class="tree zoomable-img" src="' + escapeHtml(t.photo_url) + '" alt="' + escapeHtml(t.name) + '" loading="lazy" decoding="async" onclick="zoomImage(this.src)">';
   }
