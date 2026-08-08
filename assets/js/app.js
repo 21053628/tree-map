@@ -216,12 +216,20 @@ const App = (function() {
         })
       });
       
-      marker.bindPopup(DOMPurify.sanitize(
+      const popupDiv = L.DomUtil.create('div');
+      popupDiv.innerHTML = DOMPurify.sanitize(
         '<b>🚩 ' + p.name + '</b><br>' +
         '此地盤樹木：' + count + ' 棵<br>' +
-        (hk ? 'HK80：N ' + CoordUtils.format1(hk.N) + ' / E ' + CoordUtils.format1(hk.E) + '<br>' : '') +
-        '<button onclick="App.selectProject(\'' + p.project_id + '\')">📍 前往地盤查看樹木</button>'
-      ));
+        (hk ? 'HK80：N ' + CoordUtils.format1(hk.N) + ' / E ' + CoordUtils.format1(hk.E) + '<br>' : '')
+      );
+      const btn = L.DomUtil.create('button', '', popupDiv);
+      btn.textContent = '📍 前往地盤查看樹木';
+      L.DomEvent.disableClickPropagation(btn);
+      btn.onclick = function(e) {
+        e.stopPropagation();
+        App.selectProject(p.project_id);
+      };
+      marker.bindPopup(popupDiv);
       
       markers.push(marker);
     });
