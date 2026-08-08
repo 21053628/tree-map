@@ -60,6 +60,11 @@ const App = (function() {
   let resizeTimer = null;
   let loadDebounceTimer = null;
   
+  // 懸停散開功能的全局狀態
+  let activeGroupId = -1;
+  let mouseOutTimer = null;
+  let coordGroupsRef = []; // 引用當前的群組資料
+  
   /**
    * 初始化地圖
    */
@@ -446,7 +451,7 @@ const App = (function() {
         
         if (marker._offsetPos && !marker._isOffset && marker._groupId !== null) {
           const groupId = marker._groupId;
-          const group = coordGroups[groupId];
+          const group = coordGroupsRef[groupId];
           if (group) {
             group.forEach(function(tree) {
               const m = treesCache.get(tree.tree_id);
@@ -546,7 +551,8 @@ const App = (function() {
               [+other.lat, +other.lng]
             );
             
-            if (dist < 2) {
+            // 增加距離閾值到 5 米，讓更多相近的樹木可以被歸為同一群組
+            if (dist < 5) {
               group.push(other);
               used[idx] = true;
             }
@@ -566,7 +572,7 @@ const App = (function() {
     
     // 第二步：為每棵樹計算偏移後的座標（用於懸停散開）
     const offsetMap = new Map(); // key: tree_id, value: {original: [lat, lng], offset: [lat, lng]}
-    const offsetRadius = 0.00008; // 約 8 米偏移半徑
+    const offsetRadius = 0.00012; // 約 12 米偏移半徑，增加散開範圍讓樹木更容易被看到
     
     coordGroups.forEach(function(trees) {
       if (trees.length === 1) {
@@ -594,9 +600,11 @@ const App = (function() {
       }
     });
     
+    // 更新全局群組引用，供 mouseover/mouseout 使用
+    coordGroupsRef = coordGroups;
+    
     // 優化 4: 使用事件委託，減少監聽器數量
-    let activeGroupId = -1;
-    let mouseOutTimer = null;
+    // activeGroupId 和 mouseOutTimer 已在模組層級宣告，這裡不需要重複宣告
     
     // 全局 mouseout 處理函數
     window.handleMouseOut = function() {
@@ -605,7 +613,7 @@ const App = (function() {
       }
       mouseOutTimer = setTimeout(function() {
         if (activeGroupId !== -1) {
-          const group = coordGroups[activeGroupId];
+          const group = coordGroupsRef[activeGroupId];
           if (group) {
             group.forEach(function(tree) {
               const m = treesCache.get(tree.tree_id);
