@@ -65,9 +65,9 @@
 <body>
 <div class="wrap" id="app"><div class="card loading">載入中…</div></div>
 
-<!-- 🔥 修正 1：移除多餘的 ></script>，確保 DOM 正常解析 -->
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
-<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" crossorigin></script>
+<!-- 🔥 終極修正 1：移除 crossorigin，防止第一次 CORS 預檢失敗導致腳本靜默不加載 -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
 
 <script>
 (function(){
@@ -76,7 +76,6 @@
   const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
   const $ = function(s){ return document.querySelector(s); };
   
-  /* ---------- HK1980 (EPSG:2326) ---------- */
   const HK80  = '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs';
   const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
   
@@ -223,46 +222,39 @@
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // 🔥 修正 2：加入 setTimeout 同 invalidateSize，解決動態渲染尺寸為 0 嘅問題
+  // 🔥 終極修正 2：使用 requestAnimationFrame 雙重保險，確保 DOM 絕對渲染完畢
   function initMiniMap(t){
+    if(!window.L) {
+      console.warn('⚠️ Leaflet 未載入，放棄初始化小地圖');
+      return;
+    }
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
-    
-    let retries = 0;
-    const maxRetries = 30; // 最多等待 3 秒 (30 * 100ms)
-    
-    function tryInit() {
-      // 1. 等待 Leaflet (window.L) 真正載入完成
-      if (!window.L) {
-        if (retries < maxRetries) { retries++; setTimeout(tryInit, 100); }
-        return;
-      }
-      
-      const minimapEl = document.getElementById('minimap');
-      if (!minimapEl) return;
-      
-      // 2. 等待 DOM 渲染完成，確保容器有實際尺寸 (唔係 0)
-      if (minimapEl.offsetWidth === 0 || minimapEl.offsetHeight === 0) {
-        if (retries < maxRetries) { retries++; setTimeout(tryInit, 100); }
-        return;
-      }
 
-      // 3. 初始化地圖
-      const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
-                     dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
-                   .setView([lat,lng], 18);
-      L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
-      L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
-      L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
-        fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
-      
-      // 4. 強制重新計算尺寸（多次確保瀏覽器渲染管線完成）
-      mm.invalidateSize();
-      setTimeout(function() { mm.invalidateSize(); }, 100);
-      setTimeout(function() { mm.invalidateSize(); }, 300);
-    }
-    
-    tryInit();
+    // requestAnimationFrame 會等待瀏覽器準備好繪製下一幀畫面
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        const minimapEl = document.getElementById('minimap');
+        if (!minimapEl) return;
+
+        // 如果尺寸還是 0，用 setTimeout 兜底
+        if (minimapEl.offsetWidth === 0 || minimapEl.offsetHeight === 0) {
+          setTimeout(function(){ initMiniMap(t); }, 150);
+          return;
+        }
+
+        const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
+                       dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
+                     .setView([lat,lng], 18);
+        L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+        L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+        L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
+          fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
+        
+        // 強制刷新尺寸
+        mm.invalidateSize();
+      });
+    });
   }
 
   async function staffMode(){
