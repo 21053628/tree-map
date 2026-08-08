@@ -1,291 +1,281 @@
-html,body{margin:0;height:100%;font-family:system-ui,"Microsoft JhengHei",sans-serif;
-          -webkit-tap-highlight-color:transparent;overflow:hidden}
-#map{height:100%;width:100%}
-button{touch-action:manipulation}
-#bar{position:absolute;top:8px;right:8px;z-index:999;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-#bar select{padding:10px;border-radius:8px;border:1px solid #bbb;font-size:15px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);max-width:46vw}
-#bar button{padding:10px 12px;border-radius:8px;border:none;font-size:15px;background:#2e7d32;color:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
-#bar button.blue{background:#1565c0}
-#panel{display:none;position:absolute;top:52px;right:8px;z-index:1200;background:#fff;border-radius:12px;
-       padding:12px;width:290px;box-shadow:0 2px 10px rgba(0,0,0,.3);max-height:80vh;overflow:auto}
-#panel input,#panel select{width:100%;padding:10px;margin-top:6px;border:1px solid #bbb;border-radius:8px;font-size:15px;box-sizing:border-box}
-#panel button{width:100%;padding:12px;margin-top:8px;border:none;border-radius:8px;background:#2e7d32;color:#fff;font-size:16px;cursor:pointer}
-#panel .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-#panel .x{background:#90a4ae}
-#status{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:999;background:#fff;
-        padding:6px 12px;border-radius:8px;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.2);max-width:85%;white-space:nowrap}
-.popup-img{width:160px;border-radius:6px;margin:4px 0}
-.legend{background:#fff;padding:8px 12px;border-radius:8px;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.25);line-height:1.7}
-.prjIcon{background:#1565c0;color:#fff;border-radius:6px;padding:2px 6px;font-size:13px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
-.treeIcon{display:flex;flex-direction:column;align-items:center}
-.treeIcon .lbl{background:#263238;color:#ffd54f;font-weight:bold;font-size:11px;padding:2px 8px;
-               border-radius:10px;border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);margin-bottom:2px;white-space:nowrap}
-.treeIcon .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
-.layerbar{background:#fff;border-radius:10px;padding:4px;display:flex;gap:4px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
-.layerbar button{border:none;background:#eceff1;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer}
-.layerbar button.on{background:#4527a0;color:#fff}
-.leaflet-popup-content{font-size:14px;line-height:1.5}
-.leaflet-popup-content button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;margin-top:4px}
-.leaflet-popup-content button:hover{background:#0d47a1}
-.leaflet-popup-content button:active{transform:scale(0.98)}
-
-/* 樹木標記平滑動畫效果 - 優化響應速度 */
-.leaflet-marker-icon {
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+/* ================= 全域變數與基礎設定 ================= */
+:root {
+  --primary: #2e7d32;
+  --primary-dark: #1b5e20;
+  --accent: #1565c0;
+  --accent-dark: #0d47a1;
+  --bg: #f4f7f4;
+  --text: #222;
+  --muted: #666;
+  --card-bg: #fff;
+  --radius: 12px;
+  --shadow: 0 2px 8px rgba(0,0,0,.08);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-.leaflet-marker-dragging {
-  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+html, body {
+  margin: 0; height: 100%;
+  font-family: system-ui, -apple-system, "Microsoft JhengHei", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
 }
 
-/* 地盤旗幟圖標動畫 - 快速響應 */
+#map { height: 100%; width: 100%; }
+button { touch-action: manipulation; cursor: pointer; }
+
+/* ================= 頂部控制列 (優化劉海屏適配) ================= */
+#bar {
+  position: absolute; top: 8px; right: 8px; z-index: 999;
+  display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
+  padding-top: var(--safe-top); /* 🔥 優化：防止劉海屏/狀態欄遮擋 */
+}
+#bar select {
+  padding: 10px; border-radius: 8px; border: 1px solid #bbb;
+  font-size: 15px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  max-width: 46vw;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+#bar select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.15);
+  outline: none;
+}
+#bar button {
+  padding: 10px 12px; border-radius: 8px; border: none;
+  font-size: 15px; background: var(--primary); color: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  transition: transform 0.08s ease, background 0.2s;
+}
+#bar button.blue { background: var(--accent); }
+#bar button:active { transform: scale(0.96); }
+
+/* ================= 側邊/底部面板 (Panel) ================= */
+#panel {
+  display: none; position: absolute; top: 52px; right: 8px; z-index: 1200;
+  background: var(--card-bg); border-radius: var(--radius);
+  padding: 12px; width: 290px; box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  max-height: 80vh; overflow-y: auto;
+  overscroll-behavior: contain; /* 🔥 優化：防止滾動穿透到地圖 */
+  -webkit-overflow-scrolling: touch; /* iOS 平滑滾動 */
+  /* 滑入動畫 */
+  transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: translateY(-10px); opacity: 0; pointer-events: none;
+}
+#panel[style*="display: block"] {
+  transform: translateY(0); opacity: 1; pointer-events: auto;
+}
+#panel input, #panel select {
+  width: 100%; padding: 10px; margin-top: 6px;
+  border: 1px solid #bbb; border-radius: 8px; font-size: 15px; box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+#panel input:focus, #panel select:focus {
+  border-color: var(--primary); outline: none;
+}
+#panel button {
+  width: 100%; padding: 12px; margin-top: 8px; border: none;
+  border-radius: 8px; background: var(--primary); color: #fff; font-size: 16px;
+  transition: transform 0.08s ease, background 0.2s;
+}
+#panel button:active { transform: scale(0.97); }
+#panel .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#panel .x { background: #90a4ae; }
+
+/* ================= 狀態列與圖例 ================= */
+#status {
+  position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 999; background: rgba(255,255,255,0.95); backdrop-filter: blur(4px);
+  padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1); max-width: 85%; white-space: nowrap;
+  pointer-events: none;
+}
+.legend {
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(4px);
+  padding: 8px 12px; border-radius: 8px; font-size: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15); line-height: 1.7;
+}
+
+/* ================= 地圖標記與圖標動畫 ================= */
 .prjIcon {
-  transition: transform 0.2s ease-out, opacity 0.2s ease-out, box-shadow 0.2s ease;
+  background: var(--accent); color: #fff; border-radius: 6px;
+  padding: 2px 6px; font-size: 13px; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
 }
-
 .prjIcon:hover {
   transform: scale(1.15) rotate(3deg);
   box-shadow: 0 4px 12px rgba(21, 101, 192, 0.5);
 }
 
-/* 樹木圖標動畫 - 自然過渡 */
 .treeIcon {
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), 
-              box-shadow 0.15s ease,
-              filter 0.15s ease;
+  display: flex; flex-direction: column; align-items: center;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s ease;
   cursor: pointer;
 }
-
 .treeIcon:hover {
   transform: scale(1.25) translateY(-5px);
-  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4)) brightness(1.1);
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.3)) brightness(1.05);
 }
-
-/* 樹木標籤特別強調效果 */
+.treeIcon .lbl {
+  background: #263238; color: #ffd54f; font-weight: bold; font-size: 11px;
+  padding: 2px 8px; border-radius: 10px; border: 1px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.4); margin-bottom: 2px; white-space: nowrap;
+  transition: all 0.15s ease;
+}
 .treeIcon:hover .lbl {
-  background: #ffd54f;
-  color: #1a237e;
-  font-weight: 900;
-  box-shadow: 0 2px 8px rgba(255, 213, 79, 0.6);
-  transform: scale(1.08);
+  background: #ffd54f; color: #1a237e; font-weight: 900;
+  box-shadow: 0 2px 8px rgba(255, 213, 79, 0.6); transform: scale(1.08);
 }
-
-/* 樹木狀態點特別強調效果 */
+.treeIcon .dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  transition: all 0.15s ease;
+}
 .treeIcon:hover .dot {
-  border-width: 3px;
-  border-color: #fff;
+  border-width: 3px; border-color: #fff;
   box-shadow: 0 0 12px currentColor, 0 2px 6px rgba(0,0,0,0.4);
   animation: pulse 1s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.15);
-    opacity: 0.9;
-  }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.9; }
 }
 
-/* 地圖飛行動畫優化 - 提升渲染性能 */
-.leaflet-fade-anim .leaflet-map-pane {
-  will-change: transform;
-}
+/* Leaflet 標記平滑動畫 */
+.leaflet-marker-icon { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.leaflet-marker-dragging { transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-.leaflet-zoom-anim .leaflet-zoom-animated {
-  will-change: transform;
+/* ================= 底圖切換按鈕 (Layer Bar) ================= */
+.layerbar {
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(4px);
+  border-radius: 10px; padding: 4px; display: flex; gap: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.15);
 }
-
-/* 面板滑入動畫 - 快速流暢 */
-#panel {
-  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
-  transform: translateY(-8px);
-  opacity: 0;
-  pointer-events: none;
-}
-
-#panel[style*="display: block"] {
-  transform: translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* 按鈕點擊反饋動畫 - 即時回應 */
-#bar button:active {
-  transform: scale(0.96);
-  transition: transform 0.08s ease;
-}
-
-/* 選擇器動畫 - 細膩過渡 */
-#bar select {
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-}
-
-#bar select:focus {
-  border-color: #1565c0;
-  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.15);
-  outline: none;
-}
-
-/* 輸入框動畫優化 */
-#panel input:focus,
-#panel select:focus {
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-/* 面板按鈕點擊反饋 */
-#panel button:active {
-  transform: scale(0.97);
-  transition: transform 0.08s ease;
-}
-
-/* Leaflet popup 按鈕動畫 */
-.leaflet-popup-content button {
-  transition: background-color 0.2s ease, transform 0.08s ease;
-}
-
-.leaflet-popup-content button:hover {
-  background: #0d47a1;
-}
-
-.leaflet-popup-content button:active {
-  transform: scale(0.96);
-}
-
-/* 層級按鈕動畫 - 清晰反饋 */
 .layerbar button {
-  transition: background-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+  border: none; background: transparent; border-radius: 8px;
+  padding: 8px 12px; font-size: 13px; color: #555; font-weight: 500;
+  transition: all 0.15s ease;
 }
+.layerbar button.on { background: var(--accent); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
+.layerbar button:active { transform: scale(0.95); }
 
-.layerbar button:active {
-  transform: scale(0.95);
+/* ================= Popup 彈窗優化 ================= */
+.leaflet-popup-content-wrapper {
+  max-width: calc(100vw - 32px) !important;
+  box-sizing: border-box; overflow: hidden;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.15) !important;
 }
-
-/* ================= 手機優化 ================= */
-@media (max-width:600px){
-  #bar{left:8px;right:8px;top:6px;flex-wrap:nowrap;gap:4px}
-  #bar select{flex:1;min-width:0;max-width:none;font-size:16px;padding:9px 6px}
-  #bar button{flex:0 0 auto;padding:10px 10px;font-size:13px;white-space:nowrap}
-  .leaflet-top.leaflet-left{top:56px;left:6px}
-  .leaflet-bottom.leaflet-right{bottom:40px;right:6px}
-  .leaflet-control-zoom a{width:38px;height:38px;line-height:38px;font-size:20px}
-  .legend{display:none}
-  body.panel-open .layerbar{display:none}
-  #panel{position:fixed;top:auto;bottom:0;left:0;right:0;width:auto;max-height:75vh;
-         border-radius:16px 16px 0 0;padding:10px 14px calc(14px + env(safe-area-inset-bottom))}
-  #panel::before{content:'';display:block;width:44px;height:4px;background:#ccc;border-radius:2px;margin:2px auto 8px}
-  #panel input,#panel select{font-size:16px;padding:12px}
-  #panel button{padding:14px;font-size:16px}
-  #status{font-size:12px;bottom:8px;max-width:92%}
-  .layerbar button{padding:10px 14px;font-size:12px}
-  .popup-img{width:100%;max-width:280px}
-  /* 手機版 Popup 完美置中與防出界 */
-  .leaflet-popup-content-wrapper{
-    border-radius: 14px !important;
-    padding: 0 !important; /* 保持 padding 0，但靠 content margin 撐開空間 */
-    max-width: calc(100vw - 24px) !important;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.25) !important;
-  }
-  .leaflet-popup-content{
-    margin: 16px 18px 18px 18px !important; /* 手機版留多啲空間俾關閉按鈕 */
-    font-size: 14px;
-    line-height: 1.6;
-    max-height: 60vh; /* 限制高度，防止內容太長擋住地圖 */
-    overflow-y: auto; /* 超長內容可以上下滑動 */
-  }
-  /* 手機版隱藏底部小三角（Tip），令 Popup 定位更準確，唔易出界 */
-  .leaflet-popup-tip-container{
-    display: none !important; 
-  }
-  #panel{z-index:1300}
+.leaflet-popup-content {
+  margin: 14px 16px 16px 16px !important;
+  line-height: 1.5; font-size: 14px;
+  word-wrap: break-word; overflow-wrap: break-word;
+  max-height: 60vh; overflow-y: auto;
+  overscroll-behavior: contain; /* 🔥 優化：防止滾動穿透 */
+  -webkit-overflow-scrolling: touch;
 }
-
-/* 平板電腦優化 */
-@media (min-width:601px) and (max-width:1024px){
-  #bar{left:12px;right:12px;top:10px}
-  #bar select{font-size:16px;padding:11px}
-  #bar button{padding:11px 14px;font-size:15px}
-  #panel{width:320px;top:58px;right:12px}
-  .leaflet-control-zoom a{width:42px;height:42px;line-height:42px;font-size:22px}
+.leaflet-popup-content button {
+  padding: 10px 14px; font-size: 14px; border: none; border-radius: 8px;
+  background: var(--accent); color: #fff; cursor: pointer; margin-top: 8px;
+  width: 100%; font-weight: 500;
+  transition: background 0.2s, transform 0.08s;
 }
+.leaflet-popup-content button:hover { background: var(--accent-dark); }
+.leaflet-popup-content button:active { transform: scale(0.98); }
 
-/* 確保 Leaflet 控制項在手機上正確顯示 */
-.leaflet-touch .leaflet-bar{
-  border-radius:8px;
-}
-
-.leaflet-touch .leaflet-bar a{
-  width:38px;
-  height:38px;
-  line-height:38px;
-}
-
-/* 防止地圖被意外拖動時觸發瀏覽器手勢 */
-.leaflet-container{
-  touch-action: none;
-}
-
-/* ================= Popup 防出界與關閉按鈕優化 ================= */
-.leaflet-popup-content-wrapper{
-  max-width: calc(100vw - 32px) !important; /* 左右各留 16px 安全距離，防止出界 */
-  box-sizing: border-box;
-  overflow: hidden; /* 防止內部圖片撐爆圓角 */
-  border-radius: 12px !important;
-}
-
-.leaflet-popup-content{
-  margin: 14px 16px 16px 16px !important; /* 強制留出右上角空間俾關閉按鈕 */
-  line-height: 1.5;
-  word-wrap: break-word; /* 強制長文字換行，防止撐爆 */
-  overflow-wrap: break-word;
-}
-
-/* 放大並美化關閉按鈕（解決手機撳唔到／出界問題） */
+/* 🔥 優化：關閉按鈕放大並完美置中 */
 .leaflet-popup-close-button {
-  width: 32px !important;
-  height: 32px !important;
-  top: 8px !important;
-  right: 8px !important;
+  width: 36px !important; height: 36px !important;
+  top: 8px !important; right: 8px !important;
   z-index: 1000;
-  background: rgba(0,0,0,0.06) !important; /* 加個淺灰底色，更容易睇到同撳到 */
+  background: rgba(0,0,0,0.05) !important;
   border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  font-size: 20px !important;
-  color: #555 !important;
-  padding: 0 !important;
-  transition: background 0.2s;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  font-size: 22px !important; color: #666 !important;
+  padding: 0 !important; line-height: 36px !important; text-align: center !important;
+  transition: background 0.2s, color 0.2s;
 }
-.leaflet-popup-close-button:hover {
-  background: rgba(0,0,0,0.15) !important;
-  color: #000 !important;
-}
-/* 修正關閉按鈕入面個 "×" 號嘅垂直置中 */
-.leaflet-popup-close-button span {
-  display: block;
-  margin-top: 2px; 
-  font-family: Arial, sans-serif;
+.leaflet-popup-close-button:hover { background: rgba(0,0,0,0.1) !important; color: #000 !important; }
+.leaflet-popup-close-button span { display: block; margin-top: -2px; font-family: Arial, sans-serif; }
+
+.popup-img {
+  max-width: 100% !important; height: auto; border-radius: 8px;
+  display: block; margin: 8px 0; box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 
-/* 確保 Popup 入面嘅圖片唔會撐爆個框 */
-.popup-img{
-  max-width: 100% !important;
-  height: auto;
-  border-radius: 6px;
-  display: block;
-  margin: 8px 0;
+/* ================= 手機版響應式優化 ================= */
+@media (max-width: 600px) {
+  #bar { left: 8px; right: 8px; top: 8px; flex-wrap: nowrap; gap: 4px; }
+  #bar select { flex: 1; min-width: 0; max-width: none; font-size: 16px; padding: 10px 8px; }
+  #bar button { flex: 0 0 auto; padding: 10px 12px; font-size: 14px; white-space: nowrap; }
+  
+  .leaflet-top.leaflet-left { top: calc(60px + var(--safe-top)); left: 6px; }
+  .leaflet-bottom.leaflet-right { bottom: calc(40px + var(--safe-bottom)); right: 6px; }
+  .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
+  
+  .legend { display: none; }
+  body.panel-open .layerbar { display: none; }
+  
+  /* 手機版 Panel 變為 Bottom Sheet */
+  #panel {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0;
+    width: auto; max-height: 85vh;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 16px calc(16px + var(--safe-bottom));
+    box-shadow: 0 -4px 20px rgba(0,0,0,.15);
+    z-index: 1300;
+    transform: translateY(100%); /* 手機版由下而上滑入 */
+  }
+  #panel[style*="display: block"] { transform: translateY(0); }
+  
+  /* Bottom Sheet 拖拽條 */
+  #panel::before {
+    content: ''; display: block; width: 40px; height: 4px;
+    background: #ddd; border-radius: 2px; margin: 0 auto 12px;
+  }
+  
+  #panel input, #panel select { font-size: 16px; padding: 12px; } /* 防止 iOS 自動縮放 */
+  #panel button { padding: 14px; font-size: 16px; }
+  
+  #status { font-size: 12px; bottom: calc(12px + var(--safe-bottom)); max-width: 92%; }
+  .layerbar button { padding: 10px 14px; font-size: 12px; }
+  
+  .leaflet-popup-content-wrapper { border-radius: 16px !important; padding: 0 !important; }
+  .leaflet-popup-content { margin: 16px 18px 18px 18px !important; font-size: 15px; line-height: 1.6; }
+  .leaflet-popup-tip-container { display: none !important; }
 }
 
-/* 優化按鈕點擊區域，方便手指操作 */
-@media (pointer:coarse){
-  #bar button,
-  #bar select,
-  .layerbar button,
-  #panel button{
-    min-height:44px;
+/* ================= 平板電腦優化 ================= */
+@media (min-width: 601px) and (max-width: 1024px) {
+  #bar { left: 12px; right: 12px; top: calc(10px + var(--safe-top)); }
+  #bar select { font-size: 16px; padding: 11px; }
+  #bar button { padding: 11px 14px; font-size: 15px; }
+  #panel { width: 320px; top: calc(58px + var(--safe-top)); right: 12px; }
+  .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
+}
+
+/* ================= 通用觸控與無障礙優化 ================= */
+.leaflet-touch .leaflet-bar { border-radius: 10px; overflow: hidden; }
+.leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
+.leaflet-container { touch-action: none; }
+
+/* 確保所有按鈕喺觸控螢幕上有足夠點擊區域 */
+@media (pointer: coarse) {
+  #bar button, #bar select, .layerbar button, #panel button, .leaflet-popup-content button {
+    min-height: 44px;
   }
 }
 
+/* 減少動畫偏好設定 (無障礙) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
