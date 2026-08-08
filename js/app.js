@@ -158,6 +158,10 @@ const App = (function() {
       PROJECTS = projectsRes.data || [];
       TREES = treesRes.data || [];
       
+      // 重置緩存和狀態
+      projectMarkersCache = null;
+      treesCache.clear();
+      
       buildSelect();
       drawProjects();
       drawTrees();
@@ -190,14 +194,8 @@ const App = (function() {
     const startTime = performance.now();
     prjLayer.clearLayers();
     
-    // 如果數據未變，使用緩存
-    const cacheKey = curProject || 'all';
-    if (projectMarkersCache && projectMarkersCache.key === cacheKey) {
-      prjLayer.addLayer(L.layerGroup(projectMarkersCache.markers));
-      perfMetrics.cacheHits++;
-      console.log('📊 地盤緩存命中');
-      return;
-    }
+    // 重置緩存 - 確保每次切換地盤時都重新渲染
+    projectMarkersCache = null;
     
     const markers = [];
     
@@ -228,10 +226,9 @@ const App = (function() {
       markers.push(marker);
     });
     
-    // 批量添加到圖層並更新緩存
+    // 批量添加到圖層
     if (markers.length > 0) {
       prjLayer.addLayer(L.layerGroup(markers));
-      projectMarkersCache = { key: cacheKey, markers: markers };
     }
     
     perfMetrics.totalRenders++;
@@ -240,18 +237,34 @@ const App = (function() {
   }
   
   /**
-   * 選擇地盤
+   * 選擇地盤（優化動畫效果）
    */
   function selectProject(pid) {
     curProject = pid;
     if (map) map.closePopup();
     buildSelect();
     
+    // 清空樹木緩存，確保切換地盤時不會殘留舊標記
+    treesCache.clear();
+    
     if (pid) {
       const p = PROJECTS.find(function(x) { return String(x.project_id) === String(pid); });
-      if (p) map.flyTo([+p.lat, +p.lng], 18);
+      if (p) {
+        // 使用 flyTo 實現平滑飛行動畫
+        map.flyTo([+p.lat, +p.lng], 18, {
+          duration: 1.2, // 動畫持續時間（秒）
+          easeLinearity: 0.25 // 平滑曲線
+        });
+      }
+    } else {
+      // 如果選擇「全部地盤」，縮放到默認視圖
+      map.flyTo(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM, {
+        duration: 1.0,
+        easeLinearity: 0.25
+      });
     }
     
+    // 先繪製地盤，再繪製樹木，確保層級正確
     drawProjects();
     drawTrees();
   }
@@ -364,7 +377,7 @@ const App = (function() {
       marker._offsetPos = coords.offset;
       marker._isOffset = false; // 目前是否處於偏移狀態
       
-      // 綁定懸停事件：滑鼠移入時散開，移出時 3 秒後恢復
+      // 綁定懸停事件：滑鼠移入時散開，移出時 1.5 秒後恢復（優化動畫時間）
       let mouseOutTimer = null;
       
       marker.on('mouseover', function(e) {
@@ -383,7 +396,9 @@ const App = (function() {
               const m = treesCache.get(tree.tree_id);
               if (m && m._offsetPos && !m._isOffset) {
                 // 使用平滑動畫移動到偏移位置
-                L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
+                if (m._icon) {
+                  L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
+                }
                 m.setLatLng(m._offsetPos);
                 m._isOffset = true;
               }
@@ -393,7 +408,7 @@ const App = (function() {
       });
       
       marker.on('mouseout', function(e) {
-        // 設定 3 秒延遲後才收回
+        // 設定 1.5 秒延遲後才收回（加快回應速度）
         mouseOutTimer = setTimeout(function() {
           if (marker._isOffset) {
             // 將此群組的所有標記恢復原位
@@ -404,14 +419,16 @@ const App = (function() {
                 const m = treesCache.get(tree.tree_id);
                 if (m && m._isOffset) {
                   // 使用平滑動畫飛回原位
-                  L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
+                  if (m._icon) {
+                    L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
+                  }
                   m.setLatLng(m._originalPos);
                   m._isOffset = false;
                 }
               });
             }
           }
-        }, 3000); // 3 秒延遲
+        }, 1500); // 1.5 秒延遲
       });
       
       // 在 popup 中顯示原始座標（真實 HK80 座標）
@@ -521,6 +538,9 @@ const App = (function() {
       alert(r.ok ? '✅ 地盤已建立！' : '❌ ' + r.error);
       if (r.ok) {
         closePanel();
+        // 清空緩存並重新載入，確保新地盤正確顯示
+        projectMarkersCache = null;
+        treesCache.clear();
         load();
       }
     } catch (error) {
@@ -595,6 +615,8 @@ const App = (function() {
       alert(r.ok ? '✅ 樹木 ' + r.tree_id + ' 已建立' : '❌ ' + r.error);
       if (r.ok) {
         closePanel();
+        // 清空緩存並重新載入，確保新樹木正確顯示
+        treesCache.clear();
         load();
       }
     } catch (error) {
@@ -680,8 +702,11 @@ const App = (function() {
       selectProject(tree.project_id);
     }
     
-    // 飛到樹木位置
-    map.flyTo([+tree.lat, +tree.lng], 19);
+    // 飛到樹木位置（優化動畫）
+    map.flyTo([+tree.lat, +tree.lng], 19, {
+      duration: 1.2,
+      easeLinearity: 0.25
+    });
     
     // 找到對應的 marker 並開啟 popup
     const marker = treesCache.get(treeId);
@@ -689,7 +714,7 @@ const App = (function() {
       setTimeout(function() {
         marker.openPopup();
         updateStatus('✅ 已定位到樹木：' + treeId);
-      }, 1000);
+      }, 1200);
     }
     
     // 清除 URL 參數（避免重新整理時重複執行）
@@ -733,6 +758,7 @@ const App = (function() {
   function clearCache() {
     projectMarkersCache = null;
     treesCache.clear();
+    console.log('🗑️ 緩存已清除');
   }
 })();
 

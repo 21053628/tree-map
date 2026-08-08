@@ -27,13 +27,69 @@ button{touch-action:manipulation}
 .leaflet-popup-content{font-size:14px;line-height:1.5}
 .leaflet-popup-content button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#1565c0;color:#fff;cursor:pointer;margin-top:4px}
 
-/* 樹木標記平滑動畫效果 */
+/* 樹木標記平滑動畫效果 - 優化過渡效果 */
 .leaflet-marker-icon {
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .leaflet-marker-dragging {
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* 地盤旗幟圖標動畫 */
+.prjIcon {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.prjIcon:hover {
+  transform: scale(1.15);
+}
+
+/* 樹木圖標動畫 */
+.treeIcon {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.treeIcon:hover {
+  transform: scale(1.1);
+}
+
+/* 地圖飛行動畫優化 */
+.leaflet-fade-anim .leaflet-map-pane {
+  will-change: transform;
+}
+
+.leaflet-zoom-anim .leaflet-zoom-animated {
+  will-change: transform;
+}
+
+/* 面板滑入動畫 */
+#panel {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform: translateY(-10px);
+  opacity: 0;
+}
+
+#panel[style*="display: block"] {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* 按鈕點擊反饋動畫 */
+#bar button:active {
+  transform: scale(0.95);
+  transition: transform 0.1s ease;
+}
+
+/* 選擇器動畫 */
+#bar select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#bar select:focus {
+  border-color: #1565c0;
+  box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.2);
+  outline: none;
 }
 
 /* ================= 手機優化 ================= */
