@@ -1,199 +1,634 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="樹木資訊管理系統 - 查看樹木詳細資料、巡查記錄">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:;">
+<meta name="theme-color" content="#2e7d32">
 <title>樹木資訊</title>
-<script src="https://unpkg.com/proj4@2.9.2/dist/proj4.js"></script>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" as="style" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" as="script" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" as="script" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin>
+<!-- DOMPurify for XSS protection -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" crossorigin></script>
 <style>
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-       margin:0;background:#f4f7f4;color:#222;}
-  .wrap{max-width:640px;margin:0 auto;padding:16px;}
-  h1{font-size:20px;margin:8px 0 12px;}
-  h2{font-size:16px;margin:20px 0 8px;}
-  .card{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.1);
-        line-height:1.7;}
-  input,select,textarea{width:100%;box-sizing:border-box;padding:10px;margin:6px 0;
-        border:1px solid #ccc;border-radius:6px;font-size:15px;}
-  textarea{min-height:70px;}
-  button{width:100%;padding:12px;margin-top:6px;border:none;border-radius:6px;
-        background:#2e7d32;color:#fff;font-size:16px;font-weight:bold;cursor:pointer;}
-  hr{border:none;border-top:1px dashed #ccc;margin:16px 0;}
-  .photos img{width:70px;height:70px;object-fit:cover;border-radius:6px;margin:4px 4px 0 0;}
-  .ins{border-bottom:1px solid #eee;padding:8px 0;}
-  .ins:last-child{border-bottom:none;}
-  a{color:#1a73e8;text-decoration:none;}
+  :root{--primary:#2e7d32;--primary-dark:#1b5e20;--secondary:#546e7a;--bg:#f1f5f1;--text:#222;--muted:#666;--card-bg:#fff;--radius:12px;--shadow:0 2px 8px rgba(0,0,0,.08)}
+  *{box-sizing:border-box}body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent;line-height:1.6}
+  .wrap{max-width:600px;margin:0 auto;padding:16px}.card{background:var(--card-bg);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+  h1{font-size:22px;margin:0 0 6px;font-weight:600}.sub{color:var(--muted);font-size:14px;margin-top:4px}.badge{display:inline-block;padding:4px 12px;border-radius:999px;color:#fff;font-size:13px;font-weight:500}
+  img.tree{width:100%;height:auto;border-radius:10px;margin-top:10px;object-fit:cover;content-visibility:auto}
+  button{width:100%;padding:14px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-size:16px;font-weight:500;margin-top:10px;cursor:pointer;touch-action:manipulation;transition:background .2s,transform .1s}
+  button:hover{background:var(--primary-dark)}button:active{transform:scale(.98)}button.sec{background:var(--secondary)}button.sec:hover{background:#37474f}
+  a.back{display:inline-block;background:#37474f;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;margin-bottom:12px;font-size:15px;transition:opacity .2s}a.back:hover{opacity:.8}
+  select,textarea,input{width:100%;padding:13px;border:1px solid #ccc;border-radius:9px;font-size:16px;margin-top:10px;box-sizing:border-box;background:#fff;transition:border-color .2s,box-shadow .2s}
+  select:focus,textarea:focus,input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(46,125,50,.15)}
+  .log{font-size:14px;color:#444;border-top:1px dashed #ccc;padding:10px 0;margin-top:8px}.ok{color:var(--primary);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}.grid div{background:#f8fafc;padding:12px;border-radius:8px;text-align:center;font-size:14px}
+  .grid b{display:block;color:var(--primary);font-size:17px;margin-top:3px;font-weight:600}.row2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  hr{border:none;border-top:1px dashed #ccc;margin:14px 0}#minimap{height:200px;border-radius:10px;margin-top:10px;border:1px solid #e0e0e0;contain:layout}
+  .loading{display:flex;align-items:center;justify-content:center;min-height:120px;color:var(--muted)}.error{background:#ffebee;color:#c62828;padding:14px;border-radius:8px;margin:14px 0}
+  .zoomable-img{cursor:zoom-in;transition:transform .2s}.zoomable-img:hover{transform:scale(1.02)}
+  .modal{display:none;position:fixed;z-index:9999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.9);align-items:center;justify-content:center}
+  .modal.show{display:flex}.modal img{max-width:95%;max-height:95%;object-fit:contain;cursor:zoom-out}.modal-close{position:absolute;top:20px;right:30px;color:#fff;font-size:40px;cursor:pointer}
+  .inspection-photo-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(80px, 1fr));gap:8px;margin-top:8px}
+  .inspection-photo-item{background:#f5f5f5;border-radius:8px;overflow:hidden}
+  .inspection-photo-thumb{width:100%;height:80px;object-fit:cover;display:block;cursor:zoom-in}
+  .inspection-photo-btn{width:100%;padding:4px;margin:0;font-size:11px;background:#546e7a;color:#fff;border:none;border-radius:0;cursor:pointer}
+  .inspection-photo-btn:hover{background:#37474f}
+  .form-group{margin-top:12px}.form-label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px;font-weight:500}
+  .section-title{font-size:15px;color:var(--primary);font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:6px}
+  .photo-preview-container{margin-top:12px;padding:12px;background:#f5f5f5;border-radius:10px}
+  .photo-preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-top:8px}
+  .photo-preview-item{position:relative;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+  .photo-preview-thumb{width:100%;height:100px;object-fit:cover;display:block}
+  .photo-preview-remove{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(255,0,0,.85);color:#fff;border:none;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
+  .photo-preview-remove:hover{background:rgba(255,0,0,1)}
+  .photo-count{font-size:13px;color:var(--muted);margin-bottom:8px}
+  @media (max-width:600px){.wrap{padding:12px}.card{padding:14px}#minimap{height:180px}.grid{grid-template-columns:repeat(3,1fr);gap:8px}.grid div{padding:10px;font-size:13px}}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1 id="treeTitle">🌳 樹木資訊</h1>
-  <div id="treeBox" class="card">載入中…</div>
+<div class="wrap" id="app"><div class="card loading">載入中…</div></div>
 
-  <h2>📋 巡查記錄</h2>
-  <div id="insBox" class="card">載入中…</div>
-
-  <h2>👷 工作人員專區 🔒</h2>
-  <div class="card">
-    <b>1️⃣ 簽到</b>
-    <input id="chkStaff" placeholder="員工姓名">
-    <button onclick="doCheckin()">✅ 簽到</button>
-
-    <hr>
-
-    <b>2️⃣ 巡查記錄（可多張相片）</b>
-    <input id="insStaff" placeholder="員工姓名">
-    <select id="insHealth">
-      <option value="">-- 樹木狀況 --</option>
-      <option>Normal</option><option>Fair</option><option>Poor</option>
-      <option>Very Poor</option><option>Dead</option>
-    </select>
-    <textarea id="insNote" placeholder="巡查備註（可留空）"></textarea>
-    <input type="file" id="insPhotos" accept="image/*" multiple>
-    <button onclick="doInspection()">💾 提交巡查</button>
-  </div>
-
-  <p><a href="index.html">↩ 返回地圖</a></p>
-</div>
-
-<script src="config.js"></script>
-<script src="utils.js"></script>
-<script src="auth.js"></script>
-<script src="api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin async></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" crossorigin async></script>
 <script>
-  ApiService.init(Config.API_ENDPOINT);
-
-  var params = new URLSearchParams(location.search);
-  var TREE_ID = params.get('id') || '';
-  var PRJ = params.get('prj') || '';
-  var TREE = null;
-
-  function esc(s){
-    var d = document.createElement('div');
-    d.textContent = (s === null || s === undefined) ? '' : String(s);
-    return d.innerHTML;
+(function(){
+  'use strict';
+  
+  const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
+  const $ = function(s){ return document.querySelector(s); };
+  
+  /* ---------- HK1980 (EPSG:2326) ---------- */
+  const HK80  = '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs';
+  const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
+  
+  const coordCache = new Map();
+  function toHK(lat,lng){
+    if(!window.proj4 || !lat || !lng) return null;
+    const key = lat+','+lng;
+    if(coordCache.has(key)) return coordCache.get(key);
+    try{ 
+      const r = proj4(WGS84, HK80, [+lng, +lat]); 
+      const result = {N:r[1], E:r[0]};
+      coordCache.set(key, result);
+      return result;
+    }catch(e){ return null; }
   }
-
-  function fmtTime(v){
-    if(!v) return '';
-    var d = new Date(v);
-    return isNaN(d.getTime()) ? String(v) : d.toLocaleString();
+  function toWGS(N,E){
+    if(!window.proj4) return null;
+    const key = N+','+E;
+    if(coordCache.has(key)) return coordCache.get(key);
+    try{ 
+      const r = proj4(HK80, WGS84, [+E, +N]); 
+      const result = {lat:r[1], lng:r[0]};
+      coordCache.set(key, result);
+      return result;
+    }catch(e){ return null; }
   }
+  function f1(n){ return Number(n).toFixed(1); }
+  function f5(n){ return Number(n).toFixed(5); }
+  
+  const params = new URLSearchParams(location.search);
+  const id  = params.get('id') || params.get('tree_id') || 'A001';
+  const prj = params.get('prj') || params.get('project_id') || '';
+  let TREE = null;
 
-  async function loadAll(){
-    try{
-      var res = await Promise.all([
-        ApiService.get('tree', { id: TREE_ID, prj: PRJ }),
-        ApiService.get('inspections', { id: TREE_ID, prj: PRJ })
-      ]);
-      TREE = res[0].data || null;
-      renderTree();
-      renderInspections(res[1].data || []);
-    }catch(e){
-      document.getElementById('treeBox').innerHTML = '❌ 載入失敗：' + esc(e.message);
-    }
+// 👇 最新後端驗證登入系統 (取代原本嘅假密碼)
+async function staffOk(){
+  const tokenData = localStorage.getItem('tree_staff_token');
+  if(tokenData){
+    try {
+      const data = JSON.parse(tokenData);
+      if(data.token && data.until > Date.now()) return true;
+    } catch(e){}
   }
-
-  function renderTree(){
-    var box = document.getElementById('treeBox');
-    if(!TREE){ box.innerHTML = '❌ 找不到樹木'; return; }
-    document.getElementById('treeTitle').textContent = '🌳 ' + TREE.tree_id + ' ' + (TREE.name || '');
-    var hk = CoordUtils.toHK80(+TREE.lat, +TREE.lng);
-    var photos = String(TREE.photo_url || '').split(',').filter(function(u){
-      return u && u.indexOf('...') === -1;
-    });
-    box.innerHTML =
-      '<b>Status:</b> ' + esc(TREE.status) + '<br>' +
-      '<b>地盤:</b> ' + esc(TREE.project_id || '-') + '<br>' +
-      '<b>DBH:</b> ' + esc(TREE.dbh || '-') + ' cm｜<b>Height:</b> ' + esc(TREE.height || '-') +
-      ' m｜<b>Spread:</b> ' + esc(TREE.spread || '-') + ' m<br>' +
-      (hk ? '<b>HK80:</b> N ' + CoordUtils.format1(hk.N) + ' / E ' + CoordUtils.format1(hk.E) + '<br>' : '') +
-      '<b>描述:</b> ' + esc(TREE.description || '-') +
-      (photos.length ? '<div class="photos">' + photos.map(function(u){
-        return '<img src="' + u + '">';
-      }).join('') + '</div>' : '');
-  }
-
-  function renderInspections(list){
-    var box = document.getElementById('insBox');
-    if(!list.length){ box.innerHTML = '暫無巡查記錄。'; return; }
-    list.sort(function(a,b){ return new Date(b.time) - new Date(a.time); });
-    box.innerHTML = list.map(function(r){
-      var photos = String(r.photo_url || '').split(',').filter(function(u){ return u; });
-      return '<div class="ins"><b>' + esc(fmtTime(r.time)) + '</b>｜' + esc(r.staff) +
-        '｜' + esc(r.health || '') + '<br>' +
-        (r.note ? esc(r.note) + '<br>' : '') +
-        (photos.length ? '<div class="photos">' + photos.map(function(u){
-          return '<img src="' + u + '">';
-        }).join('') + '</div>' : '') + '</div>';
-    }).join('');
-  }
-
-  /* 簽到（要密碼）*/
-  async function doCheckin(){
-    if(!await AuthService.promptAuth()) return;
-    var staff = document.getElementById('chkStaff').value.trim();
-    if(!staff){ alert('請輸入員工姓名'); return; }
-    var r = await ApiService.post({
-      type: 'checkin', staff: staff, tree_id: TREE_ID, prj: PRJ,
-      lat: TREE ? TREE.lat : '', lng: TREE ? TREE.lng : ''
-    });
-    alert(r.ok ? '✅ 簽到成功！' : '❌ ' + r.error);
-  }
-
-  /* 巡查（要密碼）*/
-  async function doInspection(){
-    if(!await AuthService.promptAuth()) return;
-    var staff = document.getElementById('insStaff').value.trim();
-    if(!staff){ alert('請輸入員工姓名'); return; }
-    var health = document.getElementById('insHealth').value;
-    var note = document.getElementById('insNote').value.trim();
-    var files = Array.from(document.getElementById('insPhotos').files || []);
-    if(!health && !note && !files.length){ alert('請填寫巡查資料或上載相片'); return; }
-
-    try{
-      var bases = [];
-      for(var i = 0; i < files.length; i++){
-        bases.push(await fileToBase64(files[i]));
+  
+  for(;;) {
+    const p = prompt('🔒 請輸入工作人員密碼：');
+    if(p === null) return false;
+    
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: {'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({type: 'login', password: p})
+      }).then(r => r.json());
+      
+      if(res && res.ok && res.token){
+        localStorage.setItem('tree_staff_token', JSON.stringify({
+          token: res.token,
+          until: Date.now() + 30*60*1000
+        }));
+        return true;
+      } else {
+        alert('❌ 密碼錯誤');
       }
-      var r = await ApiService.post({
-        type: 'inspection', staff: staff, tree_id: TREE_ID, prj: PRJ,
-        health: health, note: note, photo_base64: bases,
-        lat: TREE ? TREE.lat : '', lng: TREE ? TREE.lng : ''
-      });
-      if(r.ok){ alert('✅ 巡查已提交！'); loadAll(); }
-      else{ alert('❌ ' + r.error); }
-    }catch(e){
-      alert('❌ 提交失敗：' + e.message);
+    } catch(err) {
+      alert('❌ 驗證請求失敗：' + err.message);
+      return false;
     }
   }
+}
 
-  /* 相片自動縮細再上傳，避免太大 */
-  function fileToBase64(file){
-    return new Promise(function(resolve, reject){
-      var reader = new FileReader();
-      reader.onload = function(){
-        var img = new Image();
-        img.onload = function(){
-          var MAX = 1280, w = img.width, h = img.height;
-          if(w > MAX || h > MAX){
-            var ratio = Math.min(MAX / w, MAX / h);
-            w = Math.round(w * ratio); h = Math.round(h * ratio);
-          }
-          var canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
-        };
-        img.onerror = reject;
-        img.src = reader.result;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+function fmtTime(v){
+  const d = new Date(v);
+  if(isNaN(d.getTime())) return String(v).slice(0,16);
+  const p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) +
+         ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    const t = res.data;
+    if(!t){ 
+      $('#app').innerHTML = '<div class="card error">❌ 找不到樹木：<b>' + id + '</b></div>'; 
+      return; 
+    }
+    TREE = t; render(t); initMiniMap(t); loadLogs();
+  })
+  .catch(function(err){
+    console.error('Fetch error:', err);
+    $('#app').innerHTML = '<div class="card error">❌ 後端連線失敗：<br>' + err.message + '</div>';
+  });
+
+const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828','Dead':'#424242'};
+
+function render(t){
+  // 支援樹木主相片為陣列或單張
+  const hk = toHK(t.lat, t.lng);
+  var html = '<a class="back" href="index.html?tree_id=' + encodeURIComponent(t.tree_id) + '&project_id=' + encodeURIComponent(t.project_id || '') + '">⬅ 地圖</a>' +
+  '<div class="card">' +
+    '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
+    '<div style="margin-top:8px"><span class="badge" style="background:' + (COLORS[t.status]||'#757575') + '">Status: ' + escapeHtml(t.status) + '</span></div>';
+  if(t.project_id){
+    html += '<div style="margin-top:6px"><span class="badge" style="background:#1976d2">🚩 地盤：<b>' + escapeHtml(t.project_id) + '</b></span> <span style="font-size:12px;color:#666;margin-left:6px">(NFC 用)</span></div>';
   }
+  // 支援樹木主相片為陣列或單張
+  var mainPhotos = t.photo_url;
+  if(mainPhotos){
+    if(typeof mainPhotos === 'string' && mainPhotos.indexOf('...') !== -1){
+      mainPhotos = null;
+    } else if(typeof mainPhotos === 'string'){
+      mainPhotos = [mainPhotos];
+    }
+  }
+  if(mainPhotos && mainPhotos.length > 0){
+    for(var i = 0; i < mainPhotos.length; i++){
+      html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="zoomImage(this.src)">';
+    }
+  }
+  html += '<div class="grid">' +
+      '<div>Height<b>' + (t.height||'-') + ' m</b></div>' +
+      '<div>Spread<b>' + (t.spread||'-') + ' m</b></div>' +
+      '<div>DBH<b>' + (t.dbh||'-') + ' cm</b></div>' +
+    '</div>' +
+    '<div class="sub" style="margin-top:8px">' + escapeHtml(t.description||'') + '</div>' +
+    '<div class="sub" style="margin-top:6px">📍 <b>HK80：</b>N ' + (hk?f1(hk.N):'—') + ' ／ E ' + (hk?f1(hk.E):'—') + ' ｜ <b>Level：</b>' + (t.level||'-') + ' m</div>' +
+    '<div class="sub">WGS84：' + f5(t.lat) + ', ' + f5(t.lng) + '</div>' +
+    '<div id="minimap"></div>' +
+  '</div>' +
+  '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員</button></div>' +
+  '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>' +
+  '<!-- 圖片縮放 Modal -->' +
+  '<div id="imgModal" class="modal" onclick="closeZoom()">' +
+    '<span class="modal-close">&times;</span>' +
+    '<img id="modalImg" src="" alt="放大圖片" crossorigin="anonymous" referrerpolicy="no-referrer">' +
+  '</div>';
+  $('#app').innerHTML = html;
+}
 
-  loadAll();
+function escapeHtml(str){
+  if(!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function initMiniMap(t){
+  if(!window.L) return;
+  const lat=+t.lat, lng=+t.lng;
+  if(!lat||!lng) return;
+  const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
+                 dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
+               .setView([lat,lng], 18);
+  L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+  L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+  L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
+    fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
+}
+
+// 👇 改為 async 配合新嘅 staffOk
+async function staffMode(){
+  if(!await staffOk()) return;
+  const hk = toHK(TREE.lat, TREE.lng);
+  $('#staffBox').innerHTML =
+    '<button onclick="checkin()">✅ 簽到</button>' +
+    '<hr><div class="section-title">📝 巡查記錄（狀態會自動同步樹木資料）</div>' +
+    '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
+    '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
+    '<input type="file" id="photo" accept="image/*" multiple style="display:none">' +
+    '<button onclick="document.getElementById(\'photo\').click()" style="margin-top:10px;background:#546e7a">📷 選擇相片（支援多張／相簿）</button>' +
+    '<div id="photoPreviewContainer" class="photo-preview-container" style="display:none">' +
+      '<div class="photo-count">已選擇 <b id="photoCount">0</b> 張相片</div>' +
+      '<div id="photoPreviewGrid" class="photo-preview-grid"></div>' +
+    '</div>' +
+    '<button onclick="submitInspection()" style="margin-top:10px">📤 上傳巡查記錄</button>' +
+    '<hr><div class="section-title">✏️ 樹木資料（HK80 座標／Level／地盤）</div>' +
+    '<div class="form-group"><label class="form-label">🌳 樹種</label><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
+    '<datalist id="tree_list"></datalist>' +
+    '<div class="form-group"><label class="form-label">📊 健康狀況</label><select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select></div>' +
+    '<div class="form-group"><label class="form-label">🚩 所屬地盤</label><select id="eProject"></select></div>' +
+    '<div class="row2"><div class="form-group"><label class="form-label">Height (m)</label><input id="eHeight" placeholder="高度" inputmode="decimal"></div><div class="form-group"><label class="form-label">Spread (m)</label><input id="eSpread" placeholder="冠幅" inputmode="decimal"></div></div>' +
+    '<div class="form-group"><label class="form-label">DBH (cm)</label><input id="eDbh" placeholder="胸徑" inputmode="decimal"></div>' +
+    '<div class="row2"><div class="form-group"><label class="form-label">HK80 N (Northing)</label><input id="eN" placeholder="北座標" inputmode="decimal"></div><div class="form-group"><label class="form-label">HK80 E (Easting)</label><input id="eE" placeholder="東座標" inputmode="decimal"></div></div>' +
+    '<div class="form-group"><label class="form-label">Level (m，高程)</label><input id="eLevel" placeholder="高程" inputmode="decimal"></div>' +
+    '<div class="form-group"><label class="form-label">📄 簡介</label><textarea id="eDesc" rows="2" placeholder="樹木簡介"></textarea></div>' +
+    '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
+
+  // 初始化相片預覽功能
+  initPhotoPreview();
+
+  $('#eStatus').value = TREE.status || 'Normal';
+  $('#eName').value = TREE.name || '';
+  $('#eHeight').value = TREE.height || '';
+  $('#eSpread').value = TREE.spread || '';
+  $('#eDbh').value = TREE.dbh || '';
+  $('#eN').value = hk ? f1(hk.N) : '';
+  $('#eE').value = hk ? f1(hk.E) : '';
+  $('#eLevel').value = TREE.level || '';
+  $('#eDesc').value = TREE.description || '';
+
+  fetch(API + '?action=projects').then(function(r){ return r.json(); }).then(function(res){
+    const opts = (res.data || []).map(function(p){
+      return '<option value="' + p.project_id + '">🚩 ' + p.name + '</option>';
+    }).join('');
+    $('#eProject').innerHTML = '<option value="">（不屬任何地盤）</option>' + opts;
+    $('#eProject').value = TREE.project_id || '';
+  });
+
+  // 載入樹木清單到 datalist
+  if(!window.allTreesLoaded){
+    fetch('data/trees_data.json')
+      .then(function(r){ return r.json(); })
+      .then(function(trees){
+        const dataList = document.getElementById('tree_list');
+        trees.forEach(function(tree){
+          const option = document.createElement('option');
+          option.value = tree.name;
+          dataList.appendChild(option);
+        });
+        window.allTreesLoaded = true;
+      })
+      .catch(function(err){ console.error('載入樹木資料失敗:', err); });
+  }
+}
+
+// 全局變數儲存選中的相片
+let selectedPhotos = [];
+
+function initPhotoPreview(){
+  const fileInput = $('#photo');
+  const previewContainer = $('#photoPreviewContainer');
+  const previewGrid = $('#photoPreviewGrid');
+  const photoCount = $('#photoCount');
+
+  fileInput.addEventListener('change', function(e){
+    const files = Array.from(e.target.files);
+    
+    // 將新選擇的相片加入陣列
+    for(let i = 0; i < files.length; i++){
+      selectedPhotos.push(files[i]);
+    }
+    
+    // 清空 input，允許重複選擇同一檔案
+    fileInput.value = '';
+    
+    updatePhotoPreview();
+  });
+}
+
+function updatePhotoPreview(){
+  const previewContainer = $('#photoPreviewContainer');
+  const previewGrid = $('#photoPreviewGrid');
+  const photoCount = $('#photoCount');
+  
+  if(selectedPhotos.length === 0){
+    previewContainer.style.display = 'none';
+    return;
+  }
+  
+  previewContainer.style.display = 'block';
+  photoCount.textContent = selectedPhotos.length;
+  previewGrid.innerHTML = '';
+  
+  selectedPhotos.forEach(function(file, index){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const item = document.createElement('div');
+      item.className = 'photo-preview-item';
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'photo-preview-remove';
+      removeBtn.textContent = '×';
+      removeBtn.title = '移除這張相片';
+      removeBtn.onclick = function(event){
+        event.stopPropagation();
+        removePhoto(index);
+      };
+      const img = document.createElement('img');
+      img.className = 'photo-preview-thumb';
+      img.src = e.target.result;
+      img.loading = 'lazy';
+      item.appendChild(img);
+      item.appendChild(removeBtn);
+      previewGrid.appendChild(item);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removePhoto(index){
+  selectedPhotos.splice(index, 1);
+  updatePhotoPreview();
+}
+
+async function checkin(){
+  const staff = prompt('工作人員姓名：') || '未填';
+  try {
+    const r = await post({type:'checkin', staff:staff, tree_id:id, prj:prj});
+    alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：' + r.error);
+  } catch(err) {
+    console.error('Checkin error:', err);
+    alert('❌ 連線錯誤：' + err.message);
+  }
+}
+
+async function submitInspection(){
+  const staff  = prompt('工作人員姓名：') || '未填';
+  
+  // 使用 selectedPhotos 陣列而不是 fileInput.files
+  if(selectedPhotos.length === 0){
+    try {
+      const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
+        health:$('#health').value, note:$('#note').value, photo_base64:''});
+      alert(r.ok ? '✅ 已上傳！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
+      if(r.ok) { selectedPhotos = []; setTimeout(function(){ location.reload(); }, 1000); }
+    } catch(err) {
+      console.error('Submit inspection error:', err);
+      alert('❌ 連線錯誤：' + err.message);
+    }
+    return;
+  }
+  
+  // 處理多張相片
+  const photosData = [];
+  for(let i = 0; i < selectedPhotos.length; i++){
+    try {
+      const b64 = await compress(selectedPhotos[i]);
+      photosData.push(b64);
+    } catch(err) {
+      console.error('Compress error for file ' + i + ':', err);
+      alert('❌ 壓縮圖片失敗：' + err.message);
+      return;
+    }
+  }
+  
+  // 直接發送 Base64 陣列（不要 JSON.stringify）
+  const payload = {
+    type:'inspection',
+    staff:staff,
+    tree_id:id,
+    prj:prj,
+    health:$('#health').value,
+    note:$('#note').value,
+    photo_base64: photosData  // 直接傳送陣列，讓後端處理
+  };
+  
+  console.log('Sending payload:', payload);
+  
+  try {
+    const r = await post(payload);
+    console.log('Server response:', r);
+    alert(r.ok ? '✅ 已上傳 ' + selectedPhotos.length + ' 張相片！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
+    if(r.ok) { selectedPhotos = []; setTimeout(function(){ location.reload(); }, 1000); }
+  } catch(err) {
+    console.error('Submit inspection error:', err);
+    alert('❌ 連線錯誤：' + err.message);
+  }
+}
+
+async function saveTreeInfo(){
+  let lat = TREE.lat, lng = TREE.lng;
+  const N = $('#eN').value, E = $('#eE').value;
+  if(N && E){
+    const w = toWGS(N, E);
+    if(!w){ alert('HK80 座標轉換失敗，請檢查 N/E 數值'); return; }
+    lat = w.lat.toFixed(6); lng = w.lng.toFixed(6);
+  }
+  try {
+    const r = await post({type:'update_tree', tree_id:id, prj:prj,
+      name:$('#eName').value,
+      status:$('#eStatus').value,
+      project_id:$('#eProject').value, height:$('#eHeight').value,
+      spread:$('#eSpread').value, dbh:$('#eDbh').value, level:$('#eLevel').value,
+      lat:lat, lng:lng, description:$('#eDesc').value});
+    alert(r.ok ? '✅ 已更新！' : '❌ 失敗：' + r.error);
+    if(r.ok) setTimeout(function(){ location.reload(); }, 800);
+  } catch(err) {
+    console.error('Save tree info error:', err);
+    alert('❌ 連線錯誤：' + err.message);
+  }
+}
+
+// 👇 最新後端 Token 驗證 post 函數
+async function post(payload){
+  let token = null;
+  const tokenData = localStorage.getItem('tree_staff_token');
+  if(tokenData){
+    try {
+      const data = JSON.parse(tokenData);
+      if(data.token && data.until > Date.now()) token = data.token;
+    } catch(e){}
+  }
+  if(token) payload.token = token;
+
+  return fetch(API, {
+    method: 'POST',
+    headers: {'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  }).then(async function(r){ 
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const json = await r.json();
+    if(json && json.ok === false && json.error === 'UNAUTHORIZED'){
+      localStorage.removeItem('tree_staff_token');
+      throw new Error('登入已過期或無效，請重新點擊「工作人員」並輸入密碼。');
+    }
+    return json;
+  });
+}
+
+async function compress(file, maxW, q){
+  maxW = maxW || 1200; q = q || .8;
+  return new Promise(function(resolve, reject){
+    const img = new Image();
+    img.onload = function(){
+      try {
+        const s = Math.min(1, maxW / img.width);
+        const c = document.createElement('canvas');
+        c.width = img.width * s; c.height = img.height * s;
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        const dataUrl = c.toDataURL('image/jpeg', q);
+        resolve(dataUrl.split(',')[1]);
+      } catch(err) {
+        console.error('Canvas compress error:', err);
+        reject(err);
+      }
+    };
+    img.onerror = function(){
+      reject(new Error('圖片載入失敗'));
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// 轉換 Google Drive 連結為可預覽/下載格式
+function convertGoogleDriveUrl(url, forDownload){
+  if(!url) return url;
+  var str = String(url);
+  // 匹配 Google Drive 文件連結格式: https://drive.google.com/file/d/FILE_ID/view 或 https://drive.google.com/open?id=FILE_ID
+  var matchId = str.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || str.match(/[\?&]id=([a-zA-Z0-9_-]+)/);
+  if(matchId && matchId[1]){
+    var fileId = matchId[1];
+    if(forDownload){
+      // 下載連結格式
+      return 'https://drive.google.com/uc?export=download&id=' + fileId;
+    } else {
+      // 預覽/顯示連結格式
+      return 'https://drive.google.com/uc?export=view&id=' + fileId;
+    }
+  }
+  // 如果不是 Google Drive 連結，返回原連結
+  return str;
+}
+
+function loadLogs(){
+  fetch(API + '?action=inspections&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      const data = res.data || [];
+      if(!data.length){ $('#logs').innerHTML = '<div class="log">尚無記錄</div>'; return; }
+      var html = '';
+      data.reverse().forEach(function(r){
+        var photoHtml = '';
+        // 支援多張相片 (photo_url 可能是陣列、JSON 字串或逗號分隔的字串)
+        var photos = r.photo_urls || r.photo_url;
+        if(!photos){ photos = []; }
+        else if(typeof photos === 'string'){
+          // 嘗試解析 JSON 陣列字串
+          if(photos.indexOf('[') !== -1 && photos.indexOf(']') !== -1){
+            try {
+              photos = JSON.parse(photos);
+            } catch(e) {
+              // 如果不是有效的 JSON，繼續下面的逗號分隔處理
+              photos = photos.replace(/^\[|\]$/g, '');
+            }
+          }
+          // 如果是逗號分隔的字串，分割成陣列
+          if(typeof photos === 'string' && photos.indexOf(',') !== -1){
+            photos = photos.split(',').map(function(url){ return url.trim(); });
+          } else if(typeof photos === 'string') {
+            photos = [photos];
+          }
+        }
+        // 確保 photos 是陣列且過濾掉空值
+        if(!Array.isArray(photos)){ photos = []; }
+        photos = photos.filter(function(p){ return p && String(p).trim() !== ''; });
+
+        if(photos && photos.length > 0){
+          var timeStr = fmtTime(r.time);
+          var treeIdEscaped = escapeHtml(r.tree_id||id);
+          var timeStrForDownload = timeStr.replace(/&/g,'&amp;').replace(/'/g,'&apos;');
+
+          photoHtml += '<div class="inspection-photo-grid">';
+          for(var i = 0; i < photos.length; i++){
+            var photoUrl = photos[i];
+            // 轉換 Google Drive 連結為可預覽格式
+            var displayUrl = convertGoogleDriveUrl(photoUrl, false);
+            // 轉換 Google Drive 連結為可下載格式
+            var downloadUrl = convertGoogleDriveUrl(photoUrl, true);
+            var displayUrlEscaped = escapeHtml(displayUrl);
+            var downloadUrlEscaped = escapeHtml(downloadUrl);
+            var photoIndex = i + 1;
+            photoHtml += '<div class="inspection-photo-item"><img class="inspection-photo-thumb" src="' + displayUrlEscaped + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="event.stopPropagation(); zoomImage(\'' + displayUrlEscaped + '\')" title="點擊放大" onerror="this.parentElement.style.display=\'none\'"><button class="inspection-photo-btn" onclick="event.stopPropagation(); downloadPhoto(\'' + downloadUrlEscaped + '\', \'' + treeIdEscaped + '\', \'' + timeStrForDownload + '\', ' + photoIndex + ')">⬇️ #' + photoIndex + '</button></div>';
+          }
+          photoHtml += '</div>';
+        }
+        html += '<div class=\"log\"><span class=\"ok\">' + escapeHtml(r.health) + '</span>｜' +
+               escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>';
+      });
+      $('#logs').innerHTML = html;
+    })
+    .catch(function(err){ 
+      console.error('Load logs error:', err);
+      $('#logs').innerHTML = '<div class="log">載入失敗</div>'; 
+    });
+}
+
+// 暴露全局函數供 HTML onclick 使用
+window.staffMode = staffMode;
+window.checkin = checkin;
+window.submitInspection = submitInspection;
+window.saveTreeInfo = saveTreeInfo;
+window.removePhoto = removePhoto;
+
+// 圖片縮放功能
+window.zoomImage = function(src, event){
+  if(event && event.stopPropagation) event.stopPropagation();
+  const modal = document.getElementById('imgModal');
+  const modalImg = document.getElementById('modalImg');
+  modalImg.src = src;
+  modal.classList.add('show');
+};
+
+window.closeZoom = function(){
+  document.getElementById('imgModal').classList.remove('show');
+};
+
+// 下載巡查照片功能
+window.downloadPhoto = function(url, treeId, timeStr, photoIndex){
+  // 如果是 Google Drive 下載連結，直接打開新分頁讓用戶下載
+  if(url && url.indexOf('drive.google.com') !== -1){
+    window.open(url, '_blank');
+    return;
+  }
+  // 使用 fetch with no-cors mode 來處理跨域圖片下載
+  fetch(url, { mode: 'cors', credentials: 'omit' })
+    .then(function(r){ 
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.blob(); 
+    })
+    .then(function(blob){
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      var suffix = photoIndex ? '_' + photoIndex : '';
+      link.download = 'inspection_' + treeId + '_' + timeStr.replace(/[: ]/g,'-') + suffix + '.jpg';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    })
+    .catch(function(err){
+      console.error('Download error:', err);
+      // 如果 fetch 失敗，嘗試直接打開圖片讓用戶手動保存
+      window.open(url, '_blank');
+      alert('⚠️ 自動下載失敗，已在新分頁打開圖片，請手動右鍵保存。\n錯誤：' + err.message);
+    });
+};
+
+})();
 </script>
 </body>
 </html>
