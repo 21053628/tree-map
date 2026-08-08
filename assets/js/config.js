@@ -58,7 +58,13 @@ function initConfig(apiEndpoint) {
   return Config;
 }
 
-// 匯出配置
+// 匯出配置到全域對象
+if (typeof window !== 'undefined') {
+  window.Config = Config;
+  window.initConfig = initConfig;
+}
+
+// CommonJS 匯出（如需 Node.js 環境使用）
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { Config, initConfig };
 }
