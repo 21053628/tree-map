@@ -241,26 +241,40 @@ const App = (function() {
    */
   function selectProject(pid) {
     curProject = pid;
-    if (map) map.closePopup();
-    buildSelect();
     
+    // 先關閉 popup，避免干擾地圖操作
+    if (map) {
+      map.closePopup();
+      // 等待 popup 完全關閉後再執行飛行動畫
+      setTimeout(function() {
+        performFlyTo(pid);
+      }, 50);
+    } else {
+      performFlyTo(pid);
+    }
+  }
+  
+  /**
+   * 執行飛行動畫
+   */
+  function performFlyTo(pid) {
     // 清空樹木緩存，確保切換地盤時不會殘留舊標記
     treesCache.clear();
     
     if (pid) {
       const p = PROJECTS.find(function(x) { return String(x.project_id) === String(pid); });
       if (p) {
-        // 使用 flyTo 實現平滑飛行動畫
-        map.flyTo([+p.lat, +p.lng], 18, {
+        // 使用 flyTo 實現平滑飛行動畫，縮放到最大可用級別
+        map.flyTo([+p.lat, +p.lng], Config.MAP.MAX_ZOOM, {
           duration: 1.2, // 動畫持續時間（秒）
-          easeLinearity: 0.25 // 平滑曲線
+          easeLineProxy: 0.25 // 平滑曲線
         });
       }
     } else {
       // 如果選擇「全部地盤」，縮放到默認視圖
       map.flyTo(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM, {
         duration: 1.0,
-        easeLinearity: 0.25
+        easeLineProxy: 0.25
       });
     }
     
