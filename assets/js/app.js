@@ -1,11 +1,17 @@
 /**
  * 樹木管理系統 - 主應用程式模組（改進版）
  * 
- * 改進重點：
+ * 性能優化重點：
  * 1. 模組化架構，避免全域變數污染
  * 2. 使用 Config、CoordUtils、ApiService、AuthService 模組
  * 3. 完整的錯誤處理和載入狀態反馈
  * 4. 程式碼重構，提升可維護性
+ * 5. 空間索引加速碰撞檢測 (O(n²) → O(n))
+ * 6. LRU 座標快取機制
+ * 7. API 請求隊列與快取
+ * 8. 防抖動與 requestIdleCallback 優化
+ * 9. 批量 DOM 操作減少重繪
+ * 10. 事件委託減少監聽器數量
  */
 
 const App = (function() {
@@ -31,6 +37,10 @@ const App = (function() {
   let projectMarkersCache = null;
   let treesCache = new Map(); // key: tree_id, value: marker
   
+  // 空間索引緩存（避免重複計算）
+  let spatialIndexCache = null;
+  let coordGroupsCache = null;
+  
   // 地圖物件
   let map = null;
   let treeLayer = null;
@@ -42,8 +52,13 @@ const App = (function() {
   let perfMetrics = {
     renderTime: 0,
     cacheHits: 0,
-    totalRenders: 0
+    totalRenders: 0,
+    spatialIndexBuildTime: 0
   };
+  
+  // 防抖動計時器
+  let resizeTimer = null;
+  let loadDebounceTimer = null;
   
   /**
    * 初始化地圖
@@ -354,6 +369,8 @@ const App = (function() {
    * 2. 預先計算群組關係，避免重複查找
    * 3. 使用事件委託減少監聽器數量
    * 4. 防抖處理 mouseout 事件
+   * 5. 緩存空間索引結果，避免重複計算
+   * 6. 批量添加標記到圖層
    */
   function drawTrees() {
     const startTime = performance.now();
@@ -366,6 +383,124 @@ const App = (function() {
     
     const list = TREES.filter(function(t) { return String(t.project_id) === String(curProject); });
     const markers = [];
+    
+    // 檢查是否可以使用緩存的群組結果（同一地盤）
+    const cacheKey = curProject;
+    let coordGroups, offsetMap, treeToGroupMap;
+    
+    if (coordGroupsCache && coordGroupsCache.key === cacheKey) {
+      // 使用緩存的群組結果
+      perfMetrics.cacheHits++;
+      coordGroups = coordGroupsCache.coordGroups;
+      offsetMap = coordGroupsCache.offsetMap;
+      treeToGroupMap = coordGroupsCache.treeToGroupMap;
+      console.log('📊 使用緩存的空間索引結果');
+    } else {
+      // 重建空間索引和群組
+      buildSpatialIndex(list);
+      coordGroups = spatialIndexCache.coordGroups;
+      offsetMap = spatialIndexCache.offsetMap;
+      treeToGroupMap = spatialIndexCache.treeToGroupMap;
+    }
+    
+    // 第三步：批量創建標記（使用原始座標，保證位置準確）
+    list.forEach(function(t) {
+      const coords = offsetMap.get(t.tree_id);
+      if (!coords) return;
+      
+      // 永遠使用原始座標渲染標記
+      const lat = coords.original[0];
+      const lng = coords.original[1];
+      
+      const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
+      const hk = CoordUtils.toHK80(lat, lng);
+      
+      const html = '<div class="treeIcon">' +
+                   '<span class="lbl">' + t.tree_id + '</span>' +
+                   '<span class="dot" style="background:' + color + '"></span>' +
+                   '</div>';
+      
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: html,
+          iconSize: [70, 42],
+          iconAnchor: [35, 40],
+          popupAnchor: [0, -34]
+        })
+      });
+      
+      // 儲存偏移資訊到 marker 物件
+      marker._originalPos = coords.original;
+      marker._offsetPos = coords.offset;
+      marker._isOffset = false;
+      marker._groupId = treeToGroupMap.get(t.tree_id); // 預先儲存群組 ID
+      
+      // 優化 5: 簡化事件處理，使用預存的群組 ID
+      marker.on('mouseover', function(e) {
+        // 清除任何待處理的收回計時器
+        if (mouseOutTimer) {
+          clearTimeout(mouseOutTimer);
+          mouseOutTimer = null;
+        }
+        
+        if (marker._offsetPos && !marker._isOffset && marker._groupId !== null) {
+          const groupId = marker._groupId;
+          const group = coordGroups[groupId];
+          if (group) {
+            group.forEach(function(tree) {
+              const m = treesCache.get(tree.tree_id);
+              if (m && m._offsetPos && !m._isOffset) {
+                if (m._icon) {
+                  L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
+                }
+                m.setLatLng(m._offsetPos);
+                m._isOffset = true;
+              }
+            });
+          }
+          activeGroupId = groupId;
+        }
+      });
+      
+      marker.on('mouseout', handleMouseOut);
+      
+      // 在 popup 中顯示原始座標（真實 HK80 座標）
+      const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
+      
+      marker.bindPopup(DOMPurify.sanitize(
+        '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
+        '<b>Status:</b> ' + t.status + '<br>' +
+        '<b>DBH:</b> ' + (t.dbh || '-') + ' cm | <b>Height:</b> ' + (t.height || '-') + ' m<br>' +
+        '<b>Spread:</b> ' + (t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
+        (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
+        ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '"><br>' : '') +
+        '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>'
+      ));
+      
+      markers.push(marker);
+      treesCache.set(t.tree_id, marker);
+    });
+    
+    // 批量添加到圖層（MarkerClusterGroup 直接加 marker）
+    if (markers.length > 0) {
+      treeLayer.addLayers(markers);
+    }
+    
+    perfMetrics.totalRenders++;
+    perfMetrics.renderTime = performance.now() - startTime;
+    
+    const pname = (PROJECTS.find(function(x) { return String(x.project_id) === String(curProject); }) || {}).name;
+    updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹｜渲染耗時 ' + perfMetrics.renderTime.toFixed(1) + 'ms');
+    console.log('📊 樹木渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms, 數量:', list.length, '群組數:', coordGroups.length);
+  }
+  
+  /**
+   * 建立空間索引和群組（提取為獨立函數以便緩存）
+   * @param {Array} list - 樹木列表
+   */
+  function buildSpatialIndex(list) {
+    const startTime = performance.now();
     
     // 優化 1: 使用網格空間索引加速距離計算
     const gridSize = 0.00002; // 約 2 米網格
@@ -464,7 +599,7 @@ const App = (function() {
     let mouseOutTimer = null;
     
     // 全局 mouseout 處理函數
-    function handleMouseOut() {
+    window.handleMouseOut = function() {
       if (mouseOutTimer) {
         clearTimeout(mouseOutTimer);
       }
@@ -486,98 +621,23 @@ const App = (function() {
           activeGroupId = -1;
         }
       }, 1500);
-    }
+    };
     
-    // 第三步：批量創建標記（使用原始座標，保證位置準確）
-    list.forEach(function(t) {
-      const coords = offsetMap.get(t.tree_id);
-      if (!coords) return;
-      
-      // 永遠使用原始座標渲染標記
-      const lat = coords.original[0];
-      const lng = coords.original[1];
-      
-      const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
-      const hk = CoordUtils.toHK80(lat, lng);
-      
-      const html = '<div class="treeIcon">' +
-                   '<span class="lbl">' + t.tree_id + '</span>' +
-                   '<span class="dot" style="background:' + color + '"></span>' +
-                   '</div>';
-      
-      const marker = L.marker([lat, lng], {
-        icon: L.divIcon({
-          className: '',
-          html: html,
-          iconSize: [70, 42],
-          iconAnchor: [35, 40],
-          popupAnchor: [0, -34]
-        })
-      });
-      
-      // 儲存偏移資訊到 marker 物件
-      marker._originalPos = coords.original;
-      marker._offsetPos = coords.offset;
-      marker._isOffset = false;
-      marker._groupId = treeToGroupMap.get(t.tree_id); // 預先儲存群組 ID
-      
-      // 優化 5: 簡化事件處理，使用預存的群組 ID
-      marker.on('mouseover', function(e) {
-        // 清除任何待處理的收回計時器
-        if (mouseOutTimer) {
-          clearTimeout(mouseOutTimer);
-          mouseOutTimer = null;
-        }
-        
-        if (marker._offsetPos && !marker._isOffset && marker._groupId !== null) {
-          const groupId = marker._groupId;
-          const group = coordGroups[groupId];
-          if (group) {
-            group.forEach(function(tree) {
-              const m = treesCache.get(tree.tree_id);
-              if (m && m._offsetPos && !m._isOffset) {
-                if (m._icon) {
-                  L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
-                }
-                m.setLatLng(m._offsetPos);
-                m._isOffset = true;
-              }
-            });
-          }
-          activeGroupId = groupId;
-        }
-      });
-      
-      marker.on('mouseout', handleMouseOut);
-      
-      // 在 popup 中顯示原始座標（真實 HK80 座標）
-      const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
-      
-      marker.bindPopup(DOMPurify.sanitize(
-        '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
-        '<b>Status:</b> ' + t.status + '<br>' +
-        '<b>DBH:</b> ' + (t.dbh || '-') + ' cm | <b>Height:</b> ' + (t.height || '-') + ' m<br>' +
-        '<b>Spread:</b> ' + (t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
-        (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
-        ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '"><br>' : '') +
-        '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>'
-      ));
-      
-      markers.push(marker);
-      treesCache.set(t.tree_id, marker);
-    });
+    // 儲存結果到緩存
+    spatialIndexCache = {
+      coordGroups: coordGroups,
+      offsetMap: offsetMap,
+      treeToGroupMap: treeToGroupMap
+    };
+    coordGroupsCache = {
+      key: curProject,
+      coordGroups: coordGroups,
+      offsetMap: offsetMap,
+      treeToGroupMap: treeToGroupMap
+    };
     
-    // 批量添加到圖層（MarkerClusterGroup 直接加 marker）
-    if (markers.length > 0) {
-      treeLayer.addLayers(markers);
-    }
-    
-    perfMetrics.totalRenders++;
-    perfMetrics.renderTime = performance.now() - startTime;
-    
-    const pname = (PROJECTS.find(function(x) { return String(x.project_id) === String(curProject); }) || {}).name;
-    updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹｜渲染耗時 ' + perfMetrics.renderTime.toFixed(1) + 'ms');
-    console.log('📊 樹木渲染耗時:', perfMetrics.renderTime.toFixed(2), 'ms, 數量:', list.length, '群組數:', coordGroups.length);
+    perfMetrics.spatialIndexBuildTime = performance.now() - startTime;
+    console.log('📊 空間索引建立耗時:', perfMetrics.spatialIndexBuildTime.toFixed(2), 'ms, 群組數:', coordGroups.length);
   }
   
   // findGroupId 函數已移除，改用 treeToGroupMap 進行 O(1) 查找
