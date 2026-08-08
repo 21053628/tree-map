@@ -216,12 +216,12 @@ const App = (function() {
         })
       });
       
-      marker.bindPopup(
+      marker.bindPopup(DOMPurify.sanitize(
         '<b>🚩 ' + p.name + '</b><br>' +
         '此地盤樹木：' + count + ' 棵<br>' +
         (hk ? 'HK80：N ' + CoordUtils.format1(hk.N) + ' / E ' + CoordUtils.format1(hk.E) + '<br>' : '') +
         '<button onclick="App.selectProject(\'' + p.project_id + '\')">📍 前往地盤查看樹木</button>'
-      );
+      ));
       
       markers.push(marker);
     });
@@ -434,7 +434,7 @@ const App = (function() {
       // 在 popup 中顯示原始座標（真實 HK80 座標）
       const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
       
-      marker.bindPopup(
+      marker.bindPopup(DOMPurify.sanitize(
         '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
         '<b>Status:</b> ' + t.status + '<br>' +
         '<b>DBH:</b> ' + (t.dbh || '-') + ' cm | <b>Height:</b> ' + (t.height || '-') + ' m<br>' +
@@ -442,7 +442,7 @@ const App = (function() {
         (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
         ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '"><br>' : '') +
         '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>'
-      );
+      ));
       
       markers.push(marker);
       treesCache.set(t.tree_id, marker);
@@ -479,7 +479,7 @@ const App = (function() {
    * 顯示面板
    */
   function showPanel(html) {
-    $('#panelContent').innerHTML = html;
+    $('#panelContent').innerHTML = DOMPurify.sanitize(html);
     $('#panel').style.display = 'block';
     document.body.classList.add('panel-open');
   }
@@ -567,7 +567,7 @@ const App = (function() {
         .then(function(trees) {
           const dataList = document.getElementById('tree_datalist');
           if (dataList) {
-            dataList.innerHTML = '';
+            dataList.textContent = '';
             trees.forEach(function(tree) {
               const option = document.createElement('option');
               option.value = tree.name;

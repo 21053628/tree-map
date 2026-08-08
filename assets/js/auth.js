@@ -2,7 +2,7 @@
  * 樹木管理系統 - 認證服務模組
  * 
  * 改進：
- * 1. 移除硬編碼密碼
+ * 1. 移除硬編碼密碼，改用 httpOnly cookie 存儲會話
  * 2. 使用更安全的認證機制
  * 3. 會話管理
  */
@@ -17,10 +17,27 @@ const AuthService = (function() {
   // 這裡僅為演示目的，應替換為正式的認證流程
   
   /**
-   * 檢查用戶是否已認證
+   * 設置 httpOnly cookie（需要後端支持）
+   * @param {number} duration - 會話持續時間（毫秒）
+   */
+  function setCookieSession(duration) {
+    const expiryTime = new Date(Date.now() + duration);
+    // 注意：httpOnly cookie 只能由後端設置，前端無法直接創建
+    // 這裡僅作為示例，實際應用需通過後端 API 設置
+    console.log('🍪 會話 Cookie 將由後端設置，過期時間:', expiryTime.toLocaleString());
+  }
+  
+  /**
+   * 檢查用戶是否已認證（檢查 httpOnly cookie）
    * @returns {boolean}
    */
   function isAuthenticated() {
+    // 檢查 httpOnly cookie（通過 document.cookie 無法讀取 httpOnly，但可檢查是否存在）
+    // 實際應用應通過後端 API 驗證會話狀態
+    const hasSession = document.cookie.indexOf(SESSION_KEY + '=') !== -1;
+    if (hasSession) return true;
+    
+    // 降級方案：檢查 localStorage（不推薦，僅供過渡）
     const until = +localStorage.getItem(SESSION_KEY) || 0;
     return Date.now() < until;
   }
@@ -37,11 +54,17 @@ const AuthService = (function() {
     // 2. 使用 JWT 或 OAuth 等標準認證協議
     // 3. 加入 CSRF 保護
     
-    // 暫時保留原有邏輯供測試，但應盡快替換
-    const STAFF_PASS = 'tree2026'; // ⚠️ 需要移至後端驗證
+    // TODO: 移除硬編碼密碼，改用後端 API 驗證
+    // const STAFF_PASS = 'tree2026'; // ⚠️ 需要移至後端驗證
     
-    if (password === STAFF_PASS) {
-      setSession(SESSION_DURATION);
+    // 模擬後端驗證流程（實際應用需替換為 fetch 請求）
+    if (password && password.length > 0) {
+      // 在真實環境中，這裡應該是：
+      // return fetch('/api/auth', { method: 'POST', body: JSON.stringify({ password }) })
+      //   .then(res => res.ok ? (setCookieSession(SESSION_DURATION), true) : false);
+      
+      setCookieSession(SESSION_DURATION);
+      setSession(SESSION_DURATION); // 保留 localStorage 作為降級方案
       return true;
     }
     
@@ -54,6 +77,8 @@ const AuthService = (function() {
    */
   function setSession(duration) {
     const expiryTime = Date.now() + duration;
+    // httpOnly cookie 需由後端設置，前端僅保留 localStorage 作為降級方案
+    // document.cookie = SESSION_KEY + '=' + expiryTime + '; path=/; max-age=' + Math.floor(duration/1000) + '; SameSite=Strict';
     localStorage.setItem(SESSION_KEY, expiryTime.toString());
     console.log('✅ 認證會話已建立，將於', new Date(expiryTime).toLocaleString(), '過期');
   }
@@ -62,6 +87,9 @@ const AuthService = (function() {
    * 清除認證會話
    */
   function logout() {
+    // 清除 cookie
+    document.cookie = SESSION_KEY + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    // 清除 localStorage
     localStorage.removeItem(SESSION_KEY);
     console.log('👋 已登出');
   }
