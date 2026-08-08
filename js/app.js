@@ -568,7 +568,9 @@ const App = (function() {
     
     let treeOptions = '<option value="">-- 選擇一棵樹作為模板（可選） --</option>';
     templateTrees.sort(function(a, b) {
-      return a.tree_id.localeCompare(b.tree_id);
+      const idA = String(a.tree_id || '');
+      const idB = String(b.tree_id || '');
+      return idA.localeCompare(idB);
     }).forEach(function(t) {
       treeOptions += '<option value="' + t.tree_id + '">' + t.tree_id + ' - ' + t.name + ' (' + t.species + ')</option>';
     });

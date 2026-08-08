@@ -182,7 +182,8 @@ function staffMode(){
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
     '<hr><b>✏️ 樹木資料（HK80 座標／Level／地盤）</b>' +
-    '<div class="row2"><input id="eName" placeholder="名稱"><input id="eSpecies" placeholder="樹種"></div>' +
+    '<div class="row2"><input id="eName" list="tree_list" placeholder="輸入關鍵字搜尋樹名..."><input id="eSpecies" list="tree_list" placeholder="輸入關鍵字搜尋樹種..."></div>' +
+    '<datalist id="tree_list"></datalist>' +
     '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
     '<select id="eProject"></select>' +
     '<div class="row2"><input id="eHeight" placeholder="Height (m)" inputmode="decimal"><input id="eSpread" placeholder="Spread (m)" inputmode="decimal"></div>' +
@@ -210,6 +211,22 @@ function staffMode(){
     $('#eProject').innerHTML = '<option value="">（不屬任何地盤）</option>' + opts;
     $('#eProject').value = TREE.project_id || '';
   });
+
+  // 載入樹木清單到 datalist
+  if(!window.allTreesLoaded){
+    fetch('trees_data.json')
+      .then(function(r){ return r.json(); })
+      .then(function(trees){
+        const dataList = document.getElementById('tree_list');
+        trees.forEach(function(tree){
+          const option = document.createElement('option');
+          option.value = tree.name;
+          dataList.appendChild(option);
+        });
+        window.allTreesLoaded = true;
+      })
+      .catch(function(err){ console.error('載入樹木資料失敗:', err); });
+  }
 }
 
 async function checkin(){
