@@ -1,5 +1,5 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.2 - 修復返回地圖彈錯位）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.3 - 修復新增樹木後地圖亂彈）
  * 
  * 🚀 優化重點：
  * 1. [殺手1] Popup 懶載入 (Lazy Load)
@@ -11,6 +11,7 @@
  * 7. [UI] 移除狀態列的「渲染耗時」顯示
  * 8. [v2.1] 新增樹木即刻顯示
  * 9. [v2.2] 修復 NFC / t.html 返回地圖時動畫打架導致彈錯位嘅問題
+ * 10. [v2.3] 修復新增樹木後，MarkerCluster 重新渲染與 flyTo 動畫打架導致地圖亂彈嘅問題
  */
 
 const App = (function() {
@@ -578,7 +579,7 @@ const App = (function() {
         treesCache.clear();
         spatialIndexCache = null;
         coordGroupsCache = null;
-        load();
+        await load(); // 統一使用 await
       }
     } catch (error) { alert('❌ 請求失敗：' + error.message); }
   }
@@ -648,14 +649,25 @@ const App = (function() {
         treesCache.clear();
         spatialIndexCache = null;
         coordGroupsCache = null;
-        await load();
+        await load(); // 重新載入並觸發 MarkerCluster 重繪
         
-        const nt = TREES.find(function(t){ return String(t.tree_id) === String(r.tree_id); });
+        const newId = String(r.tree_id);
+        // 🔥 優化：使用 O(1) 的 treeMap 查找，更穩妥
+        const nt = treeMap.get(newId) || TREES.find(function(t){ return String(t.tree_id) === newId; });
+        
         if (nt) {
-          map.flyTo([+nt.lat, +nt.lng], Math.max(map.getZoom(), 18), { duration: 0.8 });
-          const m = treesCache.get(nt.tree_id);
-          if (m) setTimeout(function(){ m.openPopup(); }, 900);
-          updateStatus('✅ 已定位到新樹木：' + r.tree_id);
+          // 🔥 [v2.3 修復] 使用 setTimeout 避開 MarkerCluster 重新渲染時的視圖爭奪 (動畫打架)
+          // 給 Cluster 400ms 時間完成內部佈局計算，然後我哋再優雅咁飛過去
+          setTimeout(function() {
+            map.flyTo([+nt.lat, +nt.lng], Math.max(map.getZoom(), 18), { duration: 0.8 });
+            
+            // 再延遲 900ms 打開 popup，確保 flyTo 動畫完成
+            setTimeout(function() {
+              const m = treesCache.get(newId);
+              if (m) m.openPopup();
+              updateStatus('✅ 已定位到新樹木：' + newId);
+            }, 900);
+          }, 400); 
         }
       }
     } catch (error) { alert('❌ 請求失敗：' + error.message); }
@@ -674,10 +686,9 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.2）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.3）');
   }
   
-  // 🔥 [v2.2 修復] 支援讀取 t.html 傳過嚟嘅 lat/lng 參數
   function checkURLParams() {
     const params = new URLSearchParams(window.location.search);
     const treeId = params.get('tree_id');
@@ -690,7 +701,6 @@ const App = (function() {
     }
   }
   
-  // 🔥 [v2.2 修復] 取消兩次 flyTo 打架，靜默切換地盤，一次過直飛樹木位置
   function locateTree(treeId, projectId, lat, lng) {
     let tree = null;
     if (treeId) {
@@ -706,7 +716,6 @@ const App = (function() {
       return;
     }
 
-    // 靜默切換地盤（直接改狀態同重繪，唔觸發 flyTo 動畫，避免打架）
     if (targetPid && String(curProject) !== String(targetPid)) {
       curProject = String(targetPid);
       buildSelect();
@@ -717,7 +726,6 @@ const App = (function() {
       drawTrees();
     }
 
-    // 一次過直飛樹木
     map.flyTo([targetLat, targetLng], 19, { duration: 1.2 });
 
     setTimeout(function() {
