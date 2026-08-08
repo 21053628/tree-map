@@ -182,7 +182,7 @@ function staffMode(){
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
     '<hr><b>✏️ 樹木資料（HK80 座標／Level／地盤）</b>' +
-    '<div class="row2"><input id="eName" list="tree_list" placeholder="輸入關鍵字搜尋樹名..."><input id="eSpecies" list="tree_list" placeholder="輸入關鍵字搜尋樹種..."></div>' +
+    '<div class="row2"><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."><input id="eSpecies" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
     '<datalist id="tree_list"></datalist>' +
     '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
     '<select id="eProject"></select>' +
@@ -193,7 +193,8 @@ function staffMode(){
     '<textarea id="eDesc" rows="2" placeholder="簡介"></textarea>' +
     '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
 
-  $('#eName').value = TREE.name || '';
+  // eName 和 eSpecies 使用同一個值（樹種）
+  $('#eName').value = TREE.species || '';
   $('#eSpecies').value = TREE.species || '';
   $('#eStatus').value = TREE.status || 'Normal';
   $('#eHeight').value = TREE.height || '';
