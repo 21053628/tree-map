@@ -38,6 +38,13 @@
   .inspection-photo-btn:hover{background:#37474f}
   .form-group{margin-top:12px}.form-label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px;font-weight:500}
   .section-title{font-size:15px;color:var(--primary);font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:6px}
+  .photo-preview-container{margin-top:12px;padding:12px;background:#f5f5f5;border-radius:10px}
+  .photo-preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-top:8px}
+  .photo-preview-item{position:relative;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+  .photo-preview-thumb{width:100%;height:100px;object-fit:cover;display:block}
+  .photo-preview-remove{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(255,0,0,.85);color:#fff;border:none;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
+  .photo-preview-remove:hover{background:rgba(255,0,0,1)}
+  .photo-count{font-size:13px;color:var(--muted);margin-bottom:8px}
   @media (max-width:600px){.wrap{padding:12px}.card{padding:14px}#minimap{height:180px}.grid{grid-template-columns:repeat(3,1fr);gap:8px}.grid div{padding:10px;font-size:13px}}
   @media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
 </style>
@@ -196,8 +203,13 @@ function staffMode(){
     '<hr><div class="section-title">📝 巡查記錄（狀態會自動同步樹木資料）</div>' +
     '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
     '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
-    '<input type="file" id="photo" accept="image/*" capture="environment" multiple>' +
-    '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
+    '<input type="file" id="photo" accept="image/*" multiple style="display:none">' +
+    '<button onclick="document.getElementById(\'photo\').click()" style="margin-top:10px;background:#546e7a">📷 選擇相片（支援多張／相簿）</button>' +
+    '<div id="photoPreviewContainer" class="photo-preview-container" style="display:none">' +
+      '<div class="photo-count">已選擇 <b id="photoCount">0</b> 張相片</div>' +
+      '<div id="photoPreviewGrid" class="photo-preview-grid"></div>' +
+    '</div>' +
+    '<button onclick="submitInspection()" style="margin-top:10px">📤 上傳巡查記錄</button>' +
     '<hr><div class="section-title">✏️ 樹木資料（HK80 座標／Level／地盤）</div>' +
     '<div class="form-group"><label class="form-label">🌳 樹種</label><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
     '<datalist id="tree_list"></datalist>' +
@@ -209,6 +221,9 @@ function staffMode(){
     '<div class="form-group"><label class="form-label">Level (m，高程)</label><input id="eLevel" placeholder="高程" inputmode="decimal"></div>' +
     '<div class="form-group"><label class="form-label">📄 簡介</label><textarea id="eDesc" rows="2" placeholder="樹木簡介"></textarea></div>' +
     '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
+
+  // 初始化相片預覽功能
+  initPhotoPreview();
 
   $('#eStatus').value = TREE.status || 'Normal';
   $('#eName').value = TREE.name || '';
@@ -245,6 +260,74 @@ function staffMode(){
   }
 }
 
+// 全局變數儲存選中的相片
+let selectedPhotos = [];
+
+function initPhotoPreview(){
+  const fileInput = $('#photo');
+  const previewContainer = $('#photoPreviewContainer');
+  const previewGrid = $('#photoPreviewGrid');
+  const photoCount = $('#photoCount');
+
+  fileInput.addEventListener('change', function(e){
+    const files = Array.from(e.target.files);
+    
+    // 將新選擇的相片加入陣列
+    for(let i = 0; i < files.length; i++){
+      selectedPhotos.push(files[i]);
+    }
+    
+    // 清空 input，允許重複選擇同一檔案
+    fileInput.value = '';
+    
+    updatePhotoPreview();
+  });
+}
+
+function updatePhotoPreview(){
+  const previewContainer = $('#photoPreviewContainer');
+  const previewGrid = $('#photoPreviewGrid');
+  const photoCount = $('#photoCount');
+  
+  if(selectedPhotos.length === 0){
+    previewContainer.style.display = 'none';
+    return;
+  }
+  
+  previewContainer.style.display = 'block';
+  photoCount.textContent = selectedPhotos.length;
+  previewGrid.innerHTML = '';
+  
+  selectedPhotos.forEach(function(file, index){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const item = document.createElement('div');
+      item.className = 'photo-preview-item';
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'photo-preview-remove';
+      removeBtn.textContent = '×';
+      removeBtn.title = '移除這張相片';
+      removeBtn.onclick = function(event){
+        event.stopPropagation();
+        removePhoto(index);
+      };
+      const img = document.createElement('img');
+      img.className = 'photo-preview-thumb';
+      img.src = e.target.result;
+      img.loading = 'lazy';
+      item.appendChild(img);
+      item.appendChild(removeBtn);
+      previewGrid.appendChild(item);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removePhoto(index){
+  selectedPhotos.splice(index, 1);
+  updatePhotoPreview();
+}
+
 async function checkin(){
   const staff = prompt('工作人員姓名：') || '未填';
   try {
@@ -258,15 +341,14 @@ async function checkin(){
 
 async function submitInspection(){
   const staff  = prompt('工作人員姓名：') || '未填';
-  const fileInput = $('#photo');
-  const files = fileInput.files;
   
-  if(files.length === 0){
+  // 使用 selectedPhotos 陣列而不是 fileInput.files
+  if(selectedPhotos.length === 0){
     try {
       const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
         health:$('#health').value, note:$('#note').value, photo_base64:''});
       alert(r.ok ? '✅ 已上傳！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
-      if(r.ok) { fileInput.value = ''; setTimeout(function(){ location.reload(); }, 1000); }
+      if(r.ok) { selectedPhotos = []; setTimeout(function(){ location.reload(); }, 1000); }
     } catch(err) {
       console.error('Submit inspection error:', err);
       alert('❌ 連線錯誤：' + err.message);
@@ -276,9 +358,9 @@ async function submitInspection(){
   
   // 處理多張相片
   const photosData = [];
-  for(let i = 0; i < files.length; i++){
+  for(let i = 0; i < selectedPhotos.length; i++){
     try {
-      const b64 = await compress(files[i]);
+      const b64 = await compress(selectedPhotos[i]);
       photosData.push(b64);
     } catch(err) {
       console.error('Compress error for file ' + i + ':', err);
@@ -303,8 +385,8 @@ async function submitInspection(){
   try {
     const r = await post(payload);
     console.log('Server response:', r);
-    alert(r.ok ? '✅ 已上傳 ' + files.length + ' 張相片！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
-    if(r.ok) { fileInput.value = ''; setTimeout(function(){ location.reload(); }, 1000); }
+    alert(r.ok ? '✅ 已上傳 ' + selectedPhotos.length + ' 張相片！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
+    if(r.ok) { selectedPhotos = []; setTimeout(function(){ location.reload(); }, 1000); }
   } catch(err) {
     console.error('Submit inspection error:', err);
     alert('❌ 連線錯誤：' + err.message);
@@ -453,6 +535,7 @@ window.staffMode = staffMode;
 window.checkin = checkin;
 window.submitInspection = submitInspection;
 window.saveTreeInfo = saveTreeInfo;
+window.removePhoto = removePhoto;
 
 // 圖片縮放功能
 window.zoomImage = function(src, event){
