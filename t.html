@@ -467,8 +467,8 @@
       }
       return json;
     } catch(err) {
-      // 網路不穩或失敗時也暫存
-      if(window.OfflineQueue && !navigator.onLine) {
+      // 🔥 終極修正：只要係網絡層錯誤 (TypeError) 或 真斷網，一律離線暫存！
+      if(window.OfflineQueue && (err instanceof TypeError || !navigator.onLine)) {
         await window.OfflineQueue.push(payload);
         if(window.pwaToast) window.pwaToast('📥 網路不穩，已離線暫存');
         return { ok: true, queued: true };

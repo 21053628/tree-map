@@ -1,4 +1,4 @@
-/* 樹木管理系統 - 離線寫入佇列 (IndexedDB Outbox) */
+/* 樹木管理系統 - 離線寫入佇列 (IndexedDB Outbox) v1.0.1 */
 const OfflineQueue = (function() {
   'use strict';
   const DB_NAME = 'tree-offline';
@@ -55,7 +55,6 @@ const OfflineQueue = (function() {
   return { push: push, all: all, remove: remove };
 })();
 
-/* ---------- 小吐司提示 ---------- */
 function pwaToast(msg) {
   let el = document.getElementById('pwaToast');
   if (!el) {
@@ -70,7 +69,6 @@ function pwaToast(msg) {
   el._t = setTimeout(function() { el.style.opacity = '0'; }, 2600);
 }
 
-/* ---------- 同步離線佇列 ---------- */
 async function syncOutbox() {
   if (!navigator.onLine) return;
   const items = await OfflineQueue.all();
@@ -86,21 +84,12 @@ async function syncOutbox() {
         body: JSON.stringify(item.payload)
       });
       const json = await res.json();
-
-      if (json && json.ok) {
-        await OfflineQueue.remove(item.id);
-        synced++;
-      } else if (json && json.error === 'UNAUTHORIZED') {
-        // Token 過期：嘗試重新登入後繼續
+      if (json && json.ok) { await OfflineQueue.remove(item.id); synced++; }
+      else if (json && json.error === 'UNAUTHORIZED') {
         const ok = await AuthService.promptAuth();
         if (!ok) break;
-      } else {
-        await OfflineQueue.remove(item.id); // 伺服器已處理，移除避免重複
-        synced++;
-      }
-    } catch (e) {
-      break; // 仍然離線，停止同步
-    }
+      } else { await OfflineQueue.remove(item.id); synced++; }
+    } catch (e) { break; }
   }
 
   if (synced > 0) {
@@ -110,13 +99,13 @@ async function syncOutbox() {
   }
 }
 
-/* ---------- 自動攔截 ApiService.post：離線時入佇列 ---------- */
+/* ---------- 自動攔截 ApiService.post（index.html 用）---------- */
 (function() {
   if (typeof ApiService === 'undefined') return;
   const origPost = ApiService.post;
 
   ApiService.post = async function(payload) {
-    if (!navigator.onLine) {
+    if (window.OfflineQueue && !navigator.onLine) {
       await OfflineQueue.push(payload);
       pwaToast('📥 離線暫存：有網路時自動上傳');
       return { ok: true, queued: true };
@@ -124,7 +113,8 @@ async function syncOutbox() {
     try {
       return await origPost(payload);
     } catch (err) {
-      if (!navigator.onLine) {
+      /* 🔥 修正：網絡層失敗（Failed to fetch）一律入佇列 */
+      if (window.OfflineQueue && (err instanceof TypeError || !navigator.onLine)) {
         await OfflineQueue.push(payload);
         pwaToast('📥 離線暫存：有網路時自動上傳');
         return { ok: true, queued: true };
@@ -134,14 +124,6 @@ async function syncOutbox() {
   };
 })();
 
-/* ---------- 網路狀態監聽 ---------- */
-window.addEventListener('offline', function() {
-  pwaToast('📴 離線模式：可繼續巡查，記錄會暫存');
-});
-window.addEventListener('online', function() {
-  pwaToast(' 已連線：正在同步…');
-  syncOutbox();
-});
-document.addEventListener('visibilitychange', function() {
-  if (!document.hidden) syncOutbox();
-});
+window.addEventListener('offline', function() { pwaToast('📴 離線模式：可繼續巡查'); });
+window.addEventListener('online', function() { pwaToast('🟢 已連線：正在同步…'); syncOutbox(); });
+document.addEventListener('visibilitychange', function() { if (!document.hidden) syncOutbox(); });
