@@ -261,7 +261,7 @@ async function submitInspection(){
       const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
         health:$('#health').value, note:$('#note').value, photo_base64:''});
       alert(r.ok ? '✅ 已上傳！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
-      if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
+      if(r.ok) { fileInput.value = ''; setTimeout(function(){ location.reload(); }, 1000); }
     } catch(err) {
       console.error('Submit inspection error:', err);
       alert('❌ 連線錯誤：' + err.message);
@@ -286,7 +286,7 @@ async function submitInspection(){
     const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
       health:$('#health').value, note:$('#note').value, photo_base64: JSON.stringify(photosData)});
     alert(r.ok ? '✅ 已上傳 ' + files.length + ' 張相片！樹木狀態已同步更新' : '❌ 失敗：' + r.error);
-    if(r.ok) setTimeout(function(){ location.reload(); }, 1000);
+    if(r.ok) { fileInput.value = ''; setTimeout(function(){ location.reload(); }, 1000); }
   } catch(err) {
     console.error('Submit inspection error:', err);
     alert('❌ 連線錯誤：' + err.message);
