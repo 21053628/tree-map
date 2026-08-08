@@ -365,6 +365,26 @@ async function compress(file, maxW, q){
   });
 }
 
+// 轉換 Google Drive 連結為可預覽/下載格式
+function convertGoogleDriveUrl(url, forDownload){
+  if(!url) return url;
+  var str = String(url);
+  // 匹配 Google Drive 文件連結格式: https://drive.google.com/file/d/FILE_ID/view 或 https://drive.google.com/open?id=FILE_ID
+  var matchId = str.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || str.match(/[\?&]id=([a-zA-Z0-9_-]+)/);
+  if(matchId && matchId[1]){
+    var fileId = matchId[1];
+    if(forDownload){
+      // 下載連結格式
+      return 'https://drive.google.com/uc?export=download&id=' + fileId;
+    } else {
+      // 預覽/顯示連結格式
+      return 'https://drive.google.com/uc?export=view&id=' + fileId;
+    }
+  }
+  // 如果不是 Google Drive 連結，返回原連結
+  return str;
+}
+
 function loadLogs(){
   fetch(API + '?action=inspections&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
     .then(function(r){ return r.json(); })
@@ -406,12 +426,14 @@ function loadLogs(){
           photoHtml += '<div class="inspection-photo-grid">';
           for(var i = 0; i < photos.length; i++){
             var photoUrl = photos[i];
-            // 將 Google Drive 連結轉換為可嵌入格式（使用正則表達式替換所有 /d/）
-            var displayUrl = String(photoUrl).replace(/\/d\//g, '/');
-            var photoUrlEscaped = escapeHtml(photoUrl);
+            // 轉換 Google Drive 連結為可預覽格式
+            var displayUrl = convertGoogleDriveUrl(photoUrl, false);
+            // 轉換 Google Drive 連結為可下載格式
+            var downloadUrl = convertGoogleDriveUrl(photoUrl, true);
             var displayUrlEscaped = escapeHtml(displayUrl);
+            var downloadUrlEscaped = escapeHtml(downloadUrl);
             var photoIndex = i + 1;
-            photoHtml += '<div class="inspection-photo-item"><img class="inspection-photo-thumb" src="' + displayUrlEscaped + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="event.stopPropagation(); zoomImage(\'' + photoUrlEscaped + '\')" title="點擊放大" onerror="this.parentElement.style.display=\'none\'"><button class="inspection-photo-btn" onclick="event.stopPropagation(); downloadPhoto(\'' + photoUrlEscaped + '\', \'' + treeIdEscaped + '\', \'' + timeStrForDownload + '\', ' + photoIndex + ')">⬇️ #' + photoIndex + '</button></div>';
+            photoHtml += '<div class="inspection-photo-item"><img class="inspection-photo-thumb" src="' + displayUrlEscaped + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="event.stopPropagation(); zoomImage(\'' + displayUrlEscaped + '\')" title="點擊放大" onerror="this.parentElement.style.display=\'none\'"><button class="inspection-photo-btn" onclick="event.stopPropagation(); downloadPhoto(\'' + downloadUrlEscaped + '\', \'' + treeIdEscaped + '\', \'' + timeStrForDownload + '\', ' + photoIndex + ')">⬇️ #' + photoIndex + '</button></div>';
           }
           photoHtml += '</div>';
         }
@@ -447,6 +469,11 @@ window.closeZoom = function(){
 
 // 下載巡查照片功能
 window.downloadPhoto = function(url, treeId, timeStr, photoIndex){
+  // 如果是 Google Drive 下載連結，直接打開新分頁讓用戶下載
+  if(url && url.indexOf('drive.google.com') !== -1){
+    window.open(url, '_blank');
+    return;
+  }
   // 使用 fetch with no-cors mode 來處理跨域圖片下載
   fetch(url, { mode: 'cors', credentials: 'omit' })
     .then(function(r){ 
