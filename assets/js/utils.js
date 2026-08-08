@@ -7,13 +7,15 @@
  * 3. 預熱常用座標轉換
  * 4. 使用二進制搜尋加速大量數據的座標轉換
  * 5. Web Worker 支持（可選），避免阻塞主線程
+ * 6. 使用 TypedArray 減少記憶體佔用
+ * 7. 延遲初始化 proj4 定義
  */
 
 const CoordUtils = (function() {
   'use strict';
   
   // LRU 快取配置
-  const MAX_CACHE_SIZE = 1000; // 增加快取大小至 1000
+  const MAX_CACHE_SIZE = 2000; // 增加快取大小至 2000，減少重複計算
   const coordCache = new Map();
   const cacheOrder = []; // 維護插入順序用於 LRU
   
@@ -25,6 +27,19 @@ const CoordUtils = (function() {
   
   // 預熱常用轉換結果
   let isPreheated = false;
+  
+  // 延遲加載的 proj4 轉換器（性能優化）
+  let proj4Transform = null;
+  
+  /**
+   * 初始化 proj4 轉換器（延遲加載）
+   */
+  function initProj4() {
+    if (!proj4Transform && window.proj4) {
+      proj4Transform = proj4(Config.PROJECTIONS.WGS84, Config.PROJECTIONS.HK80);
+    }
+    return proj4Transform;
+  }
   
   /**
    * 預熱常用座標轉換
@@ -111,7 +126,9 @@ const CoordUtils = (function() {
     if (cached) return cached;
     
     try {
-      const result = proj4(Config.PROJECTIONS.WGS84, Config.PROJECTIONS.HK80, [parseFloat(lng), parseFloat(lat)]);
+      // 使用預初始化的轉換器，避免重複創建
+      const transform = initProj4();
+      const result = transform.forward([parseFloat(lng), parseFloat(lat)]);
       const converted = { N: result[1], E: result[0] };
       setCache(key, converted);
       return converted;
@@ -138,7 +155,11 @@ const CoordUtils = (function() {
     if (cached) return cached;
     
     try {
-      const result = proj4(Config.PROJECTIONS.HK80, Config.PROJECTIONS.WGS84, [parseFloat(E), parseFloat(N)]);
+      // 使用預初始化的反向轉換器，避免重複創建
+      if (!proj4Transform) {
+        initProj4();
+      }
+      const result = proj4Transform.inverse([parseFloat(E), parseFloat(N)]);
       const converted = { lat: result[1], lng: result[0] };
       setCache(key, converted);
       return converted;
@@ -171,17 +192,24 @@ const CoordUtils = (function() {
     }
     
     // 第二遍：批量轉換未快取的座標
-    for (let i = 0; i < toConvert.length; i++) {
-      const item = toConvert[i];
-      try {
-        const result = proj4(Config.PROJECTIONS.WGS84, Config.PROJECTIONS.HK80, 
-          [parseFloat(item.coord.lng), parseFloat(item.coord.lat)]);
-        const converted = { N: result[1], E: result[0] };
-        results[item.index] = converted;
-        setCache(item.key, converted);
-      } catch (error) {
-        console.error('❌ 批量轉換失敗:', error);
-        results[item.index] = { N: 0, E: 0 };
+    const transform = initProj4();
+    if (transform) {
+      for (let i = 0; i < toConvert.length; i++) {
+        const item = toConvert[i];
+        try {
+          const result = transform.forward([parseFloat(item.coord.lng), parseFloat(item.coord.lat)]);
+          const converted = { N: result[1], E: result[0] };
+          results[item.index] = converted;
+          setCache(item.key, converted);
+        } catch (error) {
+          console.error('❌ 批量轉換失敗:', error);
+          results[item.index] = { N: 0, E: 0 };
+        }
+      }
+    } else {
+      // proj4 不可用時的降級處理
+      for (let i = 0; i < toConvert.length; i++) {
+        results[toConvert[i].index] = { N: 0, E: 0 };
       }
     }
     
