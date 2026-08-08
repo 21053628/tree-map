@@ -1,0 +1,15 @@
+{
+  "name": "樹木管理 GIS",
+  "short_name": "樹木GIS",
+  "description": "樹木互動地圖・巡查・簽到系統",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f1f5f1",
+  "theme_color": "#2e7d32",
+  "lang": "zh-HK",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
