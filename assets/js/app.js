@@ -8,6 +8,7 @@
  * 4. [殺手4] 空間索引距離計算加入緯度 cos 修正，解決東西方向偏差
  * 5. [體驗] mouseout 延遲從 1500ms 縮短至 300ms，提升響應感
  * 6. [體驗] 底圖切換優化，避免不必要嘅迴圈
+ * 7. [UI] 移除狀態列的「渲染耗時」顯示，保持畫面簡潔
  */
 
 const App = (function() {
@@ -49,7 +50,7 @@ const App = (function() {
   let markerCluster = null;
   let currentBaseLayer = null; // 🔥 優化：記錄當前底圖
   
-  // 性能監控
+  // 性能監控 (僅保留於 console，不顯示於 UI)
   let perfMetrics = {
     renderTime: 0,
     cacheHits: 0,
@@ -417,7 +418,6 @@ const App = (function() {
       marker.on('mouseout', handleMouseOut);
       
       // 🔥 [殺手1] Popup 懶載入 (Lazy Load)
-      // 唔好喺迴圈入面執行 DOMPurify，改做點擊時先生成，大幅減少主線程阻塞
       marker.bindPopup('<div style="text-align:center;padding:10px;color:#666;">載入中...</div>');
       
       marker.on('popupopen', function(e) {
@@ -445,8 +445,9 @@ const App = (function() {
     perfMetrics.totalRenders++;
     perfMetrics.renderTime = performance.now() - startTime;
     
+    // 🔥 [UI優化] 移除渲染耗時顯示，保持狀態列簡潔
     const pname = (PROJECTS.find(function(x) { return String(x.project_id) === String(curProject); }) || {}).name;
-    updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹｜渲染耗時 ' + perfMetrics.renderTime.toFixed(1) + 'ms');
+    updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹');
   }
   
   /**
