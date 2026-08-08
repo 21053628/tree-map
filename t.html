@@ -125,7 +125,6 @@ function render(t){
   var html = '<a class="back" href="index.html">⬅ 地圖</a>' +
   '<div class="card">' +
     '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
-    '<div class="sub"><i>' + escapeHtml(t.species) + '</i></div>' +
     '<div style="margin-top:8px"><span class="badge" style="background:' + (COLORS[t.status]||'#757575') + '">Status: ' + escapeHtml(t.status) + '</span></div>';
   if(t.project_id){
     html += '<div style="margin-top:6px"><span class="badge" style="background:#1976d2">🚩 地盤：<b>' + escapeHtml(t.project_id) + '</b></span> <span style="font-size:12px;color:#666;margin-left:6px">(NFC 用)</span></div>';
@@ -182,7 +181,7 @@ function staffMode(){
     '<input type="file" id="photo" accept="image/*" capture="environment">' +
     '<button onclick="submitInspection()">📤 上傳巡查記錄</button>' +
     '<hr><b>✏️ 樹木資料（HK80 座標／Level／地盤）</b>' +
-    '<div class="row2"><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."><input id="eSpecies" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
+    '<div class="row2"><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
     '<datalist id="tree_list"></datalist>' +
     '<select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
     '<select id="eProject"></select>' +
@@ -193,10 +192,8 @@ function staffMode(){
     '<textarea id="eDesc" rows="2" placeholder="簡介"></textarea>' +
     '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
 
-  // eName 和 eSpecies 使用同一個值（樹種）
-  $('#eName').value = TREE.species || '';
-  $('#eSpecies').value = TREE.species || '';
   $('#eStatus').value = TREE.status || 'Normal';
+  $('#eName').value = TREE.name || '';
   $('#eHeight').value = TREE.height || '';
   $('#eSpread').value = TREE.spread || '';
   $('#eDbh').value = TREE.dbh || '';
@@ -266,7 +263,7 @@ async function saveTreeInfo(){
   }
   try {
     const r = await post({type:'update_tree', tree_id:id, prj:prj,
-      name:$('#eName').value, species:$('#eSpecies').value, status:$('#eStatus').value,
+      name:$('#eName').value,
       project_id:$('#eProject').value, height:$('#eHeight').value,
       spread:$('#eSpread').value, dbh:$('#eDbh').value, level:$('#eLevel').value,
       lat:lat, lng:lng, description:$('#eDesc').value});

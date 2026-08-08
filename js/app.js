@@ -436,7 +436,6 @@ const App = (function() {
       
       marker.bindPopup(
         '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
-        '<i>' + t.species + '</i><br>' +
         '<b>Status:</b> ' + t.status + '<br>' +
         '<b>DBH:</b> ' + (t.dbh || '-') + ' cm | <b>Height:</b> ' + (t.height || '-') + ' m<br>' +
         '<b>Spread:</b> ' + (t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
@@ -625,7 +624,6 @@ const App = (function() {
         tree_id: $('#tId').value,
         project_id: curProject,
         name: $('#tName').value,  // tName 現在包含樹種資料（如 "Acacia dealbata 銀荊"）
-        species: $('#tName').value,  // 使用相同的值作為 species
         status: $('#tStatus').value,
         height: $('#tHeight').value,
         spread: $('#tSpread').value,
