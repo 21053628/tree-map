@@ -2,153 +2,120 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NFC 樹木導覽系統</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2e7d32">
+<title>NFC 樹木標籤產生器</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 <style>
-  body {
-    font-family: system-ui, "Microsoft JhengHei", sans-serif;
-    background: #f1f5f1;
-    padding: 20px;
-    max-width: 600px;
-    margin: 0 auto;
-  }
-  .card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  }
-  h1 { color: #2e7d32; margin-top: 0; }
-  h2 { color: #1b5e20; font-size: 18px; }
-  .info { background: #e8f5e9; padding: 12px; border-radius: 8px; margin: 12px 0; }
-  .code {
-    background: #f5f5f5;
-    padding: 10px;
-    border-radius: 6px;
-    font-family: monospace;
-    word-break: break-all;
-    border: 1px solid #ddd;
-  }
-  button {
-    background: #2e7d32;
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 16px;
-    cursor: pointer;
-    width: 100%;
-    margin-top: 8px;
-  }
-  button:hover { background: #1b5e20; }
-  input, select {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #bbb;
-    border-radius: 8px;
-    font-size: 16px;
-    margin-top: 8px;
-    box-sizing: border-box;
-  }
-  .step { 
-    background: #fff3e0; 
-    padding: 12px; 
-    border-radius: 8px; 
-    margin: 10px 0;
-    border-left: 4px solid #ff9800;
-  }
-  .nfc-icon { font-size: 48px; text-align: center; display: block; margin: 10px 0; }
+  :root{--primary:#2e7d32;--primary-dark:#1b5e20;--bg:#f1f5f1;--text:#222;--muted:#666;--card-bg:#fff;--radius:12px;--shadow:0 2px 8px rgba(0,0,0,.08)}
+  *{box-sizing:border-box}body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent;line-height:1.6;padding:16px}
+  .wrap{max-width:600px;margin:0 auto}
+  .card{background:var(--card-bg);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
+  h1{color:var(--primary);margin:0 0 16px;font-size:24px;display:flex;align-items:center;gap:8px}
+  h2{color:var(--primary-dark);font-size:18px;margin-top:0}
+  .step{background:#fff3e0;padding:14px;border-radius:10px;margin:12px 0;border-left:4px solid #ff9800}
+  .step strong{color:#e65100}
+  input{width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;font-size:16px;margin-top:10px;box-sizing:border-box;background:#fff}
+  input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(46,125,50,.15)}
+  button{width:100%;padding:14px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-size:16px;font-weight:600;margin-top:12px;cursor:pointer;touch-action:manipulation;transition:background .2s,transform .1s}
+  button:hover{background:var(--primary-dark)}
+  button:active{transform:scale(.98)}
+  button.sec{background:#546e7a}
+  button.sec:hover{background:#37474f}
+  .url-box{background:#263238;color:#81c784;padding:14px;border-radius:10px;font-family:monospace;word-break:break-all;font-size:14px;margin-top:12px;position:relative}
+  .copy-btn{position:absolute;top:8px;right:8px;background:#455a64;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer}
+  .copy-btn:active{transform:scale(.95)}
+  .info{background:#e8f5e9;padding:12px;border-radius:8px;margin:12px 0;font-size:14px;color:#1b5e20}
 </style>
 </head>
 <body>
+<div class="wrap">
+  <h1>🌳 NFC 樹木標籤產生器</h1>
 
-<h1>🌳 NFC 樹木導覽系統</h1>
-
-<div class="card">
-  <h2>📱 什麼是 NFC 樹木標籤？</h2>
-  <p>NFC（近場通訊）標籤是一種小型晶片，可以儲存網址資訊。當市民用手机掃描樹木上的 NFC 標籤時，會自動：</p>
-  <ul>
-    <li>✅ <strong>直接開啟該樹木的詳情頁面</strong></li>
-    <li>✅ <strong>在地圖上顯示樹木位置</strong></li>
-    <li>✅ <strong>查看樹木資料、巡查記錄</strong></li>
-  </ul>
-</div>
-
-<div class="card">
-  <h2>🔧 設定步驟</h2>
-  
-  <div class="step">
-    <strong>步驟 1：準備 NFC 標籤</strong>
-    <p>購買可寫入的 NFC 標籤貼紙（建議 NTAG213 或 NTAG215）</p>
+  <div class="card">
+    <h2>🔧 步驟 1：輸入樹木資訊</h2>
+    <p>輸入要寫入 NFC 標籤的樹木編號（必填）和地盤代碼（選填，可加速定位）。</p>
+    <input type="text" id="treeId" placeholder="樹木編號（例如：A001 或 256C）" autocomplete="off">
+    <input type="text" id="projectId" placeholder="地盤代碼（例如：P1786... 可留空）" autocomplete="off">
+    
+    <button onclick="generateURL()">🔗 產生 NFC 網址</button>
   </div>
 
-  <div class="step">
-    <strong>步驟 2：產生樹木專屬網址</strong>
-    <p>輸入樹木編號和地盤代碼：</p>
-    <input type="text" id="treeId" placeholder="樹木編號（例如：A001）">
-    <input type="text" id="projectId" placeholder="地盤代碼（可選）">
-    <button onclick="generateURL()">🔗 產生 NFC 網址</button>
+  <div class="card" id="resultCard" style="display:none;">
+    <h2>🔗 步驟 2：複製並寫入 NFC</h2>
+    <p>複製以下網址，打開手機「NFC Tools」App，選擇「寫入 URL」並貼上，然後將手機靠近 NFC 標籤即可寫入。</p>
     
-    <div id="urlResult" style="display:none; margin-top:16px;">
-      <p><strong>產生的網址：</strong></p>
-      <div class="code" id="generatedURL"></div>
-      <p class="info">
-        💡 <strong>使用方法：</strong><br>
-        1. 複製上方網址<br>
-        2. 使用 NFC 寫入 App（如「NFC Tools」）將網址寫入 NFC 標籤<br>
-        3. 將 NFC 標籤貼在樹木標示牌上
-      </p>
+    <div class="url-box" id="generatedURL">
+      <button class="copy-btn" onclick="copyURL()">📋 複製</button>
+      <span id="urlText"></span>
+    </div>
+
+    <button class="sec" onclick="testJump()">🧪 在瀏覽器測試跳轉</button>
+    
+    <div class="info">
+      💡 <strong>提示：</strong>寫入完成後，用手機碰一碰標籤，就會自動打開大地圖並飛到這棵樹的位置，同時彈出詳細資料！
     </div>
   </div>
 
-  <div class="step">
-    <strong>步驟 3：測試 NFC 標籤</strong>
-    <p>寫入完成後，用手机掃描 NFC 標籤，應該會：</p>
-    <ol>
-      <li>自動開啟瀏覽器</li>
-      <li>跳轉到主地圖頁面（index.html）並自動定位到該樹木</li>
-      <li>地圖會顯示該樹木的位置和詳細資訊</li>
-      <li>點擊樹木標記可查看完整資料或前往樹木詳情頁</li>
-    </ol>
+  <div class="card">
+    <h2>❓ 常見問題</h2>
+    <p><strong>Q: 標籤買哪種？</strong><br>推薦 <strong>NTAG215</strong>（容量 500 bytes，防水貼紙款），淘寶或 HKTVmall 很容易買到。</p>
+    <p><strong>Q: iPhone 可以掃嗎？</strong><br>可以！iPhone XS 以後的機型支援背景 NFC 讀取，靠近就會彈出通知，點擊即開。</p>
   </div>
 </div>
 
-<div class="card">
-  <h2>❓ 常見問題</h2>
-  <p><strong>Q: 需要安裝 App 才能掃描嗎？</strong><br>
-  A: 不需要！現代智慧型手機（iPhone 和 Android）都內建 NFC 讀取功能，直接靠近即可。</p>
-  
-  <p><strong>Q: NFC 標籤在哪裡購買？</strong><br>
-  A: 可在網上購物平台搜尋「NFC 標籤貼紙」或「NTAG215」，價格便宜。</p>
-  
-  <p><strong>Q: 如何修改已寫入的 NFC 標籤？</strong><br>
-  A: 使用 NFC Tools 等 App 可以重新寫入新的網址。</p>
-</div>
-
 <script>
-// 產生 NFC 網址
-function generateURL() {
-  const treeId = document.getElementById('treeId').value.trim();
-  const projectId = document.getElementById('projectId').value.trim();
-  
-  if (!treeId) {
-    alert('請輸入樹木編號');
-    return;
-  }
-  
-  // 取得當前網頁的基礎 URL
-  const baseUrl = window.location.href.split('/').slice(0, -1).join('/') + '/';
-  let url = baseUrl + 'index.html?tree_id=' + encodeURIComponent(treeId);
-  
-  if (projectId) {
-    url += '&project_id=' + encodeURIComponent(projectId);
-  }
-  
-  document.getElementById('generatedURL').textContent = url;
-  document.getElementById('urlResult').style.display = 'block';
-}
-</script>
+  let currentURL = '';
 
+  function generateURL() {
+    const treeId = document.getElementById('treeId').value.trim();
+    const projectId = document.getElementById('projectId').value.trim();
+    
+    if (!treeId) {
+      alert('⚠️ 請輸入樹木編號');
+      return;
+    }
+    
+    // 穩妥地獲取當前目錄的基礎 URL
+    const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+    let url = baseUrl + 'index.html?tree_id=' + encodeURIComponent(treeId);
+    
+    if (projectId) {
+      url += '&project_id=' + encodeURIComponent(projectId);
+    }
+    
+    currentURL = url;
+    document.getElementById('urlText').textContent = url;
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function copyURL() {
+    if (!currentURL) return;
+    navigator.clipboard.writeText(currentURL).then(function() {
+      const btn = document.querySelector('.copy-btn');
+      const orig = btn.textContent;
+      btn.textContent = '✅ 已複製';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    }).catch(function() {
+      const ta = document.createElement('textarea');
+      ta.value = currentURL;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert('已複製到剪貼簿');
+    });
+  }
+
+  function testJump() {
+    if (currentURL) {
+      window.location.href = currentURL;
+    }
+  }
+</script>
 </body>
 </html>
