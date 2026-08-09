@@ -579,7 +579,7 @@ const App = (function() {
         treesCache.clear();
         spatialIndexCache = null;
         coordGroupsCache = null;
-        await load(); // 統一使用 await
+        await load();
       }
     } catch (error) { alert('❌ 請求失敗：' + error.message); }
   }
@@ -649,19 +649,16 @@ const App = (function() {
         treesCache.clear();
         spatialIndexCache = null;
         coordGroupsCache = null;
-        await load(); // 重新載入並觸發 MarkerCluster 重繪
+        await load();
         
         const newId = String(r.tree_id);
-        // 🔥 優化：使用 O(1) 的 treeMap 查找，更穩妥
         const nt = treeMap.get(newId) || TREES.find(function(t){ return String(t.tree_id) === newId; });
         
         if (nt) {
-          // 🔥 [v2.3 修復] 使用 setTimeout 避開 MarkerCluster 重新渲染時的視圖爭奪 (動畫打架)
-          // 給 Cluster 400ms 時間完成內部佈局計算，然後我哋再優雅咁飛過去
+          // 🔥 [v2.3 修復] 使用 setTimeout 避開 MarkerCluster 重新渲染時的視圖爭奪
           setTimeout(function() {
             map.flyTo([+nt.lat, +nt.lng], Math.max(map.getZoom(), 18), { duration: 0.8 });
             
-            // 再延遲 900ms 打開 popup，確保 flyTo 動畫完成
             setTimeout(function() {
               const m = treesCache.get(newId);
               if (m) m.openPopup();
@@ -689,6 +686,7 @@ const App = (function() {
     console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.3）');
   }
   
+  // 🔥 [v2.2 修復] 支援讀取 t.html 傳過嚟嘅 lat/lng 參數
   function checkURLParams() {
     const params = new URLSearchParams(window.location.search);
     const treeId = params.get('tree_id');
@@ -701,6 +699,7 @@ const App = (function() {
     }
   }
   
+  // 🔥 [v2.2 修復] 取消兩次 flyTo 打架，靜默切換地盤，一次過直飛樹木位置
   function locateTree(treeId, projectId, lat, lng) {
     let tree = null;
     if (treeId) {
