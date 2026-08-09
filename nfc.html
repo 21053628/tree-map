@@ -11,7 +11,8 @@
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 <style>
   :root{--primary:#2e7d32;--primary-dark:#1b5e20;--bg:#f1f5f1;--text:#222;--muted:#666;--card-bg:#fff;--radius:12px;--shadow:0 2px 8px rgba(0,0,0,.08)}
-  *{box-sizing:border-box}body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent;line-height:1.6;padding:16px}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent;line-height:1.6;padding:16px}
   .wrap{max-width:600px;margin:0 auto}
   .card{background:var(--card-bg);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
   h1{color:var(--primary);margin:0 0 16px;font-size:24px;display:flex;align-items:center;gap:8px}
@@ -25,9 +26,44 @@
   button:active{transform:scale(.98)}
   button.sec{background:#546e7a}
   button.sec:hover{background:#37474f}
-  .url-box{background:#263238;color:#81c784;padding:14px;border-radius:10px;font-family:monospace;word-break:break-all;font-size:14px;margin-top:12px;position:relative}
-  .copy-btn{position:absolute;top:8px;right:8px;background:#455a64;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer}
-  .copy-btn:active{transform:scale(.95)}
+  
+  /* 🔥 修復：改用 Flexbox 佈局，徹底解決 URL 文字與複製按鈕重疊嘅問題 */
+  .url-box{
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #263238;
+    color: #81c784;
+    padding: 14px;
+    border-radius: 10px;
+    font-family: monospace;
+    word-break: break-all;
+    font-size: 14px;
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+  .url-box #urlText {
+    flex: 1; /* 文字佔據剩餘空間，自動換行 */
+    user-select: all; /* 方便用戶長按全選 */
+  }
+  .copy-btn{
+    flex-shrink: 0; /* 確保按鈕唔會被文字擠壓變形 */
+    background: #455a64;
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    width: auto; /* 覆蓋全域 button 嘅 width:100% */
+    margin-top: 0; /* 覆蓋全域 margin */
+    transition: background .2s, transform .1s;
+  }
+  .copy-btn:hover { background: #37474f; }
+  .copy-btn:active { transform: scale(.95); }
+
   .info{background:#e8f5e9;padding:12px;border-radius:8px;margin:12px 0;font-size:14px;color:#1b5e20}
 </style>
 </head>
@@ -48,9 +84,10 @@
     <h2>🔗 步驟 2：複製並寫入 NFC</h2>
     <p>複製以下網址，打開手機「NFC Tools」App，選擇「寫入 URL」並貼上，然後將手機靠近 NFC 標籤即可寫入。</p>
     
+    <!-- 🔥 修復：HTML 結構調整，文字同按鈕並排 -->
     <div class="url-box" id="generatedURL">
-      <button class="copy-btn" onclick="copyURL()">📋 複製</button>
       <span id="urlText"></span>
+      <button class="copy-btn" onclick="copyURL()">📋 複製</button>
     </div>
 
     <button class="sec" onclick="testJump()">🧪 在瀏覽器測試跳轉</button>
@@ -95,20 +132,44 @@
 
   function copyURL() {
     if (!currentURL) return;
-    navigator.clipboard.writeText(currentURL).then(function() {
-      const btn = document.querySelector('.copy-btn');
-      const orig = btn.textContent;
-      btn.textContent = '✅ 已複製';
-      setTimeout(() => { btn.textContent = orig; }, 1500);
-    }).catch(function() {
-      const ta = document.createElement('textarea');
-      ta.value = currentURL;
-      document.body.appendChild(ta);
-      ta.select();
+    
+    // 現代瀏覽器 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(currentURL).then(function() {
+        showCopySuccess();
+      }).catch(function() {
+        fallbackCopy();
+      });
+    } else {
+      fallbackCopy();
+    }
+  }
+
+  function fallbackCopy() {
+    const ta = document.createElement('textarea');
+    ta.value = currentURL;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
       document.execCommand('copy');
-      document.body.removeChild(ta);
-      alert('已複製到剪貼簿');
-    });
+      showCopySuccess();
+    } catch (err) {
+      alert('複製失敗，請手動長按文字複製');
+    }
+    document.body.removeChild(ta);
+  }
+
+  function showCopySuccess() {
+    const btn = document.querySelector('.copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = '✅ 已複製';
+    btn.style.background = '#2e7d32';
+    setTimeout(() => { 
+      btn.textContent = orig; 
+      btn.style.background = '';
+    }, 1500);
   }
 
   function testJump() {
