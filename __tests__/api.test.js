@@ -2,34 +2,40 @@
  * Api.js 單元測試 - API 服務
  */
 
-const ApiService = require('../assets/js/api.js');
-
-// Mock AuthService
-global.AuthService = {
+// Mock AuthService before importing ApiService
+const mockAuthService = {
   promptAuth: jest.fn(),
   getToken: jest.fn(),
   logout: jest.fn(),
   isAuthenticated: jest.fn()
 };
 
+// 在導入前設定全域 AuthService
+global.AuthService = mockAuthService;
+
 // Mock fetch API
 global.fetch = jest.fn();
+
+// 導入 Config 和 ApiService
+const { Config } = require('../assets/js/config.js');
+const { ApiService } = require('../assets/js/api.js');
 
 describe('ApiService - API 服務', () => {
   
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    
+    // 重置 mock AuthService
+    mockAuthService.promptAuth.mockResolvedValue(false);
+    mockAuthService.getToken.mockReturnValue(null);
+    mockAuthService.logout.mockReset();
+    mockAuthService.isAuthenticated.mockReturnValue(false);
+    
+    global.AuthService = mockAuthService;
+    
     ApiService.resetStats();
     ApiService.clearCache();
-    
-    // Mock AuthService for write operations that require auth
-    global.AuthService = {
-      promptAuth: jest.fn().mockResolvedValue(false), // Default to not authenticated
-      getToken: jest.fn().mockReturnValue(null),
-      logout: jest.fn(),
-      isAuthenticated: jest.fn().mockReturnValue(false)
-    };
     
     // 初始化 API 服務
     ApiService.init(Config.API_ENDPOINT);
@@ -131,8 +137,9 @@ describe('ApiService - API 服務', () => {
     });
 
     test('對於寫入操作應該要求認證', async () => {
-      global.AuthService.promptAuth.mockResolvedValue(true);
-      global.AuthService.getToken.mockReturnValue('test-token');
+      // 設定 mock 返回已認證
+      mockAuthService.promptAuth.mockResolvedValue(true);
+      mockAuthService.getToken.mockReturnValue('test-token');
       
       const mockResponse = { ok: true };
       global.fetch.mockResolvedValueOnce({
@@ -142,12 +149,12 @@ describe('ApiService - API 服務', () => {
 
       await ApiService.post({ type: 'inspection', data: {} });
       
-      expect(AuthService.promptAuth).toHaveBeenCalled();
-      expect(AuthService.getToken).toHaveBeenCalled();
+      expect(mockAuthService.promptAuth).toHaveBeenCalled();
+      expect(mockAuthService.getToken).toHaveBeenCalled();
     });
 
     test('當用戶取消認證時應該返回錯誤', async () => {
-      global.AuthService.promptAuth.mockResolvedValue(false);
+      mockAuthService.promptAuth.mockResolvedValue(false);
 
       const result = await ApiService.post({ type: 'update_tree', data: {} });
       
@@ -158,8 +165,8 @@ describe('ApiService - API 服務', () => {
 
     test('當收到 UNAUTHORIZED 錯誤時應該登出用戶', async () => {
       // 先通過認證
-      global.AuthService.promptAuth.mockResolvedValue(true);
-      global.AuthService.getToken.mockReturnValue('test-token');
+      mockAuthService.promptAuth.mockResolvedValue(true);
+      mockAuthService.getToken.mockReturnValue('test-token');
       
       global.fetch.mockResolvedValueOnce({
         ok: true,
@@ -169,7 +176,7 @@ describe('ApiService - API 服務', () => {
       const result = await ApiService.post({ type: 'checkin', data: {} });
       
       expect(result.error).toContain('未登入或登入已過期');
-      expect(AuthService.logout).toHaveBeenCalled();
+      expect(mockAuthService.logout).toHaveBeenCalled();
     });
 
     test('對於讀取操作不應該要求認證', async () => {
