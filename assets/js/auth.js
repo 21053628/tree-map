@@ -2,13 +2,7 @@
 樹木管理系統 - 認證服務模組（真實後端驗證版）
 - 密碼唔再放前端，由 Apps Script 後端驗證
 - 成功後攞 Token，存 30 分鐘，過期自動再問
-
-ES6 Modules 版本：支援現代化模組導入
 */
-
-import { Config } from './config.js';
-import { AuthError } from './utils.js';
-
 const AuthService = (function() {
   'use strict';
 
@@ -21,9 +15,7 @@ const AuthService = (function() {
       if (!raw) return null;
       const obj = JSON.parse(raw);
       if (obj && obj.token && obj.until > Date.now()) return obj.token;
-    } catch (e) {
-      console.warn('Token 解析失敗:', e);
-    }
+    } catch (e) {}
     return null;
   }
 
@@ -72,10 +64,6 @@ const AuthService = (function() {
   return { getToken, isAuthenticated, authenticate, logout, promptAuth };
 })();
 
-// ES6 Modules 匯出
-export { AuthService };
-
-// CommonJS 匯出（如需 Node.js 環境使用）
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = AuthService;
 }

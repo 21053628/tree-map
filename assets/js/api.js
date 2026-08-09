@@ -2,20 +2,7 @@
 樹木管理系統 - API 服務模組（工作人員 Token 版）
 - GET（睇）= 公開，高層零阻撓
 - POST（寫）= 自動彈密碼驗證 + 自動附 Token
-
-ES6 Modules 版本：支援現代化模組導入
 */
-
-import { Config } from './config.js';
-import { AuthService } from './auth.js';
-import { 
-  ApiError, 
-  NetworkError, 
-  CacheError, 
-  ErrorHandler,
-  wrapAsync 
-} from './utils.js';
-
 const ApiService = (function() {
   'use strict';
 
@@ -37,9 +24,7 @@ const ApiService = (function() {
   let debounceTimer = null;
 
   function init(endpoint) {
-    if (!endpoint) {
-      throw new Error('API 端點未提供');
-    }
+    if (!endpoint) throw new Error('API 端點未提供');
     apiEndpoint = endpoint;
   }
 
@@ -62,24 +47,17 @@ const ApiService = (function() {
     responseCache.set(key, { data: data, timestamp: now });
   }
 
-  async function fetchWithTimeout(url, options, timeout) {
+  function fetchWithTimeout(url, options, timeout) {
     timeout = timeout || DEFAULT_TIMEOUT;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, timeout);
-    
-    try {
-      const response = await fetch(url, Object.assign({}, options, { signal: controller.signal }));
-      clearTimeout(timeoutId);
-      return response;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new NetworkError(`請求超時（${timeout}ms）`, true, { url, timeout });
-      }
-      throw new NetworkError(error.message, false, { url });
-    }
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    return fetch(url, Object.assign({}, options, { signal: controller.signal }))
+      .then(response => { clearTimeout(timeoutId); return response; })
+      .catch(error => {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') throw new Error('請求超時（' + timeout + 'ms）');
+        throw error;
+      });
   }
 
   function processQueue() {
@@ -89,10 +67,7 @@ const ApiService = (function() {
       item.requestFn()
         .then(item.resolve)
         .catch(item.reject)
-        .finally(() => { 
-          activeRequests--; 
-          processQueue(); 
-        });
+        .finally(() => { activeRequests--; processQueue(); });
     }
   }
 
@@ -127,59 +102,32 @@ const ApiService = (function() {
   /* GET：公開睇資料，唔使密碼 */
   async function get(action, params, isLowPriority) {
     params = params || {};
-    if (!apiEndpoint) {
-      throw new ApiError('API 服務未初始化', null, null, { action });
-    }
-    
+    if (!apiEndpoint) throw new Error('API 服務未初始化');
     const queryString = new URLSearchParams(params).toString();
     const cacheKey = 'get:' + action + ':' + queryString;
     const cached = getFromCache(cacheKey);
     if (cached) return cached;
-    
     requestCount++;
     const url = apiEndpoint + '?action=' + action + (queryString ? '&' + queryString : '');
-    
     return enqueueRequest(() =>
-      withRetry(async () => {
-        try {
-          const response = await fetchWithTimeout(url, { 
-            method: 'GET', 
-            headers: { 'Accept': 'application/json' } 
-          });
-          
-          if (!response.ok) {
-            throw new ApiError(
-              `HTTP ${response.status}: ${response.statusText}`,
-              response.status,
-              url
-            );
-          }
-          
-          const data = await response.json();
-          setCache(cacheKey, data);
-          return data;
-        } catch (error) {
-          if (error instanceof ApiError || error instanceof NetworkError) {
-            throw error;
-          }
-          throw new ApiError(error.message, null, url, { action });
-        }
-      }), isLowPriority);
+      withRetry(() =>
+        fetchWithTimeout(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
+          .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+            return response.json();
+          })
+          .then(data => { setCache(cacheKey, data); return data; })
+      ), isLowPriority);
   }
 
   /* POST：寫入 → 自動驗證工作人員 + 自動附 Token */
   async function post(payload) {
-    if (!apiEndpoint) {
-      throw new ApiError('API 服務未初始化', null, apiEndpoint);
-    }
-    
+    if (!apiEndpoint) throw new Error('API 服務未初始化');
     requestCount++;
 
     if (WRITE_TYPES.indexOf(payload.type) !== -1 && typeof AuthService !== 'undefined') {
       const ok = await AuthService.promptAuth();
-      if (!ok) {
-        return { ok: false, error: '未登入，操作已取消' };
-      }
+      if (!ok) return { ok: false, error: '未登入，操作已取消' };
       const token = AuthService.getToken();
       if (token) payload.token = token;
     }
@@ -187,39 +135,27 @@ const ApiService = (function() {
     if (payload.type) invalidateCache(payload.type);
 
     return enqueueRequest(() =>
-      withRetry(async () => {
-        try {
-          const response = await fetchWithTimeout(apiEndpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'text/plain;charset=utf-8',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
-          
-          if (!response.ok) {
-            throw new ApiError(
-              `HTTP ${response.status}: ${response.statusText}`,
-              response.status,
-              apiEndpoint
-            );
-          }
-          
-          const data = await response.json();
-          
+      withRetry(() =>
+        fetchWithTimeout(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        })
+        .then(response => {
+          if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+          return response.json();
+        })
+        .then(data => {
           if (data && data.ok === false && data.error === 'UNAUTHORIZED') {
             if (typeof AuthService !== 'undefined') AuthService.logout();
             data.error = '未登入或登入已過期，請再試一次並輸入工作人員密碼';
           }
           return data;
-        } catch (error) {
-          if (error instanceof ApiError || error instanceof NetworkError) {
-            throw error;
-          }
-          throw new ApiError(error.message, null, apiEndpoint, { payloadType: payload.type });
-        }
-      })
+        })
+      )
     );
   }
 
@@ -251,9 +187,7 @@ const ApiService = (function() {
     });
   }
 
-  function clearCache() { 
-    responseCache.clear(); 
-  }
+  function clearCache() { responseCache.clear(); }
 
   function getStats() {
     return {
@@ -266,19 +200,11 @@ const ApiService = (function() {
     };
   }
 
-  function resetStats() { 
-    requestCount = 0; 
-    errorCount = 0; 
-    cacheHitCount = 0; 
-  }
+  function resetStats() { requestCount = 0; errorCount = 0; cacheHitCount = 0; }
 
   return { init, get, post, getStats, resetStats, clearCache, debouncedLoad };
 })();
 
-// ES6 Modules 匯出
-export { ApiService };
-
-// CommonJS 匯出（如需 Node.js 環境使用）
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = ApiService;
 }
