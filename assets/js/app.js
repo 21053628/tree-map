@@ -1,5 +1,5 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.3 - 修復新增樹木後地圖亂彈）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.4 - 選中樹木置頂）
  * 
  * 🚀 優化重點：
  * 1. [殺手1] Popup 懶載入 (Lazy Load)
@@ -12,6 +12,7 @@
  * 8. [v2.1] 新增樹木即刻顯示
  * 9. [v2.2] 修復 NFC / t.html 返回地圖時動畫打架導致彈錯位嘅問題
  * 10. [v2.3] 修復新增樹木後，MarkerCluster 重新渲染與 flyTo 動畫打架導致地圖亂彈嘅問題
+ * 11. [v2.4] 選中、NFC定位、新增樹木時，自動將該樹木 Marker 置於最前層 (zIndexOffset)
  */
 
 const App = (function() {
@@ -385,6 +386,12 @@ const App = (function() {
       
       marker.on('mouseout', handleMouseOut);
       
+      // 🔥 [v2.4 新增] 撳／選取樹木時，將佢帶到最前層（蓋過隔離重疊嘅樹）
+      marker.on('click', function() {
+        treesCache.forEach(function(m) { m.setZIndexOffset(0); });
+        marker.setZIndexOffset(2000);
+      });
+      
       marker.bindPopup('<div style="text-align:center;padding:10px;color:#666;">載入中...</div>');
       
       marker.on('popupopen', function(e) {
@@ -661,7 +668,12 @@ const App = (function() {
             
             setTimeout(function() {
               const m = treesCache.get(newId);
-              if (m) m.openPopup();
+              if (m) {
+                // 🔥 [v2.4 新增] 新建立嘅樹木帶到最前層
+                treesCache.forEach(function(otherM) { otherM.setZIndexOffset(0); });
+                m.setZIndexOffset(2000);
+                m.openPopup();
+              }
               updateStatus('✅ 已定位到新樹木：' + newId);
             }, 900);
           }, 400); 
@@ -683,7 +695,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.3）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.4）');
   }
   
   // 🔥 [v2.2 修復] 支援讀取 t.html 傳過嚟嘅 lat/lng 參數
@@ -730,6 +742,9 @@ const App = (function() {
     setTimeout(function() {
       const marker = tree ? (treesCache.get(tree.tree_id) || treesCache.get(String(treeId))) : null;
       if (marker) {
+        // 🔥 [v2.4 新增] 定位嘅樹木帶到最前層
+        treesCache.forEach(function(m) { m.setZIndexOffset(0); });
+        marker.setZIndexOffset(2000);
         marker.openPopup();
         updateStatus('✅ 已定位到樹木：' + treeId);
       }
