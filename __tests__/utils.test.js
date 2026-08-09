@@ -2,8 +2,8 @@
  * Utils.js 單元測試 - 座標轉換工具
  */
 
-// 載入被測試的模組
-const CoordUtils = require('../assets/js/utils.js');
+// 載入被測試的模組 (ES6 Modules)
+const { CoordUtils } = require('../assets/js/utils.js');
 
 describe('CoordUtils - 座標轉換工具', () => {
   

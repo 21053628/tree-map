@@ -1,15 +1,229 @@
 /**
- * 樹木管理系統 - 座標轉換工具模組
+ * 樹木管理系統 - 自定義錯誤類別
  * 
- * 性能優化：
- * 1. LRU 快取機制，限制快取大小防止記憶體洩露
- * 2. 批量轉換支持，減少函數調用開銷
- * 3. 預熱常用座標轉換
- * 4. 使用二進制搜尋加速大量數據的座標轉換
- * 5. Web Worker 支持（可選），避免阻塞主線程
- * 6. 使用 TypedArray 減少記憶體佔用
- * 7. 延遲初始化 proj4 定義
+ * 統一錯誤處理機制：
+ * 1. 定義標準化的錯誤類型
+ * 2. 提供結構化的錯誤資訊
+ * 3. 支援錯誤追蹤和日誌記錄
  */
+
+/**
+ * 基礎應用錯誤類別
+ */
+export class AppError extends Error {
+  constructor(message, code = 'UNKNOWN_ERROR', details = {}) {
+    super(message);
+    this.name = 'AppError';
+    this.code = code;
+    this.details = details;
+    this.timestamp = new Date().toISOString();
+    
+    // 保留堆疊追蹤
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, AppError);
+    }
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code,
+      details: this.details,
+      timestamp: this.timestamp,
+      stack: this.stack
+    };
+  }
+}
+
+/**
+ * API 相關錯誤
+ */
+export class ApiError extends AppError {
+  constructor(message, statusCode = null, endpoint = null, details = {}) {
+    super(message, 'API_ERROR', {
+      statusCode,
+      endpoint,
+      ...details
+    });
+    this.name = 'ApiError';
+    this.statusCode = statusCode;
+    this.endpoint = endpoint;
+  }
+}
+
+/**
+ * 認證相關錯誤
+ */
+export class AuthError extends AppError {
+  constructor(message, code = 'AUTH_ERROR', details = {}) {
+    super(message, code, details);
+    this.name = 'AuthError';
+  }
+}
+
+/**
+ * 驗證錯誤
+ */
+export class ValidationError extends AppError {
+  constructor(message, field = null, details = {}) {
+    super(message, 'VALIDATION_ERROR', {
+      field,
+      ...details
+    });
+    this.name = 'ValidationError';
+    this.field = field;
+  }
+}
+
+/**
+ * 網路錯誤
+ */
+export class NetworkError extends AppError {
+  constructor(message, isTimeout = false, details = {}) {
+    super(message, isTimeout ? 'TIMEOUT_ERROR' : 'NETWORK_ERROR', {
+      isTimeout,
+      ...details
+    });
+    this.name = 'NetworkError';
+    this.isTimeout = isTimeout;
+  }
+}
+
+/**
+ * 快取錯誤
+ */
+export class CacheError extends AppError {
+  constructor(message, cacheKey = null, details = {}) {
+    super(message, 'CACHE_ERROR', {
+      cacheKey,
+      ...details
+    });
+    this.name = 'CacheError';
+    this.cacheKey = cacheKey;
+  }
+}
+
+/**
+ * 配置錯誤
+ */
+export class ConfigError extends AppError {
+  constructor(message, configKey = null, details = {}) {
+    super(message, 'CONFIG_ERROR', {
+      configKey,
+      ...details
+    });
+    this.name = 'ConfigError';
+    this.configKey = configKey;
+  }
+}
+
+/**
+ * 統一錯誤處理器
+ */
+export class ErrorHandler {
+  static handlers = new Map();
+
+  /**
+   * 註冊錯誤處理器
+   * @param {string} errorCode - 錯誤代碼
+   * @param {Function} handler - 處理函數
+   */
+  static register(errorCode, handler) {
+    this.handlers.set(errorCode, handler);
+  }
+
+  /**
+   * 處理錯誤
+   * @param {Error|AppError} error - 錯誤對象
+   * @param {Object} context - 額外上下文資訊
+   * @returns {Promise<void>}
+   */
+  static async handle(error, context = {}) {
+    console.error('[ErrorHandler]', error);
+
+    // 記錄錯誤到日誌服務（可擴展）
+    if (context.logToServer !== false) {
+      await this.logToServer(error, context);
+    }
+
+    // 尋找對應的處理器
+    const errorCode = error.code || 'UNKNOWN_ERROR';
+    const handler = this.handlers.get(errorCode) || this.handlers.get('UNKNOWN_ERROR');
+
+    if (handler) {
+      try {
+        return await handler(error, context);
+      } catch (handlerError) {
+        console.error('[ErrorHandler] 處理器失敗:', handlerError);
+      }
+    }
+
+    // 預設處理：顯示使用者友善訊息
+    return this.showUserFriendlyMessage(error);
+  }
+
+  /**
+   * 記錄錯誤到伺服器（可實作）
+   */
+  static async logToServer(error, context) {
+    // TODO: 實作伺服器端錯誤日誌記錄
+    console.log('[ErrorLog]', {
+      error: error.toJSON?.() || { message: error.message, stack: error.stack },
+      context,
+      userAgent: navigator?.userAgent,
+      url: window?.location?.href
+    });
+  }
+
+  /**
+   * 顯示使用者友善的錯誤訊息
+   */
+  static showUserFriendlyMessage(error) {
+    const messages = {
+      'API_ERROR': '伺服器連線失敗，請檢查網路後再試',
+      'AUTH_ERROR': '登入已過期，請重新登入',
+      'VALIDATION_ERROR': '資料格式不正確，請檢查輸入',
+      'TIMEOUT_ERROR': '請求超時，請檢查網路連線',
+      'NETWORK_ERROR': '網路連線失敗，請檢查網路設定',
+      'CACHE_ERROR': '快取異常，請重新整理頁面',
+      'CONFIG_ERROR': '系統配置錯誤，請聯絡管理員'
+    };
+
+    const userMessage = messages[error.code] || '發生未知錯誤，請稍後再試';
+    
+    // 可在這裡整合 UI 通知系統
+    if (typeof window !== 'undefined' && window.alert) {
+      // 避免頻繁彈窗，改用 console 或自定義通知
+      console.warn('[UserMessage]', userMessage);
+    }
+
+    return {
+      success: false,
+      message: userMessage,
+      technicalDetails: error.message
+    };
+  }
+}
+
+/**
+ * 非同步函數包裝器，自動捕獲錯誤
+ * @param {Function} fn - 非同步函數
+ * @param {Object} options - 選項
+ * @returns {Function}
+ */
+export function wrapAsync(fn, options = {}) {
+  return async function(...args) {
+    try {
+      return await fn.apply(this, args);
+    } catch (error) {
+      if (options.handleError !== false) {
+        return await ErrorHandler.handle(error, options.context || {});
+      }
+      throw error;
+    }
+  };
+}
 
 const CoordUtils = (function() {
   'use strict';
@@ -268,7 +482,10 @@ const CoordUtils = (function() {
   };
 })();
 
-// 匯出模組
+// ES6 Modules 匯出
+export { CoordUtils };
+
+// CommonJS 匯出（如需 Node.js 環境使用）
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = CoordUtils;
+  module.exports = { CoordUtils, AppError, ApiError, AuthError, ValidationError, NetworkError, CacheError, ConfigError, ErrorHandler, wrapAsync };
 }

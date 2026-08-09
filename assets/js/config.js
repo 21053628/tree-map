@@ -58,7 +58,10 @@ function initConfig(apiEndpoint) {
   return Config;
 }
 
-// 匯出配置到全域對象
+// ES6 Modules 匯出
+export { Config, initConfig };
+
+// 匯出到全域對象（向後兼容）
 if (typeof window !== 'undefined') {
   window.Config = Config;
   window.initConfig = initConfig;
