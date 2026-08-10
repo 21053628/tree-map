@@ -152,7 +152,7 @@ body.panel-open::before {
   transform: scale(1.15) rotate(3deg);
 }
 
-/* ================= 樹木標記 v2.13：狀態漸變氣球 ================= */
+/* ================= 樹木標記 v2.14：狀態漸變氣球 + 之字形引導線 ================= */
 .treeIcon {
   display: flex; flex-direction: column; align-items: center;
   transition: transform .18s cubic-bezier(.34,1.56,.64,1), filter .18s ease;
@@ -181,13 +181,18 @@ body.panel-open::before {
 }
 .treeIcon:hover .lbl { transform: scale(1.06); }
 
-/* 指向線：更幼更精緻 */
-.treeIcon .stem {
-  display: block;
-  width: 1.5px;
-  margin: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.55));
-  border-radius: 1px;
+/* 🔥 [v2.14] 之字形引導線：SVG 斜線、狀態色 + 白邊描邊，超級清晰 */
+.treeIcon .leader { 
+  display: block; 
+  margin: 0; 
+  overflow: visible; /* 確保斜線唔會被裁切 */
+}
+.treeIcon .leader line {
+  stroke: var(--c, #2e7d32);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: .9;
+  filter: drop-shadow(0 1px 1px rgba(255,255,255,.7));
 }
 
 /* 圓點：與號碼牌同色，白邊包邊 */
@@ -390,8 +395,8 @@ body.panel-open::before {
   
   #panel::before { background: #555; }
 
-  /* 🔥 [v2.13] 深色模式指向線適配，確保夜間高對比度 */
-  .treeIcon .stem {
-    background: linear-gradient(to bottom, rgba(255,255,255,.2), rgba(255,255,255,.75));
+  /* 🔥 [v2.14] 深色模式引導線描邊改黑色，確保夜間清晰 */
+  .treeIcon .leader line {
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.8));
   }
 }
