@@ -1,12 +1,10 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.22 - 自訂地盤英文 ID）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.23 - 英文 ID 大小寫容錯）
  * 
  * 🚀 優化重點：
  * 1-28. [v2.1 - v2.21 核心優化] 包含極簡狀態圓點、搜尋、地段索引圖層、全面效能升級等
- * 29. [v2.22] 建立地盤支援自訂英文 ID：
- *             - 前端新增「自訂英文 ID」輸入框（專為 NFC tag 設計）
- *             - 自動傳送 custom_id 到後端清理並防重複
- *             - 建立成功後顯示實際生成嘅 project_id
+ * 29. [v2.22] 建立地盤支援自訂英文 ID（custom_id），專為 NFC tag 設計
+ * 30. [v2.23] 英文 project_id 大小寫容錯：NFC/URL 大細階寫錯都搵到正确地盤
  */
 
 const App = (function() {
@@ -209,7 +207,6 @@ const App = (function() {
   // 🔥 [v2.21] LRU 快取管理（自動淘汰過期）
   function lotCacheSet(key, data) {
     if (lotCache.size >= LOT_CACHE_MAX) {
-      // 淘汰最舊嘅快取
       const firstKey = lotCache.keys().next().value;
       lotCache.delete(firstKey);
     }
@@ -219,7 +216,6 @@ const App = (function() {
   function lotCacheGet(key) {
     const entry = lotCache.get(key);
     if (!entry) return null;
-    // 15 分鐘過期
     if (Date.now() - entry.timestamp > 15 * 60 * 1000) {
       lotCache.delete(key);
       return null;
@@ -545,7 +541,6 @@ const App = (function() {
     }
     if (!q) { hideSearch(); return; }
     
-    // 🔥 [v2.21] 使用預建索引（O(1) 查找）
     const projectTrees = treeSearchIndex.get(curProject) || [];
     const results = [];
     
@@ -557,7 +552,7 @@ const App = (function() {
     }
     
     if (!results.length) {
-      box.innerHTML = '<div class="sr-item sr-hint">🤷 搵唔到「' + escapeHtml(query) + '」</div>';
+      box.innerHTML = '<div class="sr-item sr-hint">🤷 唔到「' + escapeHtml(query) + '」</div>';
       box.style.display = 'block';
       return;
     }
@@ -684,7 +679,6 @@ const App = (function() {
       return;
     }
     
-    // 🔥 [v2.21] 使用預建索引（O(1) 查找）
     const list = treeSearchIndex.get(curProject) || [];
     const markers = [];
     
@@ -694,7 +688,6 @@ const App = (function() {
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       
-      // 🔥 [v2.21] 移除 inline event handlers（改用事件委派）
       const html = '<div style="width:16px;height:16px;border-radius:50%;background:' + color + ';border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:pointer;"></div>';
       
       const marker = L.marker([lat, lng], {
@@ -709,7 +702,6 @@ const App = (function() {
       
       marker._originalPos = [lat, lng];
       
-      // 🔥 [v2.21] 優化 click handler（避免重複 forEach）
       marker.on('click', function() {
         treesCache.forEach(function(m) { 
           if (m !== marker) m.setZIndexOffset(0); 
@@ -904,7 +896,6 @@ const App = (function() {
   }
   
   function init() {
-    // 🔥 [v2.21] 快取 DOM 元素（避免重複查詢）
     DOM.statusEl = document.getElementById('status');
     DOM.projSel = document.getElementById('projSel');
     DOM.addTreeBtn = document.getElementById('addTreeBtn');
@@ -922,7 +913,6 @@ const App = (function() {
       
       loadTreeSpecies();
       
-      // 🔥 [v2.21] 搜尋結果點擊（事件委派）
       if (DOM.searchResults) {
         DOM.searchResults.addEventListener('click', function(e){
           const item = (e.target && e.target.closest) ? e.target.closest('.sr-item[data-id]') : null;
@@ -936,11 +926,11 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.22）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.23）');
   }
   
   function checkURLParams() {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     let treeId = params.get('tree_id');
     let projectId = params.get('project_id');
     let lat = params.get('lat');
@@ -966,18 +956,28 @@ const App = (function() {
     }
   }
   
+  // 🔥 [v2.23] 英文 project_id 大小寫容錯
   function locateTree(treeId, projectId, lat, lng) {
     isLocating = true; 
     
     let tree = null;
-    const targetPid = projectId ? String(projectId) : '';
+    let targetPid = projectId ? String(projectId) : '';
+    
+    // 🔥 [v2.23] 大小寫不敏感：將 URL/NFC 傳入嘅 pid 修正為資料庫正確大小寫
+    if (targetPid) {
+      const proj = PROJECTS.find(function(x){
+        return String(x.project_id).toLowerCase() === targetPid.toLowerCase();
+      });
+      if (proj) targetPid = String(proj.project_id);
+    }
     
     if (treeId) {
       tree = treeMap.get(targetPid + '_' + String(treeId));
       if (!tree) {
+        const tp = targetPid.toLowerCase();
         tree = TREES.find(function(t) { 
           return String(t.tree_id) === String(treeId) && 
-                 (!targetPid || String(t.project_id) === targetPid); 
+                 (!tp || String(t.project_id || '').toLowerCase() === tp); 
         }) || null;
       }
     }
