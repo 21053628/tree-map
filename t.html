@@ -168,7 +168,7 @@
         if(res && res.ok && res.token){
           localStorage.setItem('tree_staff_token', JSON.stringify({
             token: res.token,
-            until: Date.now() + 30*60*1000
+            until: Date.now() + 4*60*60*1000
           }));
           return true;
         } else {
@@ -181,12 +181,15 @@
     }
   }
 
+  // 🔥 [更新] 巡查歷史只顯示日期（yyyy-MM-dd），不顯示時間
+  // 兼容新記錄（純日期字串）同舊記錄（完整日期時間，自動斬剩日期）
   function fmtTime(v){
+    const s = String(v);
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // 新記錄：純日期，直接顯示
     const d = new Date(v);
-    if(isNaN(d.getTime())) return String(v).slice(0,16);
+    if(isNaN(d.getTime())) return s.slice(0,10);
     const p = function(n){ return String(n).padStart(2,'0'); };
-    return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) +
-           ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
   }
 
   fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
@@ -366,9 +369,6 @@
 
   function initPhotoPreview(){
     const fileInput = $('#photo');
-    const previewContainer = $('#photoPreviewContainer');
-    const previewGrid = $('#photoPreviewGrid');
-    const photoCount = $('#photoCount');
 
     fileInput.addEventListener('change', function(e){
       const files = Array.from(e.target.files);

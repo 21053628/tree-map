@@ -29,7 +29,14 @@
   <select id="projSel" onchange="App.selectProject(this.value)"></select>
   <button class="blue" onclick="App.openProjectForm()">＋ 建立地盤</button>
   <button id="addTreeBtn" style="display:none" onclick="App.openTreeForm()">🌳 新增樹木</button>
+  
+  <!-- 🔥 [v2.19 新增] 樹木搜尋框（只搜尋當前地盤） -->
+  <div class="search-wrap">
+    <input type="text" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off" oninput="App.handleSearch(this.value)" onfocus="App.handleSearch(this.value)">
+    <div id="searchResults" class="search-results"></div>
+  </div>
 </div>
+
 <div id="panel"><div id="panelContent"></div></div>
 <div id="status">🗺️ 載入中…</div>
 <div id="map"></div>

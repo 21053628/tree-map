@@ -1,13 +1,14 @@
 /**
-樹木管理系統 - 認證服務模組（真實後端驗證版）
-- 密碼唔再放前端，由 Apps Script 後端驗證
-- 成功後攞 Token，存 30 分鐘，過期自動再問
-*/
+ * 樹木管理系統 - 認證服務模組（真實後端驗證版）
+ * - 密碼唔再放前端，由 Apps Script 後端驗證
+ * - 成功後攞 Token，存 4 小時，過期自動再問
+ */
 const AuthService = (function() {
   'use strict';
 
   const TOKEN_KEY = 'tree_staff_token';
-  const SESSION_DURATION = Config.AUTH.SESSION_DURATION; // 30 分鐘
+  // 🔥 [更新] 將前端 Session 改為 4 小時 (14,400,000 毫秒)
+  const SESSION_DURATION = 4 * 60 * 60 * 1000; 
 
   function getToken() {
     try {
