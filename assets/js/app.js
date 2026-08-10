@@ -1,19 +1,14 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.5 - 修復跨地盤同名樹木定位錯誤）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.6 - 加入狀態記憶，徹底修復返回地圖彈錯位）
  * 
  * 🚀 優化重點：
- * 1. [殺手1] Popup 懶載入 (Lazy Load)
- * 2. [殺手2] 修正 removeOutsideVisibleBounds
- * 3. [殺手3] 預先計算 treeCountMap / treeMap
- * 4. [殺手4] 空間索引距離計算加入緯度 cos 修正
- * 5. [體驗] mouseout 延遲縮短至 300ms
- * 6. [體驗] 底圖切換優化
- * 7. [UI] 移除狀態列的「渲染耗時」顯示
+ * 1-7. [核心優化] Popup 懶載入、空間索引、O(1) 查找、底圖切換等
  * 8. [v2.1] 新增樹木即刻顯示
  * 9. [v2.2] 修復 NFC / t.html 返回地圖時動畫打架導致彈錯位嘅問題
  * 10. [v2.3] 修復新增樹木後，MarkerCluster 重新渲染與 flyTo 動畫打架導致地圖亂彈嘅問題
  * 11. [v2.4] 選中、NFC定位、新增樹木時，自動將該樹木 Marker 置於最前層 (zIndexOffset)
  * 12. [v2.5] 修復唔同地盤有相同 tree_id 時，Map 互相覆蓋導致 NFC 跳轉去錯地盤嘅 Bug
+ * 13. [v2.6] 加入 localStorage 狀態記憶，解決 t.html refresh 後 history.back() 丟失參數導致彈去錯誤位置嘅問題
  */
 
 const App = (function() {
@@ -197,7 +192,6 @@ const App = (function() {
       TREES.forEach(function(t) {
         const pid = String(t.project_id || '');
         treeCountMap.set(pid, (treeCountMap.get(pid) || 0) + 1);
-        // 🔥 [v2.5 修正] 使用 project_id + tree_id 作為複合 Key，解決唔同地盤有相同 tree_id 時 Map 互相覆蓋嘅 Bug
         treeMap.set(pid + '_' + String(t.tree_id), t);
       });
       
@@ -281,6 +275,8 @@ const App = (function() {
   function selectProject(pid) {
     curProject = pid;
     buildSelect();
+    // 🔥 [v2.6 新增] 儲存當前地盤狀態
+    saveViewState('', null, null);
     
     if (map) {
       map.closePopup();
@@ -388,7 +384,6 @@ const App = (function() {
       
       marker.on('mouseout', handleMouseOut);
       
-      // 🔥 [v2.4 新增] 撳／選取樹木時，將佢帶到最前層（蓋過隔離重疊嘅樹）
       marker.on('click', function() {
         treesCache.forEach(function(m) { m.setZIndexOffset(0); });
         marker.setZIndexOffset(2000);
@@ -661,18 +656,15 @@ const App = (function() {
         await load();
         
         const newId = String(r.tree_id);
-        // 🔥 [v2.5 修正] 使用複合 Key 查找新樹
         const nt = treeMap.get(curProject + '_' + newId) || TREES.find(function(t){ return String(t.tree_id) === newId && String(t.project_id) === curProject; });
         
         if (nt) {
-          // 🔥 [v2.3 修復] 使用 setTimeout 避開 MarkerCluster 重新渲染時的視圖爭奪
           setTimeout(function() {
             map.flyTo([+nt.lat, +nt.lng], Math.max(map.getZoom(), 18), { duration: 0.8 });
             
             setTimeout(function() {
               const m = treesCache.get(newId);
               if (m) {
-                // 🔥 [v2.4 新增] 新建立嘅樹木帶到最前層
                 treesCache.forEach(function(otherM) { otherM.setZIndexOffset(0); });
                 m.setZIndexOffset(2000);
                 m.openPopup();
@@ -698,32 +690,45 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.5）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.6）');
   }
   
-  // 🔥 [v2.2 修復] 支援讀取 t.html 傳過嚟嘅 lat/lng 參數
+  // 🔥 [v2.6 核心修復] 加入 localStorage 狀態記憶，防止 history.back() 丟失參數
   function checkURLParams() {
     const params = new URLSearchParams(window.location.search);
-    const treeId = params.get('tree_id');
-    const projectId = params.get('project_id');
-    const lat = params.get('lat');
-    const lng = params.get('lng');
+    let treeId = params.get('tree_id');
+    let projectId = params.get('project_id');
+    let lat = params.get('lat');
+    let lng = params.get('lng');
     
-    if (treeId || (lat && lng)) {
+    // 如果 URL 冇參數（例如 t.html refresh 後 history.back() 觸發，或者用戶直接 refresh index.html）
+    if (!treeId && !projectId && !lat && !lng) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('tree_map_last_view'));
+        if (saved && saved.project_id) {
+          projectId = saved.project_id;
+          treeId = saved.tree_id;
+          lat = saved.lat;
+          lng = saved.lng;
+          // 恢復上次嘅縮放級別
+          if (saved.zoom && map) {
+             setTimeout(function(){ map.setZoom(saved.zoom); }, 100);
+          }
+        }
+      } catch(e) {}
+    }
+    
+    if (treeId || projectId || (lat && lng)) {
       setTimeout(function() { locateTree(treeId, projectId, lat, lng); }, 600);
     }
   }
   
-  // 🔥 [v2.5 修正] 徹底修復跨地盤同名樹木定位錯誤
   function locateTree(treeId, projectId, lat, lng) {
     let tree = null;
     const targetPid = projectId ? String(projectId) : '';
     
     if (treeId) {
-      // 1. 優先使用複合 Key (project_id_tree_id) 進行 O(1) 精確查找
       tree = treeMap.get(targetPid + '_' + String(treeId));
-      
-      // 2. 如果複合 Key 搵唔到（例如 URL 冇帶 project_id），就用 Array.find 精確匹配
       if (!tree) {
         tree = TREES.find(function(t) { 
           return String(t.tree_id) === String(treeId) && 
@@ -733,13 +738,8 @@ const App = (function() {
     }
 
     const finalPid = tree ? String(tree.project_id || '') : targetPid;
-    const targetLat = tree ? +tree.lat : +lat;
-    const targetLng = tree ? +tree.lng : +lng;
-
-    if (!targetLat || !targetLng || isNaN(targetLat) || isNaN(targetLng)) {
-      updateStatus('❌ 找不到樹木位置：' + (treeId || ''));
-      return;
-    }
+    const targetLat = tree ? +tree.lat : (lat ? +lat : null);
+    const targetLng = tree ? +tree.lng : (lng ? +lng : null);
 
     if (finalPid && String(curProject) !== finalPid) {
       curProject = finalPid;
@@ -751,22 +751,48 @@ const App = (function() {
       drawTrees();
     }
 
-    map.flyTo([targetLat, targetLng], 19, { duration: 1.2 });
-
-    setTimeout(function() {
-      const marker = tree ? (treesCache.get(tree.tree_id) || treesCache.get(String(treeId))) : null;
-      if (marker) {
-        // 🔥 [v2.4 新增] 定位嘅樹木帶到最前層
-        treesCache.forEach(function(m) { m.setZIndexOffset(0); });
-        marker.setZIndexOffset(2000);
-        marker.openPopup();
-        updateStatus('✅ 已定位到樹木：' + treeId);
+    if (targetLat && targetLng && !isNaN(targetLat) && !isNaN(targetLng)) {
+      map.flyTo([targetLat, targetLng], tree ? 19 : (map.getZoom() || Config.MAP.MAX_ZOOM), { duration: 1.2 });
+      
+      if (tree) {
+        setTimeout(function() {
+          const marker = treesCache.get(tree.tree_id) || treesCache.get(String(treeId));
+          if (marker) {
+            treesCache.forEach(function(m) { m.setZIndexOffset(0); });
+            marker.setZIndexOffset(2000);
+            marker.openPopup();
+            updateStatus('✅ 已定位到樹木：' + treeId);
+          }
+        }, 1400);
       }
-    }, 1400);
+    } else if (finalPid) {
+      // 如果只有地盤 ID 而冇座標，飛去地盤中心
+      const p = PROJECTS.find(function(x) { return String(x.project_id) === finalPid; });
+      if (p) {
+        map.flyTo([+p.lat, +p.lng], Config.MAP.MAX_ZOOM, { duration: 1.2 });
+      }
+    }
 
     if (window.history && window.history.replaceState) {
       window.history.replaceState({}, '', window.location.pathname);
     }
+    
+    // 🔥 [v2.6 新增] 儲存當前檢視狀態
+    saveViewState(treeId, targetLat, targetLng);
+  }
+
+  // 🔥 [v2.6 新增] 儲存狀態函數
+  function saveViewState(treeId, lat, lng) {
+    try {
+      localStorage.setItem('tree_map_last_view', JSON.stringify({
+        project_id: curProject,
+        tree_id: treeId || '',
+        lat: lat || '',
+        lng: lng || '',
+        zoom: map ? map.getZoom() : Config.MAP.DEFAULT_ZOOM,
+        time: Date.now()
+      }));
+    } catch(e) {}
   }
   
   function getPerfMetrics() {
@@ -786,6 +812,7 @@ const App = (function() {
     treeMap.clear();
     spatialIndexCache = null;
     coordGroupsCache = null;
+    localStorage.removeItem('tree_map_last_view'); // 清除記憶
     console.log('🗑️ 緩存已清除');
   }
   
