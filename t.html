@@ -57,12 +57,29 @@
   .photo-preview-remove{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(255,0,0,.85);color:#fff;border:none;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
   .photo-preview-remove:hover{background:rgba(255,0,0,1)}
   .photo-count{font-size:13px;color:var(--muted);margin-bottom:8px}
+  
+  /* 🔥 新增：骨架屏 (Skeleton) 閃爍動畫，完美消除最後 0.0037 嘅 CLS 移位 */
+  .sk{background:linear-gradient(90deg,#e8e8e8,#f5f5f5,#e8e8e8);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:8px}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
   @media (max-width:600px){.wrap{padding:12px}.card{padding:14px}#minimap{height:180px}.grid{grid-template-columns:repeat(3,1fr);gap:8px}.grid div{padding:10px;font-size:13px}}
   @media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
 </style>
 </head>
 <body>
-<div class="wrap" id="app"><div class="card loading">載入中…</div></div>
+<!-- 🔥 新增：骨架屏 HTML，預先模擬最終版面高度，避免內容載入時產生位移 -->
+<div class="wrap" id="app">
+  <div class="sk" style="height:40px;width:110px;margin-bottom:12px"></div>
+  <div class="card">
+    <div class="sk" style="height:26px;width:75%"></div>
+    <div class="sk" style="height:26px;width:45%;margin-top:10px"></div>
+    <div class="sk" style="aspect-ratio:4/3;margin-top:12px"></div>
+    <div class="sk" style="height:76px;margin-top:12px"></div>
+    <div class="sk" style="height:200px;margin-top:12px"></div>
+  </div>
+  <div class="card"><div class="sk" style="height:52px"></div></div>
+  <div class="card"><div class="sk" style="height:120px"></div></div>
+</div>
 
 <!-- 🔥 終極修正 1：移除 crossorigin，防止第一次 CORS 預檢失敗導致腳本靜默不加載 -->
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
