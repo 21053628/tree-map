@@ -1,5 +1,5 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.8 - 雙重防鎖徹底根治 onchange 意外觸發）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.9 - 修復 Popup 斬頂問題）
  * 
  * 🚀 優化重點：
  * 1-7. [核心優化] Popup 懶載入、空間索引、O(1) 查找、底圖切換等
@@ -11,6 +11,7 @@
  * 13. [v2.6] 加入 localStorage 狀態記憶，解決 t.html refresh 後 history.back() 丟失參數導致彈去錯誤位置嘅問題
  * 14. [v2.7] 強化 treesCache 複合 Key
  * 15. [v2.8] 引入 isLocating 全局鎖 + removeAttribute('onchange') 雙重防鎖，徹底根治 JS 修改 select.value 時意外觸發 onchange 導致 performFlyTo 覆蓋樹木座標嘅終極 Bug
+ * 16. [v2.9] 修復 NFC 定位後 Popup 被螢幕斬頂嘅問題：相片固定高度 + 載入完成後強制 popup.update()
  */
 
 const App = (function() {
@@ -415,6 +416,7 @@ const App = (function() {
       
       marker.bindPopup('<div style="text-align:center;padding:10px;color:#666;">載入中...</div>');
       
+      // 🔥 [v2.9 修復] Popup 開啟事件：相片固定高度 + 載入完成後強制 popup.update()，杜絕斬頂
       marker.on('popupopen', function(e) {
         const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
         const popupHtml = 
@@ -423,10 +425,27 @@ const App = (function() {
           '<b>DBH:</b> ' + (t.dbh || '-') + ' cm | <b>Height:</b> ' + (t.height || '-') + ' m<br>' +
           '<b>Spread:</b> ' + (t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
           (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
-          ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '"><br>' : '') +
+          ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:200px;object-fit:cover;display:block;margin:6px auto 0;border-radius:6px;"><br>' : '') +
           '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
         
         e.popup.setContent(DOMPurify.sanitize(popupHtml));
+        
+        // 🔥 [v2.9 雙保險] 相片載入完成後，強制 popup 重新計算高度 + 重新平移
+        setTimeout(function() {
+          try {
+            var el = e.popup.getElement();
+            if (el) {
+              var img = el.querySelector('img.popup-img');
+              if (img && !img.complete) {
+                img.addEventListener('load', function() {
+                  if (e.popup && e.popup._map) e.popup.update();
+                });
+              } else if (e.popup && e.popup._map) {
+                e.popup.update();
+              }
+            }
+          } catch (err) {}
+        }, 50);
       });
       
       markers.push(marker);
@@ -715,7 +734,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.8）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.9）');
   }
   
   function checkURLParams() {
