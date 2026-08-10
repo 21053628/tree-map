@@ -1,10 +1,10 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.10 - UI 互動與狀態回饋優化）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.11 - 氣球圖釘與精準定位）
  * 
  * 🚀 優化重點：
- * 1-16. [v2.1 - v2.9 核心優化] 包含 Popup 懶載入、空間索引、O(1) 查找、NFC 防打架、防斬頂等所有底層修復
- * 17. [v2.10] 狀態列動態回饋：自動識別成功/錯誤訊息並觸發 CSS 綠色/紅色邊框動畫
- * 18. [v2.10] 點擊地圖空白處自動關閉 Panel，提升手機版沉浸式體驗
+ * 1-18. [v2.1 - v2.10 核心優化] 包含 Popup 懶載入、空間索引、O(1) 查找、NFC 防打架、防斬頂、狀態回饋等
+ * 19. [v2.11] 全新「氣球圖釘」Marker 設計：號碼牌升高 + 指向線連接，圓點永遠釘死喺精準 GPS 位置
+ * 20. [v2.11] 移除 hover 散開圓點嘅冗餘邏輯，減少 DOM 操作與重繪，大幅提升密集樹木下嘅渲染效能
  */
 
 const App = (function() {
@@ -48,10 +48,6 @@ const App = (function() {
   
   let resizeTimer = null;
   let loadDebounceTimer = null;
-  
-  let activeGroupId = -1;
-  let mouseOutTimer = null;
-  let coordGroupsRef = [];
   
   function initMap() {
     if (!window.L) {
@@ -162,7 +158,6 @@ const App = (function() {
     };
     legend.addTo(map);
     
-    // 🔥 [v2.10 新增] 點擊地圖空白處自動關閉側邊/底部 Panel
     map.on('click', function() {
       if (document.body.classList.contains('panel-open')) {
         closePanel();
@@ -172,7 +167,6 @@ const App = (function() {
     return true;
   }
   
-  // 🔥 [v2.10 升級] 狀態列動態回饋：自動識別成功/錯誤並觸發 CSS 邊框動畫
   function updateStatus(message) {
     if (statusEl) {
       statusEl.textContent = message;
@@ -372,13 +366,16 @@ const App = (function() {
     list.forEach(function(t) {
       const coords = offsetMap.get(t.tree_id) || { original: [+t.lat, +t.lng], offset: null };
       
+      // 🔥 [v2.11] 永遠使用原始精準 GPS 座標，不再使用 offset
       const lat = coords.original[0];
       const lng = coords.original[1];
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       
+      // 🔥 [v2.11] 氣球圖釘設計：號碼牌 + 指向線 + 精準位置圓點
       const html = '<div class="treeIcon">' +
                    '<span class="lbl">' + t.tree_id + '</span>' +
+                   '<span class="stem"></span>' +
                    '<span class="dot" style="background:' + color + '"></span>' +
                    '</div>';
       
@@ -386,38 +383,13 @@ const App = (function() {
         icon: L.divIcon({
           className: '',
           html: html,
-          iconSize: [70, 42],
-          iconAnchor: [35, 40],
-          popupAnchor: [0, -34]
+          iconSize: [70, 63],
+          iconAnchor: [35, 54], // 🔥 圓點中心精準對齊 GPS 座標
+          popupAnchor: [0, -59]
         })
       });
       
       marker._originalPos = coords.original;
-      marker._offsetPos = coords.offset;
-      marker._isOffset = false;
-      marker._groupId = treeToGroupMap.get(t.tree_id);
-      
-      marker.on('mouseover', function(e) {
-        if (mouseOutTimer) { clearTimeout(mouseOutTimer); mouseOutTimer = null; }
-        
-        if (marker._offsetPos && !marker._isOffset && marker._groupId !== null) {
-          const groupId = marker._groupId;
-          const group = coordGroupsRef[groupId];
-          if (group) {
-            group.forEach(function(tree) {
-              const m = treesCache.get(curProject + '_' + tree.tree_id) || treesCache.get(tree.tree_id);
-              if (m && m._offsetPos && !m._isOffset) {
-                if (m._icon) L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
-                m.setLatLng(m._offsetPos);
-                m._isOffset = true;
-              }
-            });
-          }
-          activeGroupId = groupId;
-        }
-      });
-      
-      marker.on('mouseout', handleMouseOut);
       
       marker.on('click', function() {
         treesCache.forEach(function(m) { m.setZIndexOffset(0); });
@@ -536,49 +508,15 @@ const App = (function() {
     });
     
     const offsetMap = new Map();
-    const offsetRadius = 0.00012;
     
+    // 🔥 [v2.11] 簡化：不再計算散開座標，直接儲存原始座標
     for (let g = 0; g < coordGroups.length; g++) {
       const trees = coordGroups[g];
-      if (trees.length === 1) {
-        const t = trees[0];
+      for (let i = 0; i < trees.length; i++) {
+        const t = trees[i];
         offsetMap.set(t.tree_id, { original: [+t.lat, +t.lng], offset: null });
-      } else {
-        const baseLat = +trees[0].lat;
-        const baseLng = +trees[0].lng;
-        const angleStep = (2 * Math.PI) / trees.length;
-        
-        for (let i = 0; i < trees.length; i++) {
-          const t = trees[i];
-          const angle = i * angleStep;
-          const offsetLat = baseLat + offsetRadius * Math.cos(angle);
-          const offsetLng = baseLng + offsetRadius * Math.sin(angle);
-          offsetMap.set(t.tree_id, { original: [+t.lat, +t.lng], offset: [offsetLat, offsetLng] });
-        }
       }
     }
-    
-    coordGroupsRef = coordGroups;
-    
-    window.handleMouseOut = function() {
-      if (mouseOutTimer) clearTimeout(mouseOutTimer);
-      mouseOutTimer = setTimeout(function() {
-        if (activeGroupId !== -1) {
-          const group = coordGroupsRef[activeGroupId];
-          if (group) {
-            group.forEach(function(tree) {
-              const m = treesCache.get(curProject + '_' + tree.tree_id) || treesCache.get(tree.tree_id);
-              if (m && m._isOffset) {
-                if (m._icon) L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
-                m.setLatLng(m._originalPos);
-                m._isOffset = false;
-              }
-            });
-          }
-          activeGroupId = -1;
-        }
-      }, 300);
-    };
     
     spatialIndexCache = { coordGroups, offsetMap, treeToGroupMap };
     coordGroupsCache = { key: curProject, coordGroups, offsetMap, treeToGroupMap };
@@ -742,7 +680,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.10）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.11）');
   }
   
   function checkURLParams() {
