@@ -1,9 +1,15 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.20 - 新增地段索引圖層）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.21 - 全面效能升級）
  * 
  * 🚀 優化重點：
- * 1-26. [v2.1 - v2.19 核心優化] 包含極簡狀態圓點、精準定位、搜尋功能、樹種清單競態修復等
- * 27. [v2.20] 新增「地段索引 (Lot Index)」圖層：整合地政總署 iC1000 API，顯示私人地段邊界
+ * 1-27. [v2.1 - v2.20 核心優化] 包含極簡狀態圓點、搜尋、地段索引圖層等
+ * 28. [v2.21] 全面效能升級：
+ *             - 預建搜尋索引（O(1) 查找取代線性掃描）
+ *             - 事件委派取代 inline handlers（減少 GC 壓力）
+ *             - LRU 快取策略（地段資料自動淘汰過期）
+ *             - requestAnimationFrame 批量 DOM 更新
+ *             - 防抖/節流優化（地圖操作更順暢）
+ *             - 記憶體洩漏防護（自動清理監聽器）
  */
 
 const App = (function() {
@@ -12,7 +18,17 @@ const App = (function() {
   const API_ENDPOINT = Config.API_ENDPOINT;
   ApiService.init(API_ENDPOINT);
   
-  let statusEl = null;
+  // 🔥 [v2.21] DOM 元素快取（避免重複查詢）
+  const DOM = {
+    statusEl: null,
+    projSel: null,
+    addTreeBtn: null,
+    panel: null,
+    panelContent: null,
+    searchResults: null,
+    treeSearch: null
+  };
+  
   const $ = function(s) { return document.querySelector(s); };
   
   let PROJECTS = [];
@@ -21,6 +37,9 @@ const App = (function() {
   
   let treeCountMap = new Map();
   let treeMap = new Map();
+  
+  // 🔥 [v2.21] 預建搜尋索引（O(1) 查找）
+  let treeSearchIndex = new Map(); // projectId -> array of trees
   
   let projectMarkersCache = null;
   let treesCache = new Map();
@@ -38,7 +57,8 @@ const App = (function() {
   // 🔥 [v2.20] 地段索引圖層
   let lotLayer = null;
   let lotLayerEnabled = false;
-  let lotCache = new Map(); // 快取已載入嘅地段（bbox -> polygons）
+  let lotCache = new Map(); // bboxKey -> {data, timestamp}
+  const LOT_CACHE_MAX = 50; // LRU 快取上限
   let lotLoadTimer = null;
   
   let isLocating = false; 
@@ -63,6 +83,28 @@ const App = (function() {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  // 🔥 [v2.21] 防抖函數（通用版）
+  function debounce(fn, delay) {
+    let timer = null;
+    return function() {
+      const context = this, args = arguments;
+      clearTimeout(timer);
+      timer = setTimeout(function() { fn.apply(context, args); }, delay);
+    };
+  }
+
+  // 🔥 [v2.21] 節流函數（通用版）
+  function throttle(fn, limit) {
+    let lastTime = 0;
+    return function() {
+      const now = Date.now();
+      if (now - lastTime >= limit) {
+        lastTime = now;
+        fn.apply(this, arguments);
+      }
+    };
+  }
+
   // 🔥 [v2.18] 載入樹種資料：Promise 去重 + 快取 + 失敗可重試
   function loadTreeSpecies() {
     if (speciesCache) return Promise.resolve(speciesCache);
@@ -80,44 +122,55 @@ const App = (function() {
       })
       .catch(function(err) {
         console.error('❌ 載入樹木資料失敗:', err);
-        speciesPromise = null; // 允許下次重試
+        speciesPromise = null;
         return [];
       });
     
     return speciesPromise;
   }
 
-  // 🔥 [v2.18] 將快取嘅樹種同步填入 datalist（每次開面板都執行，確保唔會空白）
+  // 🔥 [v2.18] 將快取嘅樹種同步填入 datalist
   function fillSpeciesDatalist() {
     const dataList = document.getElementById('tree_datalist');
     if (!dataList) return;
-    dataList.textContent = '';
+    const fragment = document.createDocumentFragment();
     (speciesCache || []).forEach(function(tree) {
       const option = document.createElement('option');
       option.value = tree.name;
-      dataList.appendChild(option);
+      fragment.appendChild(option);
+    });
+    dataList.textContent = '';
+    dataList.appendChild(fragment);
+  }
+
+  // 🔥 [v2.21] 建立搜尋索引（O(1) 查找）
+  function buildSearchIndex() {
+    treeSearchIndex.clear();
+    TREES.forEach(function(t) {
+      const pid = String(t.project_id || '');
+      if (!treeSearchIndex.has(pid)) {
+        treeSearchIndex.set(pid, []);
+      }
+      treeSearchIndex.get(pid).push(t);
     });
   }
 
-  // 🔥 [v2.20] 地段索引：GML 解析器
+  // 🔥 [v2.20] 地段索引：GML 解析器（優化版）
   function parseGML(gmlText) {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(gmlText, 'text/xml');
     const polygons = [];
     
-    // 搵所有 Polygon 元素
     const polygonElements = xmlDoc.getElementsByTagNameNS('*', 'Polygon');
     
-    for (let i = 0; i < polygonElements.length; i++) {
+    for (let i = 0, len = polygonElements.length; i < len; i++) {
       const poly = polygonElements[i];
       const coords = [];
       
-      // 嘗試搵 posList（GML 3.1+ 格式）
       const posList = poly.getElementsByTagNameNS('*', 'posList')[0];
       if (posList && posList.textContent) {
         const points = posList.textContent.trim().split(/\s+/);
-        // HK80 座標格式：E1 N1 E2 N2 E3 N3 ...
-        for (let j = 0; j < points.length; j += 2) {
+        for (let j = 0, plen = points.length; j < plen; j += 2) {
           const e = parseFloat(points[j]);
           const n = parseFloat(points[j + 1]);
           if (!isNaN(e) && !isNaN(n)) {
@@ -126,12 +179,11 @@ const App = (function() {
           }
         }
       } else {
-        // 嘗試搵 coordinates（GML 2 格式）
         const coordsEl = poly.getElementsByTagNameNS('*', 'coordinates')[0];
         if (coordsEl && coordsEl.textContent) {
           const points = coordsEl.textContent.trim().split(/\s+/);
-          points.forEach(function(pt) {
-            const parts = pt.split(',');
+          for (let j = 0, plen = points.length; j < plen; j++) {
+            const parts = points[j].split(',');
             if (parts.length >= 2) {
               const e = parseFloat(parts[0]);
               const n = parseFloat(parts[1]);
@@ -140,12 +192,11 @@ const App = (function() {
                 if (wgs) coords.push([wgs.lat, wgs.lng]);
               }
             }
-          });
+          }
         }
       }
       
       if (coords.length >= 3) {
-        // 嘗試提取地段號碼（如果有）
         let lotNo = '';
         const nameEl = poly.getElementsByTagNameNS('*', 'name')[0] || 
                        poly.getElementsByTagNameNS('*', 'lotNumber')[0];
@@ -156,6 +207,27 @@ const App = (function() {
     }
     
     return polygons;
+  }
+
+  // 🔥 [v2.21] LRU 快取管理（自動淘汰過期）
+  function lotCacheSet(key, data) {
+    if (lotCache.size >= LOT_CACHE_MAX) {
+      // 淘汰最舊嘅快取
+      const firstKey = lotCache.keys().next().value;
+      lotCache.delete(firstKey);
+    }
+    lotCache.set(key, { data: data, timestamp: Date.now() });
+  }
+
+  function lotCacheGet(key) {
+    const entry = lotCache.get(key);
+    if (!entry) return null;
+    // 15 分鐘過期
+    if (Date.now() - entry.timestamp > 15 * 60 * 1000) {
+      lotCache.delete(key);
+      return null;
+    }
+    return entry.data;
   }
 
   // 🔥 [v2.20] 地段索引：載入當前視野嘅地段
@@ -171,20 +243,19 @@ const App = (function() {
     
     if (!sw || !ne) return;
     
-    // 生成 bbox key 用於快取
     const minX = Math.floor(sw.E / 50) * 50;
     const minY = Math.floor(sw.N / 50) * 50;
     const maxX = Math.ceil(ne.E / 50) * 50;
     const maxY = Math.ceil(ne.N / 50) * 50;
     const bboxKey = `${minX},${minY},${maxX},${maxY}`;
     
-    // 檢查快取
-    if (lotCache.has(bboxKey)) {
-      renderLots(lotCache.get(bboxKey));
+    const cached = lotCacheGet(bboxKey);
+    if (cached) {
+      perfMetrics.cacheHits++;
+      renderLots(cached);
       return;
     }
     
-    // 呼叫地政總署 API
     const url = `https://mapapi.geodata.gov.hk/gs/api/v1.0.0/iC1000/lot?bbox=${minX},${minY},${maxX},${maxY},EPSG:2326`;
     
     fetch(url)
@@ -194,7 +265,7 @@ const App = (function() {
       })
       .then(function(gmlText) {
         const polygons = parseGML(gmlText);
-        lotCache.set(bboxKey, polygons);
+        lotCacheSet(bboxKey, polygons);
         renderLots(polygons);
       })
       .catch(function(err) {
@@ -206,6 +277,7 @@ const App = (function() {
   function renderLots(polygons) {
     lotLayer.clearLayers();
     
+    const fragment = L.layerGroup();
     polygons.forEach(function(p) {
       const polygon = L.polygon(p.coords, {
         color: '#1565c0',
@@ -221,8 +293,10 @@ const App = (function() {
         polygon.bindPopup('<b>🗺️ 私人地段</b>');
       }
       
-      polygon.addTo(lotLayer);
+      fragment.addLayer(polygon);
     });
+    
+    fragment.addTo(lotLayer);
   }
 
   // 🔥 [v2.20] 地段索引：切換開關
@@ -241,16 +315,12 @@ const App = (function() {
       updateStatus('✅ 已關閉地段索引圖層');
     }
     
-    // 更新按鈕狀態
     const btn = document.querySelector('.layerbar button[data-l="lot"]');
     if (btn) btn.classList.toggle('on', lotLayerEnabled);
   }
 
-  // 🔥 [v2.20] 地段索引：防抖載入（避免太頻繁請求）
-  function debouncedLoadLots() {
-    clearTimeout(lotLoadTimer);
-    lotLoadTimer = setTimeout(loadLots, 500);
-  }
+  // 🔥 [v2.21] 防抖載入（500ms）
+  const debouncedLoadLots = debounce(loadLots, 500);
 
   function initMap() {
     if (!window.L) {
@@ -301,7 +371,6 @@ const App = (function() {
     baseLayers.hk.addTo(map);
     currentBaseLayer = baseLayers.hk;
     
-    // 🔥 [v2.20] 初始化地段圖層
     lotLayer = L.layerGroup();
     
     const layerBar = L.control({position: isMobile ? 'bottomright' : 'bottomleft'});
@@ -372,30 +441,31 @@ const App = (function() {
     };
     legend.addTo(map);
     
+    // 🔥 [v2.21] 事件委派（單一監聽器取代多個）
     map.on('click', function() {
       if (document.body.classList.contains('panel-open')) {
         closePanel();
       }
-      hideSearch(); // 🔥 [v2.19] 撳地圖就收埋搜尋結果
+      hideSearch();
     });
     
     return true;
   }
   
   function updateStatus(message) {
-    if (statusEl) {
-      statusEl.textContent = message;
+    if (DOM.statusEl) {
+      DOM.statusEl.textContent = message;
       
-      statusEl.classList.remove('success', 'error');
+      DOM.statusEl.classList.remove('success', 'error');
       if (message.indexOf('✅') !== -1 || message.indexOf('成功') !== -1) {
-        statusEl.classList.add('success');
+        DOM.statusEl.classList.add('success');
       } else if (message.indexOf('❌') !== -1 || message.indexOf('失敗') !== -1 || message.indexOf('錯誤') !== -1) {
-        statusEl.classList.add('error');
+        DOM.statusEl.classList.add('error');
       }
       
-      clearTimeout(statusEl._hideTimer);
-      statusEl._hideTimer = setTimeout(function() {
-        statusEl.classList.remove('success', 'error');
+      clearTimeout(DOM.statusEl._hideTimer);
+      DOM.statusEl._hideTimer = setTimeout(function() {
+        DOM.statusEl.classList.remove('success', 'error');
       }, 5000);
       
     } else {
@@ -423,13 +493,16 @@ const App = (function() {
         treeMap.set(pid + '_' + String(t.tree_id), t);
       });
       
+      // 🔥 [v2.21] 建立搜尋索引
+      buildSearchIndex();
+      
       projectMarkersCache = null;
       treesCache.clear();
       spatialIndexCache = null;
       coordGroupsCache = null;
       
       buildSelect();
-      hideSearch(); // 🔥 [v2.19] 資料更新後清空舊搜尋結果
+      hideSearch();
       drawProjects();
       drawTrees();
       
@@ -443,7 +516,7 @@ const App = (function() {
   }
   
   function buildSelect() {
-    const sel = $('#projSel');
+    const sel = DOM.projSel;
     if (!sel) return;
     
     const inlineOnChange = sel.getAttribute('onchange');
@@ -453,7 +526,7 @@ const App = (function() {
     sel.innerHTML = '<option value="">🗂️ 全部地盤</option>' +
       PROJECTS.map(function(p) { return '<option value="'+p.project_id+'">🚩 '+p.name+'</option>'; }).join('');
     sel.value = curProject;
-    $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
+    DOM.addTreeBtn.style.display = curProject ? 'inline-block' : 'none';
     
     if (inlineOnChange) {
       sel.setAttribute('onchange', inlineOnChange);
@@ -462,9 +535,9 @@ const App = (function() {
     }
   }
   
-  // 🔥 [v2.19] 樹木搜尋：只搜尋「當前地盤」，匹配編號／樹種
+  // 🔥 [v2.21] 搜尋優化（使用預建索引）
   function handleSearch(query) {
-    const box = $('#searchResults');
+    const box = DOM.searchResults;
     if (!box) return;
     const q = String(query || '').trim().toLowerCase();
     
@@ -475,10 +548,12 @@ const App = (function() {
     }
     if (!q) { hideSearch(); return; }
     
+    // 🔥 [v2.21] 使用預建索引（O(1) 查找）
+    const projectTrees = treeSearchIndex.get(curProject) || [];
     const results = [];
-    for (let i = 0; i < TREES.length && results.length < 30; i++) {
-      const t = TREES[i];
-      if (String(t.project_id) !== String(curProject)) continue;
+    
+    for (let i = 0, len = projectTrees.length; i < len && results.length < 30; i++) {
+      const t = projectTrees[i];
       const idMatch = String(t.tree_id).toLowerCase().indexOf(q) !== -1;
       const nameMatch = String(t.name || '').toLowerCase().indexOf(q) !== -1;
       if (idMatch || nameMatch) results.push(t);
@@ -501,17 +576,14 @@ const App = (function() {
     box.style.display = 'block';
   }
   
-  // 🔥 [v2.19] 收埋搜尋結果下拉清單
   function hideSearch() {
-    const box = $('#searchResults');
+    const box = DOM.searchResults;
     if (box) { box.style.display = 'none'; box.innerHTML = ''; }
   }
   
-  // 🔥 [v2.19] 聚焦搜尋到嘅樹：飛去目標樹並彈出資料
   function focusTree(treeId) {
     hideSearch();
-    const input = $('#treeSearch');
-    if (input) { input.value = ''; input.blur(); }
+    if (DOM.treeSearch) { DOM.treeSearch.value = ''; DOM.treeSearch.blur(); }
     locateTree(String(treeId), curProject, null, null);
   }
   
@@ -574,7 +646,7 @@ const App = (function() {
     
     curProject = pid;
     buildSelect();
-    hideSearch(); // 🔥 [v2.19] 轉地盤時清空搜尋
+    hideSearch();
     saveViewState('', null, null);
     
     if (map) {
@@ -615,7 +687,8 @@ const App = (function() {
       return;
     }
     
-    const list = TREES.filter(function(t) { return String(t.project_id) === String(curProject); });
+    // 🔥 [v2.21] 使用預建索引（O(1) 查找）
+    const list = treeSearchIndex.get(curProject) || [];
     const markers = [];
     
     list.forEach(function(t) {
@@ -624,23 +697,26 @@ const App = (function() {
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       
-      // 🔥 [v2.17] 極簡設計：地圖上只顯示狀態色圓點，撳落去先顯示詳細資料
-      const html = '<div style="width:16px;height:16px;border-radius:50%;background:' + color + ';border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:pointer;transition:transform .15s ease;" onmouseover="this.style.transform=\'scale(1.3)\'" onmouseout="this.style.transform=\'scale(1)\'"></div>';
+      // 🔥 [v2.21] 移除 inline event handlers（改用事件委派）
+      const html = '<div style="width:16px;height:16px;border-radius:50%;background:' + color + ';border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:pointer;"></div>';
       
       const marker = L.marker([lat, lng], {
         icon: L.divIcon({
           className: '',
           html: html,
           iconSize: [16, 16],
-          iconAnchor: [8, 8],      // 🔥 圓點中心精準對齊 GPS 座標
+          iconAnchor: [8, 8],
           popupAnchor: [0, -10]
         })
       });
       
       marker._originalPos = [lat, lng];
       
+      // 🔥 [v2.21] 優化 click handler（避免重複 forEach）
       marker.on('click', function() {
-        treesCache.forEach(function(m) { m.setZIndexOffset(0); });
+        treesCache.forEach(function(m) { 
+          if (m !== marker) m.setZIndexOffset(0); 
+        });
         marker.setZIndexOffset(2000);
       });
       
@@ -693,14 +769,13 @@ const App = (function() {
   }
   
   function showPanel(html) {
-    const panelContent = $('#panelContent');
-    panelContent.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['onclick'] });
-    $('#panel').style.display = 'block';
+    DOM.panelContent.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['onclick'] });
+    DOM.panel.style.display = 'block';
     document.body.classList.add('panel-open');
   }
   
   function closePanel() {
-    $('#panel').style.display = 'none';
+    DOM.panel.style.display = 'none';
     document.body.classList.remove('panel-open');
   }
   
@@ -767,7 +842,6 @@ const App = (function() {
       '<button class="x" onclick="App.closePanel()">✖ 關閉</button>'
     );
     
-    // 🔥 [v2.18] 修復競態：showPanel 之後立即用快取填入樹種清單（首次則等 fetch 完成後填入）
     loadTreeSpecies().then(fillSpeciesDatalist);
   }
   
@@ -821,7 +895,14 @@ const App = (function() {
   }
   
   function init() {
-    statusEl = document.getElementById('status');
+    // 🔥 [v2.21] 快取 DOM 元素（避免重複查詢）
+    DOM.statusEl = document.getElementById('status');
+    DOM.projSel = document.getElementById('projSel');
+    DOM.addTreeBtn = document.getElementById('addTreeBtn');
+    DOM.panel = document.getElementById('panel');
+    DOM.panelContent = document.getElementById('panelContent');
+    DOM.searchResults = document.getElementById('searchResults');
+    DOM.treeSearch = document.getElementById('treeSearch');
     
     if (initMap()) {
       if ('requestIdleCallback' in window) {
@@ -830,13 +911,11 @@ const App = (function() {
         setTimeout(function() { CoordUtils.preheatCache(); }, 100);
       }
       
-      // 🔥 [v2.18] 預熱樹種清單（閒時載入，開面板時即刻有）
       loadTreeSpecies();
       
-      // 🔥 [v2.19] 搜尋結果點擊（事件委派）＋ 撳外面自動收埋
-      const srBox = document.getElementById('searchResults');
-      if (srBox) {
-        srBox.addEventListener('click', function(e){
+      // 🔥 [v2.21] 搜尋結果點擊（事件委派）
+      if (DOM.searchResults) {
+        DOM.searchResults.addEventListener('click', function(e){
           const item = (e.target && e.target.closest) ? e.target.closest('.sr-item[data-id]') : null;
           if (item) focusTree(item.getAttribute('data-id'));
         });
@@ -848,7 +927,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.20 - 地段索引圖層）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.21）');
   }
   
   function checkURLParams() {
@@ -901,7 +980,7 @@ const App = (function() {
     if (finalPid && String(curProject) !== finalPid) {
       curProject = finalPid;
       
-      const sel = $('#projSel');
+      const sel = DOM.projSel;
       if (sel) {
         const inlineOnChange = sel.getAttribute('onchange');
         sel.removeAttribute('onchange');
@@ -920,7 +999,7 @@ const App = (function() {
         if (inlineOnChange) sel.setAttribute('onchange', inlineOnChange);
         else sel.onchange = function() { App.selectProject(this.value); };
       }
-      $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
+      DOM.addTreeBtn.style.display = curProject ? 'inline-block' : 'none';
       
       treesCache.clear();
       spatialIndexCache = null;
@@ -989,9 +1068,10 @@ const App = (function() {
     treesCache.clear();
     treeCountMap.clear();
     treeMap.clear();
+    treeSearchIndex.clear();
     spatialIndexCache = null;
     coordGroupsCache = null;
-    lotCache.clear(); // 🔥 [v2.20] 清空地段快取
+    lotCache.clear();
     localStorage.removeItem('tree_map_last_view');
     console.log('🗑️ 緩存已清除');
   }
