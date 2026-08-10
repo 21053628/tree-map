@@ -1,17 +1,10 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.9 - 修復 Popup 斬頂問題）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.10 - UI 互動與狀態回饋優化）
  * 
  * 🚀 優化重點：
- * 1-7. [核心優化] Popup 懶載入、空間索引、O(1) 查找、底圖切換等
- * 8. [v2.1] 新增樹木即刻顯示
- * 9. [v2.2] 修復 NFC / t.html 返回地圖時動畫打架導致彈錯位嘅問題
- * 10. [v2.3] 修復新增樹木後，MarkerCluster 重新渲染與 flyTo 動畫打架導致地圖亂彈嘅問題
- * 11. [v2.4] 選中、NFC定位、新增樹木時，自動將該樹木 Marker 置於最前層 (zIndexOffset)
- * 12. [v2.5] 修復唔同地盤有相同 tree_id 時，Map 互相覆蓋導致 NFC 跳轉去錯地盤嘅 Bug
- * 13. [v2.6] 加入 localStorage 狀態記憶，解決 t.html refresh 後 history.back() 丟失參數導致彈去錯誤位置嘅問題
- * 14. [v2.7] 強化 treesCache 複合 Key
- * 15. [v2.8] 引入 isLocating 全局鎖 + removeAttribute('onchange') 雙重防鎖，徹底根治 JS 修改 select.value 時意外觸發 onchange 導致 performFlyTo 覆蓋樹木座標嘅終極 Bug
- * 16. [v2.9] 修復 NFC 定位後 Popup 被螢幕斬頂嘅問題：相片固定高度 + 載入完成後強制 popup.update()
+ * 1-16. [v2.1 - v2.9 核心優化] 包含 Popup 懶載入、空間索引、O(1) 查找、NFC 防打架、防斬頂等所有底層修復
+ * 17. [v2.10] 狀態列動態回饋：自動識別成功/錯誤訊息並觸發 CSS 綠色/紅色邊框動畫
+ * 18. [v2.10] 點擊地圖空白處自動關閉 Panel，提升手機版沉浸式體驗
  */
 
 const App = (function() {
@@ -44,7 +37,6 @@ const App = (function() {
   let markerCluster = null;
   let currentBaseLayer = null;
   
-  // 🔥 [v2.8 新增] 全局鎖，防止 locateTree 期間 selectProject 被意外觸發
   let isLocating = false; 
   
   let perfMetrics = {
@@ -170,12 +162,33 @@ const App = (function() {
     };
     legend.addTo(map);
     
+    // 🔥 [v2.10 新增] 點擊地圖空白處自動關閉側邊/底部 Panel
+    map.on('click', function() {
+      if (document.body.classList.contains('panel-open')) {
+        closePanel();
+      }
+    });
+    
     return true;
   }
   
+  // 🔥 [v2.10 升級] 狀態列動態回饋：自動識別成功/錯誤並觸發 CSS 邊框動畫
   function updateStatus(message) {
     if (statusEl) {
       statusEl.textContent = message;
+      
+      statusEl.classList.remove('success', 'error');
+      if (message.indexOf('✅') !== -1 || message.indexOf('成功') !== -1) {
+        statusEl.classList.add('success');
+      } else if (message.indexOf('❌') !== -1 || message.indexOf('失敗') !== -1 || message.indexOf('錯誤') !== -1) {
+        statusEl.classList.add('error');
+      }
+      
+      clearTimeout(statusEl._hideTimer);
+      statusEl._hideTimer = setTimeout(function() {
+        statusEl.classList.remove('success', 'error');
+      }, 5000);
+      
     } else {
       console.log('[Status]', message);
     }
@@ -223,7 +236,6 @@ const App = (function() {
     const sel = $('#projSel');
     if (!sel) return;
     
-    // 🔥 [v2.8 雙重保險] 修改 value 前暫時移除 onchange，防止瀏覽器 quirk 意外觸發事件
     const inlineOnChange = sel.getAttribute('onchange');
     sel.removeAttribute('onchange');
     sel.onchange = null;
@@ -233,7 +245,6 @@ const App = (function() {
     sel.value = curProject;
     $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
     
-    // 恢復 onchange
     if (inlineOnChange) {
       sel.setAttribute('onchange', inlineOnChange);
     } else {
@@ -293,7 +304,6 @@ const App = (function() {
   }
   
   function selectProject(pid) {
-    // 🔥 [v2.8 核心防禦] 如果正在執行 NFC 定位，絕對唔准觸發飛去地盤中心嘅動作
     if (isLocating) {
       console.log('[v2.8] selectProject blocked by isLocating lock');
       return; 
@@ -416,7 +426,6 @@ const App = (function() {
       
       marker.bindPopup('<div style="text-align:center;padding:10px;color:#666;">載入中...</div>');
       
-      // 🔥 [v2.9 修復] Popup 開啟事件：相片固定高度 + 載入完成後強制 popup.update()，杜絕斬頂
       marker.on('popupopen', function(e) {
         const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
         const popupHtml = 
@@ -430,7 +439,6 @@ const App = (function() {
         
         e.popup.setContent(DOMPurify.sanitize(popupHtml));
         
-        // 🔥 [v2.9 雙保險] 相片載入完成後，強制 popup 重新計算高度 + 重新平移
         setTimeout(function() {
           try {
             var el = e.popup.getElement();
@@ -734,7 +742,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.9）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.10）');
   }
   
   function checkURLParams() {
@@ -765,7 +773,7 @@ const App = (function() {
   }
   
   function locateTree(treeId, projectId, lat, lng) {
-    isLocating = true; // 🔥 [v2.8] 上鎖，禁止 selectProject 執行
+    isLocating = true; 
     
     let tree = null;
     const targetPid = projectId ? String(projectId) : '';
@@ -789,7 +797,6 @@ const App = (function() {
       
       const sel = $('#projSel');
       if (sel) {
-        // 🔥 [v2.8] 安全地更新 Select UI，剝離 onchange
         const inlineOnChange = sel.getAttribute('onchange');
         sel.removeAttribute('onchange');
         sel.onchange = null;
@@ -843,7 +850,6 @@ const App = (function() {
     
     saveViewState(treeId, targetLat, targetLng);
     
-    // 🔥 [v2.8] 動畫完成後解鎖 (2秒後)
     setTimeout(function() { 
       isLocating = false; 
     }, 2000);
