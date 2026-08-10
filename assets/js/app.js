@@ -1,10 +1,9 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.11 - 氣球圖釘與精準定位）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.12 - 標籤動態流防重疊）
  * 
  * 🚀 優化重點：
- * 1-18. [v2.1 - v2.10 核心優化] 包含 Popup 懶載入、空間索引、O(1) 查找、NFC 防打架、防斬頂、狀態回饋等
- * 19. [v2.11] 全新「氣球圖釘」Marker 設計：號碼牌升高 + 指向線連接，圓點永遠釘死喺精準 GPS 位置
- * 20. [v2.11] 移除 hover 散開圓點嘅冗餘邏輯，減少 DOM 操作與重繪，大幅提升密集樹木下嘅渲染效能
+ * 1-20. [v2.1 - v2.11 核心優化] 包含氣球圖釘、精準定位、O(1) 查找、NFC 防打架、防斬頂、狀態回饋等
+ * 21. [v2.12] 全新「標籤動態流 (Dynamic Flow)」：自動計算密集樹木嘅號碼牌高度層級，避免文字重叠，指向線自動伸縮
  */
 
 const App = (function() {
@@ -49,6 +48,33 @@ const App = (function() {
   let resizeTimer = null;
   let loadDebounceTimer = null;
   
+  // 🔥 [v2.12 新增] 標籤動態流：自動計算每棵樹號碼牌嘅高度層級，避免重叠
+  function computeLabelLevels(list) {
+    const levelMap = new Map();
+    const placed = [];
+    const LAT_R = 0.00018; // 約 20m 碰撞半徑 (緯度)
+    const LNG_R = 0.00022; // 約 20m 碰撞半徑 (經度)
+    
+    // 由南至北、由西至東排序，確保流動順序穩定
+    const sorted = list.slice().sort(function(a, b) {
+      return (+a.lat - +b.lat) || (+a.lng - +b.lng);
+    });
+    
+    sorted.forEach(function(t) {
+      const lat = +t.lat, lng = +t.lng;
+      const near = placed.filter(function(p) {
+        return Math.abs(p.lat - lat) < LAT_R && Math.abs(p.lng - lng) < LNG_R;
+      });
+      let level = 0;
+      const usedLevels = near.map(function(p) { return p.level; });
+      // 搵出最細嘅可用高度層（同一層附近冇人先用）
+      while (usedLevels.indexOf(level) !== -1) level++;
+      placed.push({ lat: lat, lng: lng, level: level });
+      levelMap.set(t.tree_id, level);
+    });
+    return levelMap;
+  }
+
   function initMap() {
     if (!window.L) {
       updateStatus('❌ 地圖元件載入失敗：請檢查網路後重新整理');
@@ -363,19 +389,25 @@ const App = (function() {
       treeToGroupMap = spatialIndexCache.treeToGroupMap;
     }
     
+    // 🔥 [v2.12] 動態流：計算每棵樹號碼牌嘅高度層級
+    const labelLevelMap = computeLabelLevels(list);
+    
     list.forEach(function(t) {
       const coords = offsetMap.get(t.tree_id) || { original: [+t.lat, +t.lng], offset: null };
       
-      // 🔥 [v2.11] 永遠使用原始精準 GPS 座標，不再使用 offset
       const lat = coords.original[0];
       const lng = coords.original[1];
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       
-      // 🔥 [v2.11] 氣球圖釘設計：號碼牌 + 指向線 + 精準位置圓點
+      // 🔥 [v2.12] 動態流：根據層級自動拉伸指向線，將號碼牌錯開高度
+      const level = labelLevelMap.get(t.tree_id) || 0;
+      const stemH = 22 + level * 26;
+      const totalH = 22 + stemH + 18; // 號碼牌(約22) + 指向線(stemH) + 圓點(約18)
+      
       const html = '<div class="treeIcon">' +
                    '<span class="lbl">' + t.tree_id + '</span>' +
-                   '<span class="stem"></span>' +
+                   '<span class="stem" style="height:' + stemH + 'px"></span>' +
                    '<span class="dot" style="background:' + color + '"></span>' +
                    '</div>';
       
@@ -383,9 +415,9 @@ const App = (function() {
         icon: L.divIcon({
           className: '',
           html: html,
-          iconSize: [70, 63],
-          iconAnchor: [35, 54], // 🔥 圓點中心精準對齊 GPS 座標
-          popupAnchor: [0, -59]
+          iconSize: [70, totalH],
+          iconAnchor: [35, totalH - 9], // 🔥 圓點中心永遠精準對齊 GPS 座標
+          popupAnchor: [0, -(totalH - 4)]
         })
       });
       
@@ -509,7 +541,6 @@ const App = (function() {
     
     const offsetMap = new Map();
     
-    // 🔥 [v2.11] 簡化：不再計算散開座標，直接儲存原始座標
     for (let g = 0; g < coordGroups.length; g++) {
       const trees = coordGroups[g];
       for (let i = 0; i < trees.length; i++) {
@@ -680,7 +711,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.11）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.12）');
   }
   
   function checkURLParams() {
