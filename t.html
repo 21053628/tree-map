@@ -23,11 +23,13 @@
 <link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
 <link rel="preconnect" href="https://drive.usercontent.google.com" crossorigin>
+<!-- 🔥 LCP 優化：預先同 API 伺服器握手，慳返 TTFB 時間 -->
+<link rel="preconnect" href="https://script.google.com" crossorigin>
 <!-- 🔥 修正：移除 crossorigin/preload，避免 PWA 快取 CORS 衝突導致 CSS 被瀏覽器拒絕套用 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
 <!-- DOMPurify for XSS protection -->
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" crossorigin defer></script>
 <style>
   :root{--primary:#2e7d32;--primary-dark:#1b5e20;--secondary:#546e7a;--bg:#f1f5f1;--text:#222;--muted:#666;--card-bg:#fff;--radius:12px;--shadow:0 2px 8px rgba(0,0,0,.08)}
   *{box-sizing:border-box}body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent;line-height:1.6}
@@ -85,9 +87,9 @@
   <div class="card"><div class="sk" style="height:120px"></div></div>
 </div>
 
-<!-- 🔥 終極修正 1：移除 crossorigin，防止第一次 CORS 預檢失敗導致腳本靜默不加載 -->
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
+<!-- 🔥 LCP 優化：加入 defer，唔再阻塞主線程，讓 API 請求同 LCP 圖片搶先載入 -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" defer></script>
 
 <script>
 (function(){
@@ -258,36 +260,43 @@
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // 🔥 終極修正 2：使用 requestAnimationFrame 雙重保險，確保 DOM 絕對渲染完畢
+  // 🔥 終極修正 2：配合 defer 異步加載，自動輪詢等待 Leaflet 準備好
   function initMiniMap(t){
-    if(!window.L) {
-      console.warn('⚠️ Leaflet 未載入，放棄初始化小地圖');
-      return;
-    }
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
 
-    requestAnimationFrame(function() {
+    let retries = 0;
+    function tryInit() {
+      // 如果 Leaflet 仲未下載完，每 100ms 檢查一次
+      if (!window.L) {
+        if (retries < 50) { retries++; setTimeout(tryInit, 100); }
+        return;
+      }
+
       requestAnimationFrame(function() {
-        const minimapEl = document.getElementById('minimap');
-        if (!minimapEl) return;
+        requestAnimationFrame(function() {
+          const minimapEl = document.getElementById('minimap');
+          if (!minimapEl) return;
 
-        if (minimapEl.offsetWidth === 0 || minimapEl.offsetHeight === 0) {
-          setTimeout(function(){ initMiniMap(t); }, 150);
-          return;
-        }
+          if (minimapEl.offsetWidth === 0 || minimapEl.offsetHeight === 0) {
+            setTimeout(function(){ tryInit(); }, 150);
+            return;
+          }
 
-        const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
-                       dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
-                     .setView([lat,lng], 18);
-        L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
-        L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
-        L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
-          fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
-        
-        mm.invalidateSize();
+          const mm = L.map('minimap',{zoomControl:false, attributionControl:false,
+                         dragging:false, scrollWheelZoom:false, doubleClickZoom:false})
+                       .setView([lat,lng], 18);
+          L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+          L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',{maxZoom:19}).addTo(mm);
+          L.circleMarker([lat,lng],{color:'#fff',weight:2,radius:9,
+            fillColor:COLORS[t.status]||'#757575',fillOpacity:.9}).addTo(mm);
+          
+          mm.invalidateSize();
+        });
       });
-    });
+    }
+    
+    tryInit();
   }
 
   async function staffMode(){
