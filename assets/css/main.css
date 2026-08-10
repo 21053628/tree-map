@@ -318,6 +318,18 @@ body.panel-open::before {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
+
+/* 🔥 [v2.26 修正] 標題右邊預留空間，關閉按鈕唔再遮住文字 */
+.leaflet-popup-content > b:first-child {
+  display: block;
+  padding-right: 44px;   /* 預留俾 44px 關閉按鈕 */
+  box-sizing: border-box;
+}
+/* 標題變咗 block 之後，隱藏多餘嘅 <br>，避免雙重行距 */
+.leaflet-popup-content > b:first-child + br {
+  display: none;
+}
+
 .leaflet-popup-content button {
   padding: 10px 14px; font-size: 14px; border: none; border-radius: 8px;
   background: var(--accent); color: #fff; cursor: pointer; margin-top: 8px;
