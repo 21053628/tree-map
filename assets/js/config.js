@@ -38,7 +38,7 @@ const Config = {
   MAP: {
     DEFAULT_CENTER: [22.40, 114.18],
     DEFAULT_ZOOM: 11,
-    MAX_ZOOM: 19
+    MAX_ZOOM: 20
   }
 };
 
