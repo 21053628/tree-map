@@ -1,9 +1,10 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.16 - 自包含垂直彩線）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.10 - UI 互動與狀態回饋優化）
  * 
  * 🚀 優化重點：
- * 1-23. [v2.1 - v2.15 核心優化] 包含精準定位、O(1) 查找、NFC 防打架、防斬頂、狀態漸變氣球等
- * 24. [v2.16] 自包含 inline style Marker：垂直彩色引導線永遠唔交叉、免疫 CSS 快取錯配、最多 3 層分層
+ * 1-16. [v2.1 - v2.9 核心優化] 包含 Popup 懶載入、空間索引、O(1) 查找、NFC 防打架、防斬頂等所有底層修復
+ * 17. [v2.10] 狀態列動態回饋：自動識別成功/錯誤訊息並觸發 CSS 綠色/紅色邊框動畫
+ * 18. [v2.10] 點擊地圖空白處自動關閉 Panel，提升手機版沉浸式體驗
  */
 
 const App = (function() {
@@ -48,31 +49,10 @@ const App = (function() {
   let resizeTimer = null;
   let loadDebounceTimer = null;
   
-  // 🔥 標籤分層：自動計算每棵樹號碼牌嘅高度層級，避免重叠
-  function computeLabelLevels(list) {
-    const levelMap = new Map();
-    const placed = [];
-    const LAT_R = 0.00018; // 約 20m 碰撞半徑 (緯度)
-    const LNG_R = 0.00022; // 約 20m 碰撞半徑 (經度)
-    
-    const sorted = list.slice().sort(function(a, b) {
-      return (+a.lat - +b.lat) || (+a.lng - +b.lng);
-    });
-    
-    sorted.forEach(function(t) {
-      const lat = +t.lat, lng = +t.lng;
-      const near = placed.filter(function(p) {
-        return Math.abs(p.lat - lat) < LAT_R && Math.abs(p.lng - lng) < LNG_R;
-      });
-      let level = 0;
-      const usedLevels = near.map(function(p) { return p.level; });
-      while (usedLevels.indexOf(level) !== -1) level++;
-      placed.push({ lat: lat, lng: lng, level: level });
-      levelMap.set(t.tree_id, level);
-    });
-    return levelMap;
-  }
-
+  let activeGroupId = -1;
+  let mouseOutTimer = null;
+  let coordGroupsRef = [];
+  
   function initMap() {
     if (!window.L) {
       updateStatus('❌ 地圖元件載入失敗：請檢查網路後重新整理');
@@ -182,6 +162,7 @@ const App = (function() {
     };
     legend.addTo(map);
     
+    // 🔥 [v2.10 新增] 點擊地圖空白處自動關閉側邊/底部 Panel
     map.on('click', function() {
       if (document.body.classList.contains('panel-open')) {
         closePanel();
@@ -191,6 +172,7 @@ const App = (function() {
     return true;
   }
   
+  // 🔥 [v2.10 升級] 狀態列動態回饋：自動識別成功/錯誤並觸發 CSS 邊框動畫
   function updateStatus(message) {
     if (statusEl) {
       statusEl.textContent = message;
@@ -387,9 +369,6 @@ const App = (function() {
       treeToGroupMap = spatialIndexCache.treeToGroupMap;
     }
     
-    // 🔥 分層：計算每棵樹號碼牌嘅高度層級
-    const labelLevelMap = computeLabelLevels(list);
-    
     list.forEach(function(t) {
       const coords = offsetMap.get(t.tree_id) || { original: [+t.lat, +t.lng], offset: null };
       
@@ -398,36 +377,47 @@ const App = (function() {
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       
-      // 🔥 [v2.16] 自包含 inline style：垂直彩線永遠唔交叉、免疫 CSS 快取錯配
-      const level = Math.min(labelLevelMap.get(t.tree_id) || 0, 2); // 最多 3 層
-      const stemH = 12 + level * 24;   // 12 / 36 / 60
-      const dotR = 14;
-      const W2 = 120, ax2 = 60;
-      const totalH2 = 24 + stemH + dotR; // 牌(~24) + 線 + 點
-      const dotY = totalH2 - dotR / 2;   // 圓點中心
-      const lineTop = dotY - dotR / 2 - stemH;
-      
-      const html =
-        '<div style="position:relative;width:' + W2 + 'px;height:' + totalH2 + 'px;pointer-events:none;">' +
-          /* 圓點：精準釘喺 GPS 座標 */
-          '<div style="position:absolute;left:' + ax2 + 'px;top:' + dotY + 'px;transform:translate(-50%,-50%);width:' + dotR + 'px;height:' + dotR + 'px;border-radius:50%;background:' + color + ';border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);pointer-events:auto;cursor:pointer;"></div>' +
-          /* 垂直彩線：永遠直上直落，絕不交叉 */
-          '<div style="position:absolute;left:' + ax2 + 'px;top:' + lineTop + 'px;height:' + stemH + 'px;width:2px;transform:translateX(-50%);background:' + color + ';opacity:.85;border-radius:1px;box-shadow:0 0 0 .5px rgba(255,255,255,.6);"></div>' +
-          /* 號碼牌：永遠喺自己圓點正上方 */
-          '<div style="position:absolute;left:' + ax2 + 'px;top:' + lineTop + 'px;transform:translate(-50%,-100%);background:' + color + ';color:#fff;font-weight:800;font-size:11px;letter-spacing:.3px;padding:4px 10px;border-radius:999px;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.35);white-space:nowrap;pointer-events:auto;cursor:pointer;font-family:system-ui,sans-serif;text-shadow:0 1px 2px rgba(0,0,0,.45);">' + t.tree_id + '</div>' +
-        '</div>';
+      const html = '<div class="treeIcon">' +
+                   '<span class="lbl">' + t.tree_id + '</span>' +
+                   '<span class="dot" style="background:' + color + '"></span>' +
+                   '</div>';
       
       const marker = L.marker([lat, lng], {
         icon: L.divIcon({
           className: '',
           html: html,
-          iconSize: [W2, totalH2],
-          iconAnchor: [ax2, dotY], // 🔥 圓點中心永遠精準對齊 GPS 座標
-          popupAnchor: [0, -(totalH2 - 4)]
+          iconSize: [70, 42],
+          iconAnchor: [35, 40],
+          popupAnchor: [0, -34]
         })
       });
       
       marker._originalPos = coords.original;
+      marker._offsetPos = coords.offset;
+      marker._isOffset = false;
+      marker._groupId = treeToGroupMap.get(t.tree_id);
+      
+      marker.on('mouseover', function(e) {
+        if (mouseOutTimer) { clearTimeout(mouseOutTimer); mouseOutTimer = null; }
+        
+        if (marker._offsetPos && !marker._isOffset && marker._groupId !== null) {
+          const groupId = marker._groupId;
+          const group = coordGroupsRef[groupId];
+          if (group) {
+            group.forEach(function(tree) {
+              const m = treesCache.get(curProject + '_' + tree.tree_id) || treesCache.get(tree.tree_id);
+              if (m && m._offsetPos && !m._isOffset) {
+                if (m._icon) L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
+                m.setLatLng(m._offsetPos);
+                m._isOffset = true;
+              }
+            });
+          }
+          activeGroupId = groupId;
+        }
+      });
+      
+      marker.on('mouseout', handleMouseOut);
       
       marker.on('click', function() {
         treesCache.forEach(function(m) { m.setZIndexOffset(0); });
@@ -546,14 +536,49 @@ const App = (function() {
     });
     
     const offsetMap = new Map();
+    const offsetRadius = 0.00012;
     
     for (let g = 0; g < coordGroups.length; g++) {
       const trees = coordGroups[g];
-      for (let i = 0; i < trees.length; i++) {
-        const t = trees[i];
+      if (trees.length === 1) {
+        const t = trees[0];
         offsetMap.set(t.tree_id, { original: [+t.lat, +t.lng], offset: null });
+      } else {
+        const baseLat = +trees[0].lat;
+        const baseLng = +trees[0].lng;
+        const angleStep = (2 * Math.PI) / trees.length;
+        
+        for (let i = 0; i < trees.length; i++) {
+          const t = trees[i];
+          const angle = i * angleStep;
+          const offsetLat = baseLat + offsetRadius * Math.cos(angle);
+          const offsetLng = baseLng + offsetRadius * Math.sin(angle);
+          offsetMap.set(t.tree_id, { original: [+t.lat, +t.lng], offset: [offsetLat, offsetLng] });
+        }
       }
     }
+    
+    coordGroupsRef = coordGroups;
+    
+    window.handleMouseOut = function() {
+      if (mouseOutTimer) clearTimeout(mouseOutTimer);
+      mouseOutTimer = setTimeout(function() {
+        if (activeGroupId !== -1) {
+          const group = coordGroupsRef[activeGroupId];
+          if (group) {
+            group.forEach(function(tree) {
+              const m = treesCache.get(curProject + '_' + tree.tree_id) || treesCache.get(tree.tree_id);
+              if (m && m._isOffset) {
+                if (m._icon) L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
+                m.setLatLng(m._originalPos);
+                m._isOffset = false;
+              }
+            });
+          }
+          activeGroupId = -1;
+        }
+      }, 300);
+    };
     
     spatialIndexCache = { coordGroups, offsetMap, treeToGroupMap };
     coordGroupsCache = { key: curProject, coordGroups, offsetMap, treeToGroupMap };
@@ -717,7 +742,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.16）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.10）');
   }
   
   function checkURLParams() {

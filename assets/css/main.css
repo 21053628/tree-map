@@ -77,7 +77,7 @@ button { touch-action: manipulation; cursor: pointer; }
   -webkit-overflow-scrolling: touch;
   transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
   transform: translateY(-10px); opacity: 0; pointer-events: none;
-  will-change: transform, opacity;
+  will-change: transform, opacity; /* 🚀 GPU 加速 */
 }
 #panel[style*="display: block"] {
   transform: translateY(0); opacity: 1; pointer-events: auto;
@@ -91,7 +91,7 @@ body.panel-open::before {
   background: var(--overlay-bg);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
-  z-index: 1199;
+  z-index: 1199; /* 剛好喺 Panel (1200) 下面，地圖上面 */
   animation: fadeIn 0.25s ease-out;
   pointer-events: auto;
 }
@@ -129,6 +129,7 @@ body.panel-open::before {
   box-shadow: 0 4px 12px rgba(0,0,0,.1); max-width: 85%; white-space: nowrap;
   pointer-events: none;
   border: 1.5px solid transparent;
+  /* ✨ 動態回饋動畫 */
   transition: opacity 0.3s, transform 0.3s, background 0.3s, border-color 0.3s, color 0.3s;
 }
 #status.success { border-color: var(--primary); color: var(--primary-dark); }
@@ -144,6 +145,7 @@ body.panel-open::before {
 .prjIcon {
   background: var(--accent); color: #fff; border-radius: 6px;
   padding: 3px 8px; font-size: 13px; font-weight: 600; border: 2px solid #fff;
+  /* 🎨 立體陰影優化 */
   filter: drop-shadow(0 2px 4px rgba(0,0,0,.3));
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   will-change: transform;
@@ -152,53 +154,36 @@ body.panel-open::before {
   transform: scale(1.15) rotate(3deg);
 }
 
-/* ================= 樹木標記 v2.15：梳齒式扇開（引導線絕不交叉） ================= */
 .treeIcon {
-  position: relative;
-  pointer-events: none; /* 透明畫布唔阻地圖操作 */
+  display: flex; flex-direction: column; align-items: center;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s ease;
+  cursor: pointer;
+  will-change: transform, filter;
 }
-.treeIcon .leader { position: absolute; inset: 0; overflow: visible; }
-.treeIcon .leader line {
-  stroke: var(--c, #2e7d32);
-  stroke-width: 2;
-  stroke-linecap: round;
-  opacity: .9;
-  filter: drop-shadow(0 1px 1px rgba(255,255,255,.7));
+.treeIcon:hover {
+  transform: scale(1.25) translateY(-5px);
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.3)) brightness(1.05);
 }
 .treeIcon .lbl {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  pointer-events: auto;
-  background: linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 45%, rgba(0,0,0,.10) 100%), var(--c, #2e7d32);
-  color: #fff;
-  font-weight: 800;
-  font-size: 11px;
-  letter-spacing: .3px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 2px solid #fff;
-  box-shadow: 0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.35);
-  text-shadow: 0 1px 2px rgba(0,0,0,.45);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: transform .15s ease;
+  background: #263238; color: #ffd54f; font-weight: bold; font-size: 11px;
+  padding: 3px 8px; border-radius: 10px; border: 1.5px solid #fff;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); 
+  margin-bottom: 2px; white-space: nowrap;
+  transition: all 0.15s ease;
 }
-.treeIcon .lbl:hover { transform: translate(-50%, -100%) scale(1.1); }
+.treeIcon:hover .lbl {
+  background: #ffd54f; color: #1a237e; font-weight: 900;
+  transform: scale(1.08);
+}
 .treeIcon .dot {
-  position: absolute;
-  left: 100px; top: 130px; /* 對應 JS 常數 ax/ay */
-  transform: translate(-50%, -50%);
-  pointer-events: auto;
-  width: 12px; height: 12px; border-radius: 50%;
-  background: var(--c, #2e7d32);
-  border: 2.5px solid #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,.45);
-  cursor: pointer;
-  transition: transform .15s ease, box-shadow .15s ease;
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  transition: all 0.15s ease;
 }
-.treeIcon .dot:hover {
-  transform: translate(-50%, -50%) scale(1.3);
-  box-shadow: 0 0 0 4px rgba(255,255,255,.35), 0 2px 6px rgba(0,0,0,.4);
+.treeIcon:hover .dot {
+  border-width: 3px; border-color: #fff;
+  box-shadow: 0 0 12px currentColor, 0 2px 6px rgba(0,0,0,0.4);
+  animation: pulse 1s infinite;
 }
 
 @keyframes pulse {
@@ -387,9 +372,4 @@ body.panel-open::before {
   .leaflet-popup-close-button:hover { color: #fff !important; background: rgba(255,255,255,0.2) !important; }
   
   #panel::before { background: #555; }
-
-  /* 🔥 [v2.15] 深色模式引導線描邊改黑色，確保夜間清晰 */
-  .treeIcon .leader line {
-    filter: drop-shadow(0 1px 1px rgba(0,0,0,.8));
-  }
 }
