@@ -19,6 +19,10 @@
 
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
+<!-- 🔥 LCP 優化：預先連線 Google 圖片伺服器，慳返 DNS/TLS 握手時間 -->
+<link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
+<link rel="preconnect" href="https://drive.google.com" crossorigin>
+<link rel="preconnect" href="https://drive.usercontent.google.com" crossorigin>
 <!-- 🔥 修正：移除 crossorigin/preload，避免 PWA 快取 CORS 衝突導致 CSS 被瀏覽器拒絕套用 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
@@ -224,7 +228,10 @@
     }
     if(mainPhotos && mainPhotos.length > 0){
       for(var i = 0; i < mainPhotos.length; i++){
-        html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="zoomImage(this.src)">';
+        // 🔥 LCP 優化：第一張相片（LCP 元素）設為 eager + fetchpriority="high"，其餘先 lazy load
+        const isLCP = (i === 0);
+        const loadingAttr = isLCP ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
+        html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" ' + loadingAttr + ' decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="zoomImage(this.src)">';
       }
     }
     html += '<div class="grid">' +
