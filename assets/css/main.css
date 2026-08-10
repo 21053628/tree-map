@@ -12,15 +12,29 @@
   --shadow: 0 2px 8px rgba(0,0,0,.08);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --overlay-bg: rgba(0,0,0,0.3);
+}
+
+/* 🌙 深色模式變數 (Dark Mode) - 自動適配系統設定 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121412;
+    --text: #e0e0e0;
+    --muted: #9e9e9e;
+    --card-bg: #1e241e;
+    --shadow: 0 4px 12px rgba(0,0,0,.5);
+    --overlay-bg: rgba(0,0,0,0.6);
+  }
 }
 
 html, body {
   margin: 0; height: 100%;
-  font-family: system-ui, -apple-system, "Microsoft JhengHei", sans-serif;
+  font-family: system-ui, -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif;
   -webkit-tap-highlight-color: transparent;
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #map { height: 100%; width: 100%; }
@@ -30,11 +44,12 @@ button { touch-action: manipulation; cursor: pointer; }
 #bar {
   position: absolute; top: 8px; right: 8px; z-index: 999;
   display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
-  padding-top: var(--safe-top); /* 🔥 優化：防止劉海屏/狀態欄遮擋 */
+  padding-top: var(--safe-top);
 }
 #bar select {
   padding: 10px; border-radius: 8px; border: 1px solid #bbb;
-  font-size: 15px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  font-size: 15px; background: var(--card-bg); color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
   max-width: 46vw;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -46,74 +61,104 @@ button { touch-action: manipulation; cursor: pointer; }
 #bar button {
   padding: 10px 12px; border-radius: 8px; border: none;
   font-size: 15px; background: var(--primary); color: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,.15);
-  transition: transform 0.08s ease, background 0.2s;
+  box-shadow: 0 2px 6px rgba(46, 125, 50, 0.3);
+  transition: transform 0.08s ease, background 0.2s, box-shadow 0.2s;
 }
-#bar button.blue { background: var(--accent); }
+#bar button.blue { background: var(--accent); box-shadow: 0 2px 6px rgba(21, 101, 192, 0.3); }
 #bar button:active { transform: scale(0.96); }
 
 /* ================= 側邊/底部面板 (Panel) ================= */
 #panel {
   display: none; position: absolute; top: 52px; right: 8px; z-index: 1200;
   background: var(--card-bg); border-radius: var(--radius);
-  padding: 12px; width: 290px; box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  padding: 16px; width: 300px; box-shadow: 0 8px 30px rgba(0,0,0,.2);
   max-height: 80vh; overflow-y: auto;
-  overscroll-behavior: contain; /* 🔥 優化：防止滾動穿透到地圖 */
-  -webkit-overflow-scrolling: touch; /* iOS 平滑滾動 */
-  /* 滑入動畫 */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
   transform: translateY(-10px); opacity: 0; pointer-events: none;
+  will-change: transform, opacity; /* 🚀 GPU 加速 */
 }
 #panel[style*="display: block"] {
   transform: translateY(0); opacity: 1; pointer-events: auto;
 }
-#panel input, #panel select {
-  width: 100%; padding: 10px; margin-top: 6px;
-  border: 1px solid #bbb; border-radius: 8px; font-size: 15px; box-sizing: border-box;
-  transition: border-color 0.15s ease;
+
+/* 🎭 沉浸式背景遮罩 (Backdrop Overlay) */
+body.panel-open::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 1199; /* 剛好喺 Panel (1200) 下面，地圖上面 */
+  animation: fadeIn 0.25s ease-out;
+  pointer-events: auto;
 }
-#panel input:focus, #panel select:focus {
-  border-color: var(--primary); outline: none;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+#panel input, #panel select, #panel textarea {
+  width: 100%; padding: 11px; margin-top: 6px;
+  border: 1px solid #ccc; border-radius: 8px; font-size: 15px; box-sizing: border-box;
+  background: var(--card-bg); color: var(--text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+#panel input:focus, #panel select:focus, #panel textarea:focus {
+  border-color: var(--primary); 
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1);
+  outline: none;
 }
 #panel button {
-  width: 100%; padding: 12px; margin-top: 8px; border: none;
-  border-radius: 8px; background: var(--primary); color: #fff; font-size: 16px;
+  width: 100%; padding: 12px; margin-top: 10px; border: none;
+  border-radius: 8px; background: var(--primary); color: #fff; font-size: 16px; font-weight: 500;
+  box-shadow: 0 2px 6px rgba(46, 125, 50, 0.2);
   transition: transform 0.08s ease, background 0.2s;
 }
 #panel button:active { transform: scale(0.97); }
-#panel .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-#panel .x { background: #90a4ae; }
+#panel .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#panel .x { background: #78909c; box-shadow: none; }
 
 /* ================= 狀態列與圖例 ================= */
 #status {
   position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-  z-index: 999; background: rgba(255,255,255,0.95); backdrop-filter: blur(4px);
-  padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0,0,0,.1); max-width: 85%; white-space: nowrap;
+  z-index: 999; background: rgba(255,255,255,0.95); backdrop-filter: blur(6px);
+  padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,.1); max-width: 85%; white-space: nowrap;
   pointer-events: none;
+  border: 1.5px solid transparent;
+  /* ✨ 動態回饋動畫 */
+  transition: opacity 0.3s, transform 0.3s, background 0.3s, border-color 0.3s, color 0.3s;
 }
+#status.success { border-color: var(--primary); color: var(--primary-dark); }
+#status.error { border-color: #c62828; color: #c62828; background: rgba(255, 235, 238, 0.95); }
+
 .legend {
-  background: rgba(255,255,255,0.95); backdrop-filter: blur(4px);
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(6px);
   padding: 8px 12px; border-radius: 8px; font-size: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.15); line-height: 1.7;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1); line-height: 1.7;
 }
 
 /* ================= 地圖標記與圖標動畫 ================= */
 .prjIcon {
   background: var(--accent); color: #fff; border-radius: 6px;
-  padding: 2px 6px; font-size: 13px; border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,.4);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  padding: 3px 8px; font-size: 13px; font-weight: 600; border: 2px solid #fff;
+  /* 🎨 立體陰影優化 */
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.3));
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
 }
 .prjIcon:hover {
   transform: scale(1.15) rotate(3deg);
-  box-shadow: 0 4px 12px rgba(21, 101, 192, 0.5);
 }
 
 .treeIcon {
   display: flex; flex-direction: column; align-items: center;
   transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s ease;
   cursor: pointer;
+  will-change: transform, filter;
 }
 .treeIcon:hover {
   transform: scale(1.25) translateY(-5px);
@@ -121,13 +166,14 @@ button { touch-action: manipulation; cursor: pointer; }
 }
 .treeIcon .lbl {
   background: #263238; color: #ffd54f; font-weight: bold; font-size: 11px;
-  padding: 2px 8px; border-radius: 10px; border: 1px solid #fff;
-  box-shadow: 0 1px 3px rgba(0,0,0,.4); margin-bottom: 2px; white-space: nowrap;
+  padding: 3px 8px; border-radius: 10px; border: 1.5px solid #fff;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); 
+  margin-bottom: 2px; white-space: nowrap;
   transition: all 0.15s ease;
 }
 .treeIcon:hover .lbl {
   background: #ffd54f; color: #1a237e; font-weight: 900;
-  box-shadow: 0 2px 8px rgba(255, 213, 79, 0.6); transform: scale(1.08);
+  transform: scale(1.08);
 }
 .treeIcon .dot {
   width: 14px; height: 14px; border-radius: 50%;
@@ -145,15 +191,14 @@ button { touch-action: manipulation; cursor: pointer; }
   50% { transform: scale(1.15); opacity: 0.9; }
 }
 
-/* Leaflet 標記平滑動畫 */
 .leaflet-marker-icon { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .leaflet-marker-dragging { transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
 /* ================= 底圖切換按鈕 (Layer Bar) ================= */
 .layerbar {
-  background: rgba(255,255,255,0.95); backdrop-filter: blur(4px);
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(6px);
   border-radius: 10px; padding: 4px; display: flex; gap: 4px;
-  box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  box-shadow: 0 4px 12px rgba(0,0,0,.1);
 }
 .layerbar button {
   border: none; background: transparent; border-radius: 8px;
@@ -168,14 +213,16 @@ button { touch-action: manipulation; cursor: pointer; }
   max-width: calc(100vw - 32px) !important;
   box-sizing: border-box; overflow: hidden;
   border-radius: 14px !important;
-  box-shadow: 0 8px 24px rgba(0,0,0,.15) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.15) !important;
+  background: var(--card-bg) !important;
+  color: var(--text) !important;
 }
 .leaflet-popup-content {
   margin: 14px 16px 16px 16px !important;
   line-height: 1.5; font-size: 14px;
   word-wrap: break-word; overflow-wrap: break-word;
   max-height: 60vh; overflow-y: auto;
-  overscroll-behavior: contain; /* 🔥 優化：防止滾動穿透 */
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 .leaflet-popup-content button {
@@ -187,19 +234,37 @@ button { touch-action: manipulation; cursor: pointer; }
 .leaflet-popup-content button:hover { background: var(--accent-dark); }
 .leaflet-popup-content button:active { transform: scale(0.98); }
 
-/* 🔥 優化：關閉按鈕放大並完美置中 */
+/* 🔗 Popup 連結按鈕化 (CTA Optimization) */
+.leaflet-popup-content a {
+  display: block;
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--primary);
+  color: #fff !important;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 2px 6px rgba(46, 125, 50, 0.3);
+}
+.leaflet-popup-content a:hover { background: var(--primary-dark); }
+.leaflet-popup-content a:active { transform: scale(0.98); }
+
 .leaflet-popup-close-button {
-  width: 36px !important; height: 36px !important;
+  width: 32px !important; height: 32px !important;
   top: 8px !important; right: 8px !important;
   z-index: 1000;
   background: rgba(0,0,0,0.05) !important;
   border-radius: 50% !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
-  font-size: 22px !important; color: #666 !important;
-  padding: 0 !important; line-height: 36px !important; text-align: center !important;
-  transition: background 0.2s, color 0.2s;
+  font-size: 20px !important; color: #666 !important;
+  padding: 0 !important; line-height: 32px !important; text-align: center !important;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
 }
-.leaflet-popup-close-button:hover { background: rgba(0,0,0,0.1) !important; color: #000 !important; }
+.leaflet-popup-close-button:hover { background: rgba(0,0,0,0.1) !important; color: #000 !important; transform: rotate(90deg); }
 .leaflet-popup-close-button span { display: block; margin-top: -2px; font-family: Arial, sans-serif; }
 
 .popup-img {
@@ -220,25 +285,23 @@ button { touch-action: manipulation; cursor: pointer; }
   .legend { display: none; }
   body.panel-open .layerbar { display: none; }
   
-  /* 手機版 Panel 變為 Bottom Sheet */
   #panel {
     position: fixed; top: auto; bottom: 0; left: 0; right: 0;
     width: auto; max-height: 85vh;
     border-radius: 20px 20px 0 0;
     padding: 12px 16px calc(16px + var(--safe-bottom));
-    box-shadow: 0 -4px 20px rgba(0,0,0,.15);
+    box-shadow: 0 -4px 30px rgba(0,0,0,.2);
     z-index: 1300;
-    transform: translateY(100%); /* 手機版由下而上滑入 */
+    transform: translateY(100%);
   }
   #panel[style*="display: block"] { transform: translateY(0); }
   
-  /* Bottom Sheet 拖拽條 */
   #panel::before {
     content: ''; display: block; width: 40px; height: 4px;
-    background: #ddd; border-radius: 2px; margin: 0 auto 12px;
+    background: #ccc; border-radius: 2px; margin: 0 auto 12px;
   }
   
-  #panel input, #panel select { font-size: 16px; padding: 12px; } /* 防止 iOS 自動縮放 */
+  #panel input, #panel select { font-size: 16px; padding: 12px; }
   #panel button { padding: 14px; font-size: 16px; }
   
   #status { font-size: 12px; bottom: calc(12px + var(--safe-bottom)); max-width: 92%; }
@@ -263,14 +326,15 @@ button { touch-action: manipulation; cursor: pointer; }
 .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
 .leaflet-container { touch-action: none; }
 
-/* 確保所有按鈕喺觸控螢幕上有足夠點擊區域 */
 @media (pointer: coarse) {
-  #bar button, #bar select, .layerbar button, #panel button, .leaflet-popup-content button {
+  #bar button, #bar select, .layerbar button, #panel button, .leaflet-popup-content button, .leaflet-popup-content a {
     min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
-/* 減少動畫偏好設定 (無障礙) */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -278,4 +342,34 @@ button { touch-action: manipulation; cursor: pointer; }
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* 🌙 深色模式具體元素覆蓋 (Dark Mode Overrides) */
+@media (prefers-color-scheme: dark) {
+  #bar select, #panel input, #panel select, #panel textarea {
+    background: #2c332c;
+    border-color: #444;
+    color: #e0e0e0;
+  }
+  #panel input::placeholder, #panel textarea::placeholder { color: #777; }
+  
+  .layerbar, .legend {
+    background: rgba(30, 36, 30, 0.85);
+    color: #e0e0e0;
+  }
+  .layerbar button { color: #bbb; }
+  .layerbar button.on { background: var(--accent); color: #fff; }
+  
+  #status { 
+    background: rgba(30, 36, 30, 0.9); 
+    color: #e0e0e0; 
+    border-color: #444;
+  }
+  #status.success { color: #81c784; border-color: #81c784; }
+  #status.error { color: #ef9a9a; border-color: #ef9a9a; background: rgba(40, 20, 20, 0.9); }
+  
+  .leaflet-popup-close-button { color: #aaa !important; background: rgba(255,255,255,0.1) !important; }
+  .leaflet-popup-close-button:hover { color: #fff !important; background: rgba(255,255,255,0.2) !important; }
+  
+  #panel::before { background: #555; }
 }
