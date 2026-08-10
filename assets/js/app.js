@@ -1,9 +1,9 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.12 - 標籤動態流防重疊）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.13 - 狀態漸變氣球設計）
  * 
  * 🚀 優化重點：
- * 1-20. [v2.1 - v2.11 核心優化] 包含氣球圖釘、精準定位、O(1) 查找、NFC 防打架、防斬頂、狀態回饋等
- * 21. [v2.12] 全新「標籤動態流 (Dynamic Flow)」：自動計算密集樹木嘅號碼牌高度層級，避免文字重叠，指向線自動伸縮
+ * 1-21. [v2.1 - v2.12 核心優化] 包含標籤動態流防重疊、精準定位、O(1) 查找、NFC 防打架、防斬頂、狀態回饋等
+ * 22. [v2.13] 全新「狀態漸變氣球」設計：將樹木狀態顏色注入 CSS 變數，號碼牌與圓點同色漸變，配合玻璃光澤與立體陰影
  */
 
 const App = (function() {
@@ -405,10 +405,11 @@ const App = (function() {
       const stemH = 22 + level * 26;
       const totalH = 22 + stemH + 18; // 號碼牌(約22) + 指向線(stemH) + 圓點(約18)
       
-      const html = '<div class="treeIcon">' +
+      // 🔥 [v2.13] 狀態顏色注入 CSS 變數 --c，號碼牌與圓點同色漸變
+      const html = '<div class="treeIcon" style="--c:' + color + '">' +
                    '<span class="lbl">' + t.tree_id + '</span>' +
                    '<span class="stem" style="height:' + stemH + 'px"></span>' +
-                   '<span class="dot" style="background:' + color + '"></span>' +
+                   '<span class="dot"></span>' +
                    '</div>';
       
       const marker = L.marker([lat, lng], {
@@ -711,7 +712,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.12）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.13）');
   }
   
   function checkURLParams() {
