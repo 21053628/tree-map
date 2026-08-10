@@ -1,5 +1,5 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.6 - 加入狀態記憶，徹底修復返回地圖彈錯位）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.7 - 徹底修復 NFC 定位彈去錯地盤中心）
  * 
  * 🚀 優化重點：
  * 1-7. [核心優化] Popup 懶載入、空間索引、O(1) 查找、底圖切換等
@@ -9,6 +9,7 @@
  * 11. [v2.4] 選中、NFC定位、新增樹木時，自動將該樹木 Marker 置於最前層 (zIndexOffset)
  * 12. [v2.5] 修復唔同地盤有相同 tree_id 時，Map 互相覆蓋導致 NFC 跳轉去錯地盤嘅 Bug
  * 13. [v2.6] 加入 localStorage 狀態記憶，解決 t.html refresh 後 history.back() 丟失參數導致彈去錯誤位置嘅問題
+ * 14. [v2.7] 修復 buildSelect 意外觸發 onchange 導致 performFlyTo 覆蓋正確樹木座標，令地圖彈去地盤中心嘅隱藏 Bug；強化 treesCache 複合 Key
  */
 
 const App = (function() {
@@ -275,7 +276,6 @@ const App = (function() {
   function selectProject(pid) {
     curProject = pid;
     buildSelect();
-    // 🔥 [v2.6 新增] 儲存當前地盤狀態
     saveViewState('', null, null);
     
     if (map) {
@@ -370,7 +370,7 @@ const App = (function() {
           const group = coordGroupsRef[groupId];
           if (group) {
             group.forEach(function(tree) {
-              const m = treesCache.get(tree.tree_id);
+              const m = treesCache.get(curProject + '_' + tree.tree_id) || treesCache.get(tree.tree_id);
               if (m && m._offsetPos && !m._isOffset) {
                 if (m._icon) L.DomUtil.addClass(m._icon, 'leaflet-marker-dragging');
                 m.setLatLng(m._offsetPos);
@@ -406,7 +406,9 @@ const App = (function() {
       });
       
       markers.push(marker);
-      treesCache.set(t.tree_id, marker);
+      // 🔥 [v2.7 強化] 使用複合 Key 儲存 marker，徹底杜絕跨地盤同名樹木衝突
+      treesCache.set(curProject + '_' + t.tree_id, marker);
+      treesCache.set(t.tree_id, marker); // 保留純 ID key 作兼容
     });
     
     if (markers.length > 0) {
@@ -515,7 +517,7 @@ const App = (function() {
           const group = coordGroupsRef[activeGroupId];
           if (group) {
             group.forEach(function(tree) {
-              const m = treesCache.get(tree.tree_id);
+              const m = treesCache.get(curProject + '_' + tree.tree_id) || treesCache.get(tree.tree_id);
               if (m && m._isOffset) {
                 if (m._icon) L.DomUtil.removeClass(m._icon, 'leaflet-marker-dragging');
                 m.setLatLng(m._originalPos);
@@ -663,7 +665,7 @@ const App = (function() {
             map.flyTo([+nt.lat, +nt.lng], Math.max(map.getZoom(), 18), { duration: 0.8 });
             
             setTimeout(function() {
-              const m = treesCache.get(newId);
+              const m = treesCache.get(curProject + '_' + newId) || treesCache.get(newId);
               if (m) {
                 treesCache.forEach(function(otherM) { otherM.setZIndexOffset(0); });
                 m.setZIndexOffset(2000);
@@ -690,10 +692,9 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.6）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.7）');
   }
   
-  // 🔥 [v2.6 核心修復] 加入 localStorage 狀態記憶，防止 history.back() 丟失參數
   function checkURLParams() {
     const params = new URLSearchParams(window.location.search);
     let treeId = params.get('tree_id');
@@ -701,7 +702,6 @@ const App = (function() {
     let lat = params.get('lat');
     let lng = params.get('lng');
     
-    // 如果 URL 冇參數（例如 t.html refresh 後 history.back() 觸發，或者用戶直接 refresh index.html）
     if (!treeId && !projectId && !lat && !lng) {
       try {
         const saved = JSON.parse(localStorage.getItem('tree_map_last_view'));
@@ -710,7 +710,6 @@ const App = (function() {
           treeId = saved.tree_id;
           lat = saved.lat;
           lng = saved.lng;
-          // 恢復上次嘅縮放級別
           if (saved.zoom && map) {
              setTimeout(function(){ map.setZoom(saved.zoom); }, 100);
           }
@@ -743,7 +742,22 @@ const App = (function() {
 
     if (finalPid && String(curProject) !== finalPid) {
       curProject = finalPid;
-      buildSelect();
+      
+      // 🔥 [v2.7 核心修復] 直接更新 Select UI，絕對唔調用 buildSelect()，避免觸發 onchange -> selectProject -> performFlyTo 飛去地盤中心
+      const sel = $('#projSel');
+      if (sel) {
+        let hasOption = false;
+        for (let i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === finalPid) { hasOption = true; break; }
+        }
+        if (hasOption) {
+          sel.value = finalPid;
+        } else {
+          buildSelect();
+        }
+      }
+      $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
+      
       treesCache.clear();
       spatialIndexCache = null;
       coordGroupsCache = null;
@@ -756,7 +770,7 @@ const App = (function() {
       
       if (tree) {
         setTimeout(function() {
-          const marker = treesCache.get(tree.tree_id) || treesCache.get(String(treeId));
+          const marker = treesCache.get(finalPid + '_' + tree.tree_id) || treesCache.get(tree.tree_id) || treesCache.get(String(treeId));
           if (marker) {
             treesCache.forEach(function(m) { m.setZIndexOffset(0); });
             marker.setZIndexOffset(2000);
@@ -766,7 +780,6 @@ const App = (function() {
         }, 1400);
       }
     } else if (finalPid) {
-      // 如果只有地盤 ID 而冇座標，飛去地盤中心
       const p = PROJECTS.find(function(x) { return String(x.project_id) === finalPid; });
       if (p) {
         map.flyTo([+p.lat, +p.lng], Config.MAP.MAX_ZOOM, { duration: 1.2 });
@@ -777,11 +790,9 @@ const App = (function() {
       window.history.replaceState({}, '', window.location.pathname);
     }
     
-    // 🔥 [v2.6 新增] 儲存當前檢視狀態
     saveViewState(treeId, targetLat, targetLng);
   }
 
-  // 🔥 [v2.6 新增] 儲存狀態函數
   function saveViewState(treeId, lat, lng) {
     try {
       localStorage.setItem('tree_map_last_view', JSON.stringify({
@@ -812,7 +823,7 @@ const App = (function() {
     treeMap.clear();
     spatialIndexCache = null;
     coordGroupsCache = null;
-    localStorage.removeItem('tree_map_last_view'); // 清除記憶
+    localStorage.removeItem('tree_map_last_view');
     console.log('🗑️ 緩存已清除');
   }
   
