@@ -13,6 +13,8 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --overlay-bg: rgba(0,0,0,0.3);
+  --glass-border: rgba(255, 255, 255, 0.4);
+  --glass-blur: blur(12px) saturate(180%);
 }
 
 /* 🌙 深色模式變數 (Dark Mode) - 自動適配系統設定 */
@@ -24,6 +26,7 @@
     --card-bg: #1e241e;
     --shadow: 0 4px 12px rgba(0,0,0,.5);
     --overlay-bg: rgba(0,0,0,0.6);
+    --glass-border: rgba(255, 255, 255, 0.08);
   }
 }
 
@@ -35,7 +38,17 @@ html, body {
   background: var(--bg);
   color: var(--text);
   transition: background-color 0.3s ease, color 0.3s ease;
+  /* 🌟 專業級字體渲染優化 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
+
+/* 🌟 自訂捲動條 (告別瀏覽器預設粗糙樣式) */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
 
 #map { height: 100%; width: 100%; }
 button { touch-action: manipulation; cursor: pointer; }
@@ -47,11 +60,13 @@ button { touch-action: manipulation; cursor: pointer; }
   padding-top: var(--safe-top);
 }
 #bar select {
-  padding: 10px; border-radius: 8px; border: 1px solid #bbb;
-  font-size: 15px; background: var(--card-bg); color: var(--text);
+  padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border);
+  font-size: 15px; background: rgba(255,255,255,0.85); color: var(--text);
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
   max-width: 46vw;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 #bar select:focus {
   border-color: var(--accent);
@@ -59,9 +74,11 @@ button { touch-action: manipulation; cursor: pointer; }
   outline: none;
 }
 #bar button {
-  padding: 10px 12px; border-radius: 8px; border: none;
+  padding: 10px 12px; border-radius: 8px; border: 1px solid var(--glass-border);
   font-size: 15px; background: var(--primary); color: #fff;
   box-shadow: 0 2px 6px rgba(46, 125, 50, 0.3);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   transition: transform 0.08s ease, background 0.2s, box-shadow 0.2s;
 }
 #bar button.blue { background: var(--accent); box-shadow: 0 2px 6px rgba(21, 101, 192, 0.3); }
@@ -77,11 +94,13 @@ button { touch-action: manipulation; cursor: pointer; }
   width: 100%;
   padding: 10px 14px;
   border-radius: 8px;
-  border: 1px solid #bbb;
+  border: 1px solid var(--glass-border);
   font-size: 15px;
-  background: var(--card-bg);
+  background: rgba(255,255,255,0.85);
   color: var(--text);
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
 }
@@ -110,6 +129,15 @@ button { touch-action: manipulation; cursor: pointer; }
   border: 1px solid rgba(0,0,0,.1);
   overscroll-behavior: contain;
 }
+/* 🌟 搜尋結果滑入動畫 */
+.search-results[style*="display: block"] {
+  animation: fadeSlideDown 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .sr-item {
   padding: 10px 14px;
   cursor: pointer;
@@ -120,34 +148,23 @@ button { touch-action: manipulation; cursor: pointer; }
   transition: background 0.15s ease;
   font-size: 14px;
 }
-.sr-item:last-child {
-  border-bottom: none;
-}
-.sr-item:hover {
-  background: rgba(46, 125, 50, 0.08);
-}
+.sr-item:last-child { border-bottom: none; }
+.sr-item:hover { background: rgba(46, 125, 50, 0.08); }
 .sr-item.sr-hint {
   color: var(--muted);
   cursor: default;
   font-style: italic;
   justify-content: center;
 }
-.sr-item.sr-hint:hover {
-  background: transparent;
-}
+.sr-item.sr-hint:hover { background: transparent; }
 .sr-dot {
-  width: 12px;
-  height: 12px;
+  width: 12px; height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,.3);
 }
-.sr-id {
-  font-weight: 600;
-  color: var(--text);
-  min-width: 60px;
-}
+.sr-id { font-weight: 600; color: var(--text); min-width: 60px; }
 .sr-name {
   color: var(--muted);
   flex: 1;
@@ -184,21 +201,20 @@ body.panel-open::before {
   animation: fadeIn 0.25s ease-out;
   pointer-events: auto;
 }
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 #panel input, #panel select, #panel textarea {
   width: 100%; padding: 11px; margin-top: 6px;
   border: 1px solid #ccc; border-radius: 8px; font-size: 15px; box-sizing: border-box;
   background: var(--card-bg); color: var(--text);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  /* 🌟 表單微互動 */
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 #panel input:focus, #panel select:focus, #panel textarea:focus {
   border-color: var(--primary); 
-  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1);
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.15), 0 0 0 3px rgba(46, 125, 50, 0.1);
   outline: none;
+  transform: translateY(-1px);
 }
 #panel button {
   width: 100%; padding: 12px; margin-top: 10px; border: none;
@@ -213,20 +229,27 @@ body.panel-open::before {
 /* ================= 狀態列與圖例 ================= */
 #status {
   position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-  z-index: 999; background: rgba(255,255,255,0.95); backdrop-filter: blur(6px);
+  z-index: 999; background: rgba(255,255,255,0.9); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
   padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;
   box-shadow: 0 4px 12px rgba(0,0,0,.1); max-width: 85%; white-space: nowrap;
   pointer-events: none;
-  border: 1.5px solid transparent;
-  transition: opacity 0.3s, transform 0.3s, background 0.3s, border-color 0.3s, color 0.3s;
+  border: 1px solid var(--glass-border);
+  transition: opacity 0.3s, background 0.3s, border-color 0.3s, color 0.3s;
+  /* 🌟 狀態列彈跳動畫 */
+  animation: slideUpBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes slideUpBounce {
+  0% { transform: translate(-50%, 15px); opacity: 0; }
+  100% { transform: translate(-50%, 0); opacity: 1; }
 }
 #status.success { border-color: var(--primary); color: var(--primary-dark); }
 #status.error { border-color: #c62828; color: #c62828; background: rgba(255, 235, 238, 0.95); }
 
 .legend {
-  background: rgba(255,255,255,0.95); backdrop-filter: blur(6px);
+  background: rgba(255,255,255,0.9); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
   padding: 8px 12px; border-radius: 8px; font-size: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,.1); line-height: 1.7;
+  border: 1px solid var(--glass-border);
 }
 
 /* ================= 地圖標記與圖標動畫 ================= */
@@ -237,24 +260,27 @@ body.panel-open::before {
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   will-change: transform;
 }
-.prjIcon:hover {
-  transform: scale(1.15) rotate(3deg);
-}
-
-/* 
-  🔥 [v2.17 極簡化] 
-  已徹底移除舊版 .treeIcon / .leader / .lbl / .dot 等複雜樣式。
-  v2.17 嘅狀態圓點完全由 JS inline style 控制，免疫 CSS 快取錯配，零視覺干擾。
-*/
+.prjIcon:hover { transform: scale(1.15) rotate(3deg); }
 
 .leaflet-marker-icon { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .leaflet-marker-dragging { transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
+/* 🌟 地圖互動元素 (地段多邊形) Hover 效果 */
+.leaflet-interactive {
+  transition: fill-opacity 0.2s ease, stroke-width 0.2s ease, stroke 0.2s ease;
+}
+.leaflet-interactive:hover {
+  fill-opacity: 0.25 !important;
+  stroke-width: 3 !important;
+  cursor: pointer;
+}
+
 /* ================= 底圖切換按鈕 (Layer Bar) ================= */
 .layerbar {
-  background: rgba(255,255,255,0.95); backdrop-filter: blur(6px);
+  background: rgba(255,255,255,0.9); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
   border-radius: 10px; padding: 4px; display: flex; gap: 4px;
   box-shadow: 0 4px 12px rgba(0,0,0,.1);
+  border: 1px solid var(--glass-border);
 }
 .layerbar button {
   border: none; background: transparent; border-radius: 8px;
@@ -292,18 +318,10 @@ body.panel-open::before {
 
 /* 🔗 Popup 連結按鈕化 (CTA Optimization) */
 .leaflet-popup-content a {
-  display: block;
-  margin-top: 12px;
-  padding: 12px 16px;
-  background: var(--primary);
-  color: #fff !important;
-  text-decoration: none;
-  border-radius: 8px;
-  font-weight: 600;
-  text-align: center;
-  width: 100%;
-  box-sizing: border-box;
-  transition: background 0.2s, transform 0.1s;
+  display: block; margin-top: 12px; padding: 12px 16px;
+  background: var(--primary); color: #fff !important; text-decoration: none;
+  border-radius: 8px; font-weight: 600; text-align: center; width: 100%;
+  box-sizing: border-box; transition: background 0.2s, transform 0.1s;
   box-shadow: 0 2px 6px rgba(46, 125, 50, 0.3);
 }
 .leaflet-popup-content a:hover { background: var(--primary-dark); }
@@ -311,10 +329,8 @@ body.panel-open::before {
 
 .leaflet-popup-close-button {
   width: 32px !important; height: 32px !important;
-  top: 8px !important; right: 8px !important;
-  z-index: 1000;
-  background: rgba(0,0,0,0.05) !important;
-  border-radius: 50% !important;
+  top: 8px !important; right: 8px !important; z-index: 1000;
+  background: rgba(0,0,0,0.05) !important; border-radius: 50% !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   font-size: 20px !important; color: #666 !important;
   padding: 0 !important; line-height: 32px !important; text-align: center !important;
@@ -334,19 +350,9 @@ body.panel-open::before {
   #bar select { flex: 1; min-width: 0; max-width: none; font-size: 16px; padding: 10px 8px; }
   #bar button { flex: 0 0 auto; padding: 10px 12px; font-size: 14px; white-space: nowrap; }
   
-  /* 🔥 [v2.19] 手機版搜尋框：全寬獨立一行 */
-  .search-wrap {
-    flex: 1 1 100%;
-    max-width: none;
-    order: 99; /* 放喺最尾 */
-  }
-  .search-wrap input {
-    font-size: 16px;
-    padding: 10px;
-  }
-  .search-results {
-    max-height: 50vh;
-  }
+  .search-wrap { flex: 1 1 100%; max-width: none; order: 99; }
+  .search-wrap input { font-size: 16px; padding: 10px; }
+  .search-results { max-height: 50vh; }
   
   .leaflet-top.leaflet-left { top: calc(60px + var(--safe-top)); left: 6px; }
   .leaflet-bottom.leaflet-right { bottom: calc(40px + var(--safe-bottom)); right: 6px; }
@@ -414,12 +420,37 @@ body.panel-open::before {
   }
 }
 
+/* 🌟 按鈕 Loading 狀態 (供 JS 調用，防止重複點擊) */
+button.is-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+button.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 16px; height: 16px;
+  top: 50%; left: 50%;
+  margin-left: -8px; margin-top: -8px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* 🌙 深色模式具體元素覆蓋 (Dark Mode Overrides) */
 @media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
   #bar select, #panel input, #panel select, #panel textarea {
     background: #2c332c;
     border-color: #444;
     color: #e0e0e0;
+  }
+  #bar select, #bar button, .search-wrap input {
+    background: rgba(30, 36, 30, 0.85);
   }
   #panel input::placeholder, #panel textarea::placeholder { color: #777; }
   
@@ -443,32 +474,19 @@ body.panel-open::before {
   
   #panel::before { background: #555; }
   
-  /* 🔥 [v2.19] 搜尋框深色模式 */
   .search-wrap input {
-    background: #2c332c;
+    background: rgba(30, 36, 30, 0.85);
     border-color: #444;
     color: #e0e0e0;
   }
-  .search-wrap input::placeholder {
-    color: #777;
-  }
+  .search-wrap input::placeholder { color: #777; }
   .search-results {
     background: #1e241e;
     border-color: rgba(255,255,255,.1);
   }
-  .sr-item {
-    border-bottom-color: rgba(255,255,255,.08);
-  }
-  .sr-item:hover {
-    background: rgba(129, 199, 132, 0.15);
-  }
-  .sr-id {
-    color: #e0e0e0;
-  }
-  .sr-name {
-    color: #9e9e9e;
-  }
-  .sr-dot {
-    border-color: #1e241e;
-  }
+  .sr-item { border-bottom-color: rgba(255,255,255,.08); }
+  .sr-item:hover { background: rgba(129, 199, 132, 0.15); }
+  .sr-id { color: #e0e0e0; }
+  .sr-name { color: #9e9e9e; }
+  .sr-dot { border-color: #1e241e; }
 }
