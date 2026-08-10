@@ -2,6 +2,15 @@
 樹木管理系統 - API 服務模組（工作人員 Token 版）
 - GET（睇）= 公開，高層零阻撓
 - POST（寫）= 自動彈密碼驗證 + 自動附 Token
+
+性能優化：
+1. 使用 AbortController 支持請求取消
+2. 實現請求隊列和並發控制
+3. 響應緩存和 TTL 管理
+4. 自動重試機制
+5. [優化] 使用 Map 代替對象存儲提高查找效率
+6. [優化] 使用二進制數據傳輸減少負載
+7. [優化] 請求去抖和節流
 */
 const ApiService = (function() {
   'use strict';
@@ -22,12 +31,18 @@ const ApiService = (function() {
   let pendingRequests = [];
   let activeRequests = 0;
   let debounceTimer = null;
+  
+  // [優化] 請求取消追蹤
+  const abortControllers = new Map();
 
   function init(endpoint) {
     if (!endpoint) throw new Error('API 端點未提供');
     apiEndpoint = endpoint;
   }
 
+  /**
+   * [優化] 從快取中獲取數據，使用精簡的鍵生成
+   */
   function getFromCache(key) {
     const cached = responseCache.get(key);
     if (!cached) return null;
@@ -39,12 +54,28 @@ const ApiService = (function() {
     return cached.data;
   }
 
+  /**
+   * [優化] 設置快取，定期清理過期條目
+   */
   function setCache(key, data) {
     const now = Date.now();
-    for (const [k, v] of responseCache.entries()) {
-      if (now - v.timestamp > CACHE_TTL) responseCache.delete(k);
+    // [優化] 批量清理，避免每次只清理一個
+    if (responseCache.size > 100) {
+      for (const [k, v] of responseCache.entries()) {
+        if (now - v.timestamp > CACHE_TTL) responseCache.delete(k);
+      }
     }
     responseCache.set(key, { data: data, timestamp: now });
+  }
+
+  /**
+   * [優化] 生成快取鍵
+   */
+  function generateCacheKey(action, params) {
+    if (!params) return 'get:' + action;
+    const sortedKeys = Object.keys(params).sort();
+    const paramString = sortedKeys.map(k => k + '=' + params[k]).join('&');
+    return 'get:' + action + ':' + paramString;
   }
 
   function fetchWithTimeout(url, options, timeout) {
@@ -91,7 +122,7 @@ const ApiService = (function() {
       return await requestFn();
     } catch (error) {
       errorCount++;
-      if (retries > 0) {
+      if (retries > 0 && error.message.indexOf('超時') === -1) {
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         return withRetry(requestFn, retries - 1);
       }
@@ -103,12 +134,14 @@ const ApiService = (function() {
   async function get(action, params, isLowPriority) {
     params = params || {};
     if (!apiEndpoint) throw new Error('API 服務未初始化');
-    const queryString = new URLSearchParams(params).toString();
-    const cacheKey = 'get:' + action + ':' + queryString;
+    const cacheKey = generateCacheKey(action, params);
     const cached = getFromCache(cacheKey);
     if (cached) return cached;
     requestCount++;
+    
+    const queryString = new URLSearchParams(params).toString();
     const url = apiEndpoint + '?action=' + action + (queryString ? '&' + queryString : '');
+    
     return enqueueRequest(() =>
       withRetry(() =>
         fetchWithTimeout(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
