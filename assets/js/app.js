@@ -1,15 +1,12 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.21 - 全面效能升級）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.22 - 自訂地盤英文 ID）
  * 
  * 🚀 優化重點：
- * 1-27. [v2.1 - v2.20 核心優化] 包含極簡狀態圓點、搜尋、地段索引圖層等
- * 28. [v2.21] 全面效能升級：
- *             - 預建搜尋索引（O(1) 查找取代線性掃描）
- *             - 事件委派取代 inline handlers（減少 GC 壓力）
- *             - LRU 快取策略（地段資料自動淘汰過期）
- *             - requestAnimationFrame 批量 DOM 更新
- *             - 防抖/節流優化（地圖操作更順暢）
- *             - 記憶體洩漏防護（自動清理監聽器）
+ * 1-28. [v2.1 - v2.21 核心優化] 包含極簡狀態圓點、搜尋、地段索引圖層、全面效能升級等
+ * 29. [v2.22] 建立地盤支援自訂英文 ID：
+ *             - 前端新增「自訂英文 ID」輸入框（專為 NFC tag 設計）
+ *             - 自動傳送 custom_id 到後端清理並防重複
+ *             - 建立成功後顯示實際生成嘅 project_id
  */
 
 const App = (function() {
@@ -779,6 +776,7 @@ const App = (function() {
     document.body.classList.remove('panel-open');
   }
   
+  // 🔥 [v2.22] 建立地盤表單：新增「自訂英文 ID」輸入框
   async function openProjectForm() {
     const authResult = AuthService.promptAuth();
     if (authResult instanceof Promise) { if (!await authResult) return; }
@@ -786,15 +784,19 @@ const App = (function() {
     
     showPanel(
       '<b>＋ 建立地盤</b>' +
-      '<input id="pName" placeholder="地盤名稱（e.g. Naichung 泥涌）">' +
+      '<input id="pName" placeholder="地盤名稱（e.g. 泥涌）">' +
+      '<input id="pCustomId" placeholder="自訂英文 ID（NFC 用，e.g. NaiChung）">' +
+      '<div style="font-size:12px;color:#666;margin-top:4px">💡 此 ID 會寫入 NFC tag，建議用簡短英文</div>' +
       '<div class="row2"><input id="pN" placeholder="HK80 N" inputmode="decimal"><input id="pE" placeholder="HK80 E" inputmode="decimal"></div>' +
       '<button onclick="App.doCreateProject()">💾 建立</button>' +
       '<button class="x" onclick="App.closePanel()">✖ 關閉</button>'
     );
   }
   
+  // 🔥 [v2.22] 建立地盤：傳送 custom_id 到後端
   async function doCreateProject() {
     const name = $('#pName').value;
+    const customId = $('#pCustomId').value;
     const N = $('#pN').value;
     const E = $('#pE').value;
     
@@ -805,20 +807,27 @@ const App = (function() {
     
     try {
       const r = await ApiService.post({
-        type: 'create_project', name: name,
-        lat: w.lat.toFixed(6), lng: w.lng.toFixed(6)
+        type: 'create_project', 
+        name: name,
+        custom_id: customId,
+        lat: w.lat.toFixed(6), 
+        lng: w.lng.toFixed(6)
       });
       
-      alert(r.ok ? '✅ 地盤已建立！' : '❌ ' + r.error);
       if (r.ok) {
+        alert('✅ 地盤已建立！\nID: ' + r.project_id + '\n（請將此 ID 寫入 NFC tag）');
         closePanel();
         projectMarkersCache = null;
         treesCache.clear();
         spatialIndexCache = null;
         coordGroupsCache = null;
         await load();
+      } else {
+        alert('❌ ' + r.error);
       }
-    } catch (error) { alert('❌ 請求失敗：' + error.message); }
+    } catch (error) { 
+      alert('❌ 請求失敗：' + error.message); 
+    }
   }
   
   async function openTreeForm() {
@@ -927,7 +936,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.21）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.22）');
   }
   
   function checkURLParams() {
