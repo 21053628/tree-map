@@ -1,23 +1,19 @@
 /**
- * 樹木管理系統 - 座標轉換工具模組
+ * 樹木管理系統 - 座標轉換工具模組（極致性能優化版 v2.0）
  * 
- * 性能優化：
- * 1. LRU 快取機制，限制快取大小防止記憶體洩露
- * 2. 批量轉換支持，減少函數調用開銷
- * 3. 預熱常用座標轉換
- * 4. 使用二進制搜尋加速大量數據的座標轉換
- * 5. Web Worker 支持（可選），避免阻塞主線程
- * 6. 使用 TypedArray 減少記憶體佔用
- * 7. 延遲初始化 proj4 定義
+ * 🚀 優化重點：
+ * 1. [殺手級優化] 重構 LRU 快取：利用 Map 原生順序特性，將 get/set 複雜度由 O(N) 降至 O(1)
+ * 2. [記憶體優化] 移除冗餘嘅 cacheOrder 陣列，減少 GC (垃圾回收) 壓力
+ * 3. [批量優化] batchToHK80 減少不必要嘅 parseFloat 呼叫與記憶體分配
+ * 4. [容錯優化] 強化 proj4 未載入時嘅降級處理，避免阻斷主線程
  */
 
 const CoordUtils = (function() {
   'use strict';
   
   // LRU 快取配置
-  const MAX_CACHE_SIZE = 2000; // 增加快取大小至 2000，減少重複計算
-  const coordCache = new Map();
-  const cacheOrder = []; // 維護插入順序用於 LRU
+  const MAX_CACHE_SIZE = 2000; 
+  const coordCache = new Map(); // 🔥 優化：單純使用 Map，利用其原生插入順序特性實作 LRU
   
   // 預熱常見座標範圍（香港地區）
   const HK_BOUNDS = {
@@ -25,18 +21,19 @@ const CoordUtils = (function() {
     lngMin: 113.85, lngMax: 114.45
   };
   
-  // 預熱常用轉換結果
   let isPreheated = false;
-  
-  // 延遲加載的 proj4 轉換器（性能優化）
   let proj4Transform = null;
   
   /**
    * 初始化 proj4 轉換器（延遲加載）
    */
   function initProj4() {
-    if (!proj4Transform && window.proj4) {
-      proj4Transform = proj4(Config.PROJECTIONS.WGS84, Config.PROJECTIONS.HK80);
+    if (!proj4Transform && window.proj4 && typeof Config !== 'undefined') {
+      try {
+        proj4Transform = proj4(Config.PROJECTIONS.WGS84, Config.PROJECTIONS.HK80);
+      } catch (e) {
+        console.error('❌ proj4 初始化失敗:', e);
+      }
     }
     return proj4Transform;
   }
@@ -45,9 +42,8 @@ const CoordUtils = (function() {
    * 預熱常用座標轉換
    */
   function preheatCache() {
-    if (isPreheated) return;
+    if (isPreheated || !window.proj4) return;
     
-    // 預熱香港主要地標座標
     const landmarks = [
       { lat: 22.2783, lng: 114.1748 }, // 維多利亞公園
       { lat: 22.2952, lng: 114.1722 }, // 銅鑼灣
@@ -59,76 +55,60 @@ const CoordUtils = (function() {
     for (let i = 0; i < landmarks.length; i++) {
       toHK80(landmarks[i].lat, landmarks[i].lng);
     }
-    
     isPreheated = true;
   }
   
   /**
-   * 從快取中獲取並更新訪問順序
-   * @param {string} key - 快取鍵
-   * @returns {any|null}
+   * 🔥 [核心優化] O(1) 複雜度的 LRU 讀取
+   * 利用 Map 嘅特性：delete 後再 set，該 key 就會自動排到最後面（最新訪問）
    */
   function getFromCache(key) {
     if (!coordCache.has(key)) return null;
-    
+    const value = coordCache.get(key);
     // 更新訪問順序（移到末尾）
-    const idx = cacheOrder.indexOf(key);
-    if (idx > -1) {
-      cacheOrder.splice(idx, 1);
-      cacheOrder.push(key);
-    }
-    
-    return coordCache.get(key);
+    coordCache.delete(key);
+    coordCache.set(key, value);
+    return value;
   }
   
   /**
-   * 設置快取並維護 LRU 順序
-   * @param {string} key - 快取鍵
-   * @param {any} value - 快取值
+   * 🔥 [核心優化] O(1) 複雜度的 LRU 寫入與淘汰
    */
   function setCache(key, value) {
-    // 如果已存在，先移除舊的順序記錄
     if (coordCache.has(key)) {
-      const idx = cacheOrder.indexOf(key);
-      if (idx > -1) cacheOrder.splice(idx, 1);
-    }
-    
-    // 如果達到上限，移除最久未使用的條目
-    while (coordCache.size >= MAX_CACHE_SIZE && cacheOrder.length > 0) {
-      const oldestKey = cacheOrder.shift();
+      coordCache.delete(key);
+    } else if (coordCache.size >= MAX_CACHE_SIZE) {
+      // Map.keys().next().value 獲取最舊的 key (O(1))
+      const oldestKey = coordCache.keys().next().value;
       coordCache.delete(oldestKey);
     }
-    
     coordCache.set(key, value);
-    cacheOrder.push(key);
   }
   
   /**
-   * WGS84 轉 HK80 座標（優化版）
-   * @param {number} lat - 緯度
-   * @param {number} lng - 經度
-   * @returns {{N: number, E: number}|null} HK80 座標
+   * WGS84 轉 HK80 座標
    */
   function toHK80(lat, lng) {
-    if (!window.proj4 || !lat || !lng) {
-      console.warn('⚠️ proj4 未載入或座標無效');
-      return null;
+    if (!window.proj4 || !lat || !lng) return null;
+    
+    const numLat = +lat;
+    const numLng = +lng;
+    
+    // 快速驗證是否在香港範圍內（僅警告，不阻斷）
+    if (numLat < HK_BOUNDS.latMin - 0.1 || numLat > HK_BOUNDS.latMax + 0.1 ||
+        numLng < HK_BOUNDS.lngMin - 0.1 || numLng > HK_BOUNDS.lngMax + 0.1) {
+      // console.warn('⚠️ 座標可能不在香港範圍'); // 避免 console 刷屏影響效能
     }
     
-    // 快速驗證是否在香港範圍內
-    if (lat < HK_BOUNDS.latMin - 0.1 || lat > HK_BOUNDS.latMax + 0.1 ||
-        lng < HK_BOUNDS.lngMin - 0.1 || lng > HK_BOUNDS.lngMax + 0.1) {
-      console.warn('⚠️ 座標可能不在香港範圍');
-    }
-    
-    const key = `wgs2hk:${lat.toFixed(6)},${lng.toFixed(6)}`;
+    const key = 'wgs2hk:' + numLat.toFixed(6) + ',' + numLng.toFixed(6);
     const cached = getFromCache(key);
     if (cached) return cached;
     
     try {
-      // 使用預初始化的轉換器，避免重複創建
       const transform = initProj4();
-      const result = transform.forward([parseFloat(lng), parseFloat(lat)]);
+      if (!transform) return null;
+      
+      const result = transform.forward([numLng, numLat]);
       const converted = { N: result[1], E: result[0] };
       setCache(key, converted);
       return converted;
@@ -139,27 +119,23 @@ const CoordUtils = (function() {
   }
   
   /**
-   * HK80 轉 WGS84 座標（優化版）
-   * @param {number|string} N - 北距
-   * @param {number|string} E - 東距
-   * @returns {{lat: number, lng: number}|null} WGS84 座標
+   * HK80 轉 WGS84 座標
    */
   function toWGS84(N, E) {
-    if (!window.proj4) {
-      console.warn('⚠️ proj4 未載入');
-      return null;
-    }
+    if (!window.proj4) return null;
     
-    const key = `hk2wgs:${N},${E}`;
+    const numN = +N;
+    const numE = +E;
+    
+    const key = 'hk2wgs:' + numN + ',' + numE;
     const cached = getFromCache(key);
     if (cached) return cached;
     
     try {
-      // 使用預初始化的反向轉換器，避免重複創建
-      if (!proj4Transform) {
-        initProj4();
-      }
-      const result = proj4Transform.inverse([parseFloat(E), parseFloat(N)]);
+      const transform = initProj4();
+      if (!transform) return null;
+      
+      const result = transform.inverse([numE, numN]);
       const converted = { lat: result[1], lng: result[0] };
       setCache(key, converted);
       return converted;
@@ -170,83 +146,47 @@ const CoordUtils = (function() {
   }
   
   /**
-   * 批量轉換座標（高性能版 - 使用文檔碎片和批量處理）
-   * @param {Array<{lat:number,lng:number}>} coords - WGS84 座標陣列
-   * @returns {Array<{N:number,E:number}>} HK80 座標陣列
+   * 批量轉換座標（高性能版）
    */
   function batchToHK80(coords) {
-    const results = new Array(coords.length);
-    const toConvert = [];
-    const cacheKeys = [];
+    if (!coords || coords.length === 0) return [];
     
-    // 第一遍：檢查快取
+    const results = new Array(coords.length);
+    const transform = initProj4();
+    
     for (let i = 0; i < coords.length; i++) {
-      const key = `wgs2hk:${coords[i].lat.toFixed(6)},${coords[i].lng.toFixed(6)}`;
-      cacheKeys.push(key);
+      const c = coords[i];
+      const numLat = +c.lat;
+      const numLng = +c.lng;
+      const key = 'wgs2hk:' + numLat.toFixed(6) + ',' + numLng.toFixed(6);
+      
       const cached = getFromCache(key);
       if (cached) {
         results[i] = cached;
-      } else {
-        toConvert.push({ index: i, coord: coords[i], key: key });
-      }
-    }
-    
-    // 第二遍：批量轉換未快取的座標
-    const transform = initProj4();
-    if (transform) {
-      for (let i = 0; i < toConvert.length; i++) {
-        const item = toConvert[i];
+      } else if (transform) {
         try {
-          const result = transform.forward([parseFloat(item.coord.lng), parseFloat(item.coord.lat)]);
-          const converted = { N: result[1], E: result[0] };
-          results[item.index] = converted;
-          setCache(item.key, converted);
+          const res = transform.forward([numLng, numLat]);
+          const converted = { N: res[1], E: res[0] };
+          results[i] = converted;
+          setCache(key, converted);
         } catch (error) {
-          console.error('❌ 批量轉換失敗:', error);
-          results[item.index] = { N: 0, E: 0 };
+          results[i] = { N: 0, E: 0 };
         }
-      }
-    } else {
-      // proj4 不可用時的降級處理
-      for (let i = 0; i < toConvert.length; i++) {
-        results[toConvert[i].index] = { N: 0, E: 0 };
+      } else {
+        results[i] = { N: 0, E: 0 };
       }
     }
-    
     return results;
   }
   
-  /**
-   * 格式化數字（小數點後 1 位）
-   * @param {number} n - 數字
-   * @returns {string} 格式化後的字串
-   */
-  function format1(n) {
-    return Number(n).toFixed(1);
-  }
+  function format1(n) { return Number(n).toFixed(1); }
+  function format5(n) { return Number(n).toFixed(5); }
   
-  /**
-   * 格式化數字（小數點後 5 位）
-   * @param {number} n - 數字
-   * @returns {string} 格式化後的字串
-   */
-  function format5(n) {
-    return Number(n).toFixed(5);
-  }
-  
-  /**
-   * 清除座標快取
-   */
   function clearCache() {
     coordCache.clear();
-    cacheOrder.length = 0;
     isPreheated = false;
   }
   
-  /**
-   * 獲取快取統計信息
-   * @returns {object}
-   */
   function getCacheStats() {
     return {
       size: coordCache.size,
@@ -255,7 +195,6 @@ const CoordUtils = (function() {
     };
   }
   
-  // 公開 API
   return {
     toHK80,
     toWGS84,
@@ -268,7 +207,6 @@ const CoordUtils = (function() {
   };
 })();
 
-// 匯出模組
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = CoordUtils;
 }
