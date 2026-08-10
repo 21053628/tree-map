@@ -152,51 +152,55 @@ body.panel-open::before {
   transform: scale(1.15) rotate(3deg);
 }
 
+/* ================= 樹木標記 v2.13：狀態漸變氣球 ================= */
 .treeIcon {
   display: flex; flex-direction: column; align-items: center;
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s ease;
+  transition: transform .18s cubic-bezier(.34,1.56,.64,1), filter .18s ease;
   cursor: pointer;
   will-change: transform, filter;
 }
 .treeIcon:hover {
-  transform: scale(1.15) translateY(-3px);
-  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.3)) brightness(1.05);
-}
-.treeIcon .lbl {
-  background: #263238; color: #ffd54f; font-weight: bold; font-size: 11px;
-  padding: 3px 8px; border-radius: 10px; border: 1.5px solid #fff;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,.3)); 
-  margin-bottom: 0; white-space: nowrap;
-  transition: all 0.15s ease;
-}
-.treeIcon:hover .lbl {
-  background: #ffd54f; color: #1a237e; font-weight: 900;
-  transform: scale(1.08);
+  transform: translateY(-4px) scale(1.08);
+  filter: drop-shadow(0 8px 14px rgba(0,0,0,.35)) brightness(1.08);
 }
 
-/* 🔥 [v2.12 更新] 指向線：高度改由 JS 動態控制 (inline style)，移除固定高度與 margin */
+/* 號碼牌：狀態色漸變 + 白邊 + 玻璃光澤 + 立體陰影 */
+.treeIcon .lbl {
+  background: linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 45%, rgba(0,0,0,.10) 100%), var(--c, #2e7d32);
+  color: #fff;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: .3px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.35);
+  text-shadow: 0 1px 2px rgba(0,0,0,.45);
+  white-space: nowrap;
+  transition: transform .15s ease;
+}
+.treeIcon:hover .lbl { transform: scale(1.06); }
+
+/* 指向線：更幼更精緻 */
 .treeIcon .stem {
   display: block;
-  width: 2px;
-  margin: 0; 
-  background: linear-gradient(to bottom, rgba(38,50,56,.3), rgba(38,50,56,.85));
+  width: 1.5px;
+  margin: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.55));
   border-radius: 1px;
-  transition: background 0.15s ease; /* 只 transition 顏色，避免高度動畫干擾 JS 動態流計算 */
-}
-.treeIcon:hover .stem {
-  background: #ffd54f;
-  /* 移除 hover 時的 height 變化，保持 JS 計算出的精確防重疊高度 */
 }
 
+/* 圓點：與號碼牌同色，白邊包邊 */
 .treeIcon .dot {
-  width: 14px; height: 14px; border-radius: 50%;
-  border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4);
-  transition: all 0.15s ease;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--c, #2e7d32);
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.45);
+  transition: transform .15s ease, box-shadow .15s ease;
 }
 .treeIcon:hover .dot {
-  border-width: 3px; border-color: #fff;
-  box-shadow: 0 0 12px currentColor, 0 2px 6px rgba(0,0,0,0.4);
-  animation: pulse 1s infinite;
+  transform: scale(1.25);
+  box-shadow: 0 0 0 4px rgba(255,255,255,.35), 0 2px 6px rgba(0,0,0,.4);
 }
 
 @keyframes pulse {
@@ -386,11 +390,8 @@ body.panel-open::before {
   
   #panel::before { background: #555; }
 
-  /* 🔥 [v2.12] 深色模式下嘅指向線適配，確保夜間高對比度 */
+  /* 🔥 [v2.13] 深色模式指向線適配，確保夜間高對比度 */
   .treeIcon .stem {
-    background: linear-gradient(to bottom, rgba(200,200,200,.3), rgba(255,255,255,.85));
-  }
-  .treeIcon:hover .stem {
-    background: #ffd54f;
+    background: linear-gradient(to bottom, rgba(255,255,255,.2), rgba(255,255,255,.75));
   }
 }
