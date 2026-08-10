@@ -1,9 +1,9 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.13 - 狀態漸變氣球設計）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.14 - 之字形扇開引導線）
  * 
  * 🚀 優化重點：
- * 1-21. [v2.1 - v2.12 核心優化] 包含標籤動態流防重疊、精準定位、O(1) 查找、NFC 防打架、防斬頂、狀態回饋等
- * 22. [v2.13] 全新「狀態漸變氣球」設計：將樹木狀態顏色注入 CSS 變數，號碼牌與圓點同色漸變，配合玻璃光澤與立體陰影
+ * 1-22. [v2.1 - v2.13 核心優化] 包含精準定位、O(1) 查找、NFC 防打架、防斬頂、狀態漸變氣球等
+ * 23. [v2.14] 全新「之字形扇開」設計：重疊號碼牌左右交錯扇開，配合 SVG 狀態色斜線引導，徹底告別難睇嘅垂直疊羅漢
  */
 
 const App = (function() {
@@ -400,15 +400,19 @@ const App = (function() {
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       
-      // 🔥 [v2.12] 動態流：根據層級自動拉伸指向線，將號碼牌錯開高度
+      // 🔥 [v2.14] 之字形扇開：左右交錯 + 縮短垂直距離，更清晰易讀
       const level = labelLevelMap.get(t.tree_id) || 0;
-      const stemH = 22 + level * 26;
-      const totalH = 22 + stemH + 18; // 號碼牌(約22) + 指向線(stemH) + 圓點(約18)
+      const tier = Math.ceil(level / 2);                          // 垂直層
+      const side = level === 0 ? 0 : (level % 2 === 1 ? -1 : 1); // 左右交錯
+      const dx = side * (20 + Math.max(0, tier - 1) * 18);       // 水平扇開距離
+      const stemH = 16 + tier * 20;                              // 垂直高度（大幅縮短）
+      const totalH = 22 + stemH + 17;
+      const cx = 55;
       
-      // 🔥 [v2.13] 狀態顏色注入 CSS 變數 --c，號碼牌與圓點同色漸變
+      // 🔥 [v2.14] 使用 SVG 繪製狀態色斜線引導線
       const html = '<div class="treeIcon" style="--c:' + color + '">' +
-                   '<span class="lbl">' + t.tree_id + '</span>' +
-                   '<span class="stem" style="height:' + stemH + 'px"></span>' +
+                   '<span class="lbl" style="margin-left:' + dx + 'px">' + t.tree_id + '</span>' +
+                   '<svg class="leader" width="110" height="' + stemH + '"><line x1="' + (cx + dx) + '" y1="0" x2="' + cx + '" y2="' + stemH + '"></line></svg>' +
                    '<span class="dot"></span>' +
                    '</div>';
       
@@ -416,9 +420,9 @@ const App = (function() {
         icon: L.divIcon({
           className: '',
           html: html,
-          iconSize: [70, totalH],
-          iconAnchor: [35, totalH - 9], // 🔥 圓點中心永遠精準對齊 GPS 座標
-          popupAnchor: [0, -(totalH - 4)]
+          iconSize: [110, totalH],
+          iconAnchor: [cx, totalH - 8], // 🔥 圓點中心永遠精準對齊 GPS 座標
+          popupAnchor: [0, -(totalH - 2)]
         })
       });
       
@@ -712,7 +716,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.13）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.14）');
   }
   
   function checkURLParams() {
