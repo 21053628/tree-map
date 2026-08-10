@@ -58,7 +58,18 @@ button { touch-action: manipulation; cursor: pointer; }
   position: absolute; top: 8px; right: 8px; z-index: 999;
   display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
   padding-top: var(--safe-top);
+  /* 🔥 [v2.25 核心修復] 容器透明區域唔再攞走點擊，popup 喺最頂都撳得到 */
+  pointer-events: none;
 }
+
+/* 🔥 [v2.25] 只有真正嘅互動元素先恢復可點擊 */
+#bar select,
+#bar button,
+#bar input,
+#bar .search-results {
+  pointer-events: auto;
+}
+
 #bar select {
   padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border);
   font-size: 15px; background: rgba(255,255,255,0.85); color: var(--text);
@@ -327,17 +338,52 @@ body.panel-open::before {
 .leaflet-popup-content a:hover { background: var(--primary-dark); }
 .leaflet-popup-content a:active { transform: scale(0.98); }
 
+/* 🔥 [v2.25] 關閉按鈕：44px 無形觸發區 + 32px 視覺圓圈，× 完美置中 */
 .leaflet-popup-close-button {
-  width: 32px !important; height: 32px !important;
-  top: 8px !important; right: 8px !important; z-index: 1000;
-  background: rgba(0,0,0,0.05) !important; border-radius: 50% !important;
-  display: flex !important; align-items: center !important; justify-content: center !important;
-  font-size: 20px !important; color: #666 !important;
-  padding: 0 !important; line-height: 32px !important; text-align: center !important;
-  transition: background 0.2s, color 0.2s, transform 0.2s;
+  position: absolute;
+  width: 44px !important;
+  height: 44px !important;
+  top: 4px !important;
+  right: 4px !important;
+  z-index: 1000;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  text-decoration: none !important;
+  color: transparent !important;   /* 隱藏 Leaflet 原本嘅 × 文字 */
+  font-size: 0 !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.leaflet-popup-close-button:hover { background: rgba(0,0,0,0.1) !important; color: #000 !important; transform: rotate(90deg); }
-.leaflet-popup-close-button span { display: block; margin-top: -2px; font-family: Arial, sans-serif; }
+/* 視覺圓圈（32px）：用偽元素畫，觸發區保持 44px */
+.leaflet-popup-close-button::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+/* 新嘅 ×：完美置中 */
+.leaflet-popup-close-button::after {
+  content: '×';
+  position: relative;
+  z-index: 1;
+  font-size: 20px;
+  line-height: 1;
+  font-family: system-ui, sans-serif;
+  color: #fff;
+}
+.leaflet-popup-close-button:active::before {
+  transform: scale(0.88);
+  background: rgba(0, 0, 0, 0.55);
+}
 
 .popup-img {
   max-width: 100% !important; height: auto; border-radius: 8px;
@@ -469,8 +515,9 @@ button.is-loading::after {
   #status.success { color: #81c784; border-color: #81c784; }
   #status.error { color: #ef9a9a; border-color: #ef9a9a; background: rgba(40, 20, 20, 0.9); }
   
-  .leaflet-popup-close-button { color: #aaa !important; background: rgba(255,255,255,0.1) !important; }
-  .leaflet-popup-close-button:hover { color: #fff !important; background: rgba(255,255,255,0.2) !important; }
+  /* 🔥 [v2.25] 深色模式關閉按鈕 */
+  .leaflet-popup-close-button::before { background: rgba(255, 255, 255, 0.18); }
+  .leaflet-popup-close-button:active::before { background: rgba(255, 255, 255, 0.32); }
   
   #panel::before { background: #555; }
   
