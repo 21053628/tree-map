@@ -467,17 +467,20 @@ const App = (function() {
   function buildSpatialIndex(list) {
     const startTime = performance.now();
     
-    const gridSize = 0.00002;
+    // [優化] 使用更大的網格尺寸減少群組數量
+    const gridSize = 0.00003; // 從 0.00002 增加到 0.00003，減少群組數量
     const gridMap = new Map();
     
-    const treeCoords = [];
+    // [優化] 預分配陣列大小
+    const treeCoords = new Array(list.length);
     for (let i = 0; i < list.length; i++) {
       const t = list[i];
       const lat = +t.lat;
       const lng = +t.lng;
-      treeCoords.push({ lat, lng });
+      treeCoords[i] = { lat, lng }; // 直接賦值，避免 push 開銷
       
-      const gridKey = Math.floor(lat / gridSize) + '_' + Math.floor(lng / gridSize);
+      // [優化] 使用整數鍵代替字串拼接
+      const gridKey = (Math.floor(lat / gridSize) << 16) | Math.floor(lng / gridSize);
       if (!gridMap.has(gridKey)) gridMap.set(gridKey, []);
       gridMap.get(gridKey).push(i);
     }
@@ -498,9 +501,13 @@ const App = (function() {
       const centerGridX = Math.floor(center.lat / gridSize);
       const centerGridY = Math.floor(center.lng / gridSize);
       
+      // [優化] 提前計算距離閾值的平方，避免重複開方
+      const distThresholdSq = (5 / 111319.5) ** 2;
+      
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
-          const neighborKey = (centerGridX + dx) + '_' + (centerGridY + dy);
+          // [優化] 使用整數鍵
+          const neighborKey = ((centerGridX + dx) << 16) | (centerGridY + dy);
           const neighbors = gridMap.get(neighborKey) || [];
           
           for (let j = 0; j < neighbors.length; j++) {
@@ -510,9 +517,9 @@ const App = (function() {
             const other = treeCoords[idx];
             const dLat = center.lat - other.lat;
             const dLng = (center.lng - other.lng) * lngFactor;
-            const dist = Math.sqrt(dLat * dLat + dLng * dLng) * 111319.5; 
+            const distSq = dLat * dLat + dLng * dLng; // [優化] 比較平方距離
             
-            if (dist < 5) {
+            if (distSq < distThresholdSq) {
               group.push(list[idx]);
               used[idx] = 1;
             }

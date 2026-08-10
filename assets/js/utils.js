@@ -9,13 +9,15 @@
  * 5. Web Worker 支持（可選），避免阻塞主線程
  * 6. 使用 TypedArray 減少記憶體佔用
  * 7. 延遲初始化 proj4 定義
+ * 8. [優化] 使用整數鍵代替字串鍵減少記憶體分配
+ * 9. [優化] 使用位運算加速網格計算
  */
 
 const CoordUtils = (function() {
   'use strict';
   
   // LRU 快取配置
-  const MAX_CACHE_SIZE = 2000; // 增加快取大小至 2000，減少重複計算
+  const MAX_CACHE_SIZE = 5000; // 增加至 5000 以適應更大數據集
   const coordCache = new Map();
   const cacheOrder = []; // 維護插入順序用於 LRU
   
@@ -30,6 +32,10 @@ const CoordUtils = (function() {
   
   // 延遲加載的 proj4 轉換器（性能優化）
   let proj4Transform = null;
+  
+  // 常數預計算（避免重複計算）
+  const DEG_TO_RAD = Math.PI / 180;
+  const CACHE_KEY_PRECISION = 1e6; // 使用整數鍵代替 toFixed
   
   /**
    * 初始化 proj4 轉換器（延遲加載）
@@ -65,7 +71,7 @@ const CoordUtils = (function() {
   
   /**
    * 從快取中獲取並更新訪問順序
-   * @param {string} key - 快取鍵
+   * @param {string|number} key - 快取鍵
    * @returns {any|null}
    */
   function getFromCache(key) {
@@ -83,7 +89,7 @@ const CoordUtils = (function() {
   
   /**
    * 設置快取並維護 LRU 順序
-   * @param {string} key - 快取鍵
+   * @param {string|number} key - 快取鍵
    * @param {any} value - 快取值
    */
   function setCache(key, value) {
@@ -104,6 +110,18 @@ const CoordUtils = (function() {
   }
   
   /**
+   * 生成整數快取鍵（比字串拼接更快）
+   * @param {number} lat 
+   * @param {number} lng 
+   * @returns {number}
+   */
+  function generateCacheKey(lat, lng) {
+    const latInt = Math.round(lat * CACHE_KEY_PRECISION);
+    const lngInt = Math.round(lng * CACHE_KEY_PRECISION);
+    return (latInt << 20) | (lngInt & 0xFFFFF); // 使用位運算組合鍵
+  }
+  
+  /**
    * WGS84 轉 HK80 座標（優化版）
    * @param {number} lat - 緯度
    * @param {number} lng - 經度
@@ -121,8 +139,9 @@ const CoordUtils = (function() {
       console.warn('⚠️ 座標可能不在香港範圍');
     }
     
-    const key = `wgs2hk:${lat.toFixed(6)},${lng.toFixed(6)}`;
-    const cached = getFromCache(key);
+    // 使用整數鍵減少字串分配
+    const cacheKey = generateCacheKey(lat, lng);
+    const cached = getFromCache(cacheKey);
     if (cached) return cached;
     
     try {
@@ -130,7 +149,7 @@ const CoordUtils = (function() {
       const transform = initProj4();
       const result = transform.forward([parseFloat(lng), parseFloat(lat)]);
       const converted = { N: result[1], E: result[0] };
-      setCache(key, converted);
+      setCache(cacheKey, converted);
       return converted;
     } catch (error) {
       console.error('❌ HK80 轉換失敗:', error);
@@ -150,8 +169,10 @@ const CoordUtils = (function() {
       return null;
     }
     
-    const key = `hk2wgs:${N},${E}`;
-    const cached = getFromCache(key);
+    const nVal = parseFloat(N);
+    const eVal = parseFloat(E);
+    const cacheKey = 'hk:' + nVal.toFixed(2) + ',' + eVal.toFixed(2);
+    const cached = getFromCache(cacheKey);
     if (cached) return cached;
     
     try {
@@ -159,9 +180,9 @@ const CoordUtils = (function() {
       if (!proj4Transform) {
         initProj4();
       }
-      const result = proj4Transform.inverse([parseFloat(E), parseFloat(N)]);
+      const result = proj4Transform.inverse([eVal, nVal]);
       const converted = { lat: result[1], lng: result[0] };
-      setCache(key, converted);
+      setCache(cacheKey, converted);
       return converted;
     } catch (error) {
       console.error('❌ WGS84 轉換失敗:', error);
@@ -181,7 +202,7 @@ const CoordUtils = (function() {
     
     // 第一遍：檢查快取
     for (let i = 0; i < coords.length; i++) {
-      const key = `wgs2hk:${coords[i].lat.toFixed(6)},${coords[i].lng.toFixed(6)}`;
+      const key = generateCacheKey(coords[i].lat, coords[i].lng);
       cacheKeys.push(key);
       const cached = getFromCache(key);
       if (cached) {
