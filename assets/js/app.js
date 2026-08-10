@@ -1,9 +1,9 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.14 - 之字形扇開引導線）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.16 - 自包含垂直彩線）
  * 
  * 🚀 優化重點：
- * 1-22. [v2.1 - v2.13 核心優化] 包含精準定位、O(1) 查找、NFC 防打架、防斬頂、狀態漸變氣球等
- * 23. [v2.14] 全新「之字形扇開」設計：重疊號碼牌左右交錯扇開，配合 SVG 狀態色斜線引導，徹底告別難睇嘅垂直疊羅漢
+ * 1-23. [v2.1 - v2.15 核心優化] 包含精準定位、O(1) 查找、NFC 防打架、防斬頂、狀態漸變氣球等
+ * 24. [v2.16] 自包含 inline style Marker：垂直彩色引導線永遠唔交叉、免疫 CSS 快取錯配、最多 3 層分層
  */
 
 const App = (function() {
@@ -48,14 +48,13 @@ const App = (function() {
   let resizeTimer = null;
   let loadDebounceTimer = null;
   
-  // 🔥 [v2.12 新增] 標籤動態流：自動計算每棵樹號碼牌嘅高度層級，避免重叠
+  // 🔥 標籤分層：自動計算每棵樹號碼牌嘅高度層級，避免重叠
   function computeLabelLevels(list) {
     const levelMap = new Map();
     const placed = [];
     const LAT_R = 0.00018; // 約 20m 碰撞半徑 (緯度)
     const LNG_R = 0.00022; // 約 20m 碰撞半徑 (經度)
     
-    // 由南至北、由西至東排序，確保流動順序穩定
     const sorted = list.slice().sort(function(a, b) {
       return (+a.lat - +b.lat) || (+a.lng - +b.lng);
     });
@@ -67,7 +66,6 @@ const App = (function() {
       });
       let level = 0;
       const usedLevels = near.map(function(p) { return p.level; });
-      // 搵出最細嘅可用高度層（同一層附近冇人先用）
       while (usedLevels.indexOf(level) !== -1) level++;
       placed.push({ lat: lat, lng: lng, level: level });
       levelMap.set(t.tree_id, level);
@@ -389,7 +387,7 @@ const App = (function() {
       treeToGroupMap = spatialIndexCache.treeToGroupMap;
     }
     
-    // 🔥 [v2.12] 動態流：計算每棵樹號碼牌嘅高度層級
+    // 🔥 分層：計算每棵樹號碼牌嘅高度層級
     const labelLevelMap = computeLabelLevels(list);
     
     list.forEach(function(t) {
@@ -400,29 +398,32 @@ const App = (function() {
       
       const color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
       
-      // 🔥 [v2.14] 之字形扇開：左右交錯 + 縮短垂直距離，更清晰易讀
-      const level = labelLevelMap.get(t.tree_id) || 0;
-      const tier = Math.ceil(level / 2);                          // 垂直層
-      const side = level === 0 ? 0 : (level % 2 === 1 ? -1 : 1); // 左右交錯
-      const dx = side * (20 + Math.max(0, tier - 1) * 18);       // 水平扇開距離
-      const stemH = 16 + tier * 20;                              // 垂直高度（大幅縮短）
-      const totalH = 22 + stemH + 17;
-      const cx = 55;
+      // 🔥 [v2.16] 自包含 inline style：垂直彩線永遠唔交叉、免疫 CSS 快取錯配
+      const level = Math.min(labelLevelMap.get(t.tree_id) || 0, 2); // 最多 3 層
+      const stemH = 12 + level * 24;   // 12 / 36 / 60
+      const dotR = 14;
+      const W2 = 120, ax2 = 60;
+      const totalH2 = 24 + stemH + dotR; // 牌(~24) + 線 + 點
+      const dotY = totalH2 - dotR / 2;   // 圓點中心
+      const lineTop = dotY - dotR / 2 - stemH;
       
-      // 🔥 [v2.14] 使用 SVG 繪製狀態色斜線引導線
-      const html = '<div class="treeIcon" style="--c:' + color + '">' +
-                   '<span class="lbl" style="margin-left:' + dx + 'px">' + t.tree_id + '</span>' +
-                   '<svg class="leader" width="110" height="' + stemH + '"><line x1="' + (cx + dx) + '" y1="0" x2="' + cx + '" y2="' + stemH + '"></line></svg>' +
-                   '<span class="dot"></span>' +
-                   '</div>';
+      const html =
+        '<div style="position:relative;width:' + W2 + 'px;height:' + totalH2 + 'px;pointer-events:none;">' +
+          /* 圓點：精準釘喺 GPS 座標 */
+          '<div style="position:absolute;left:' + ax2 + 'px;top:' + dotY + 'px;transform:translate(-50%,-50%);width:' + dotR + 'px;height:' + dotR + 'px;border-radius:50%;background:' + color + ';border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);pointer-events:auto;cursor:pointer;"></div>' +
+          /* 垂直彩線：永遠直上直落，絕不交叉 */
+          '<div style="position:absolute;left:' + ax2 + 'px;top:' + lineTop + 'px;height:' + stemH + 'px;width:2px;transform:translateX(-50%);background:' + color + ';opacity:.85;border-radius:1px;box-shadow:0 0 0 .5px rgba(255,255,255,.6);"></div>' +
+          /* 號碼牌：永遠喺自己圓點正上方 */
+          '<div style="position:absolute;left:' + ax2 + 'px;top:' + lineTop + 'px;transform:translate(-50%,-100%);background:' + color + ';color:#fff;font-weight:800;font-size:11px;letter-spacing:.3px;padding:4px 10px;border-radius:999px;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.35);white-space:nowrap;pointer-events:auto;cursor:pointer;font-family:system-ui,sans-serif;text-shadow:0 1px 2px rgba(0,0,0,.45);">' + t.tree_id + '</div>' +
+        '</div>';
       
       const marker = L.marker([lat, lng], {
         icon: L.divIcon({
           className: '',
           html: html,
-          iconSize: [110, totalH],
-          iconAnchor: [cx, totalH - 8], // 🔥 圓點中心永遠精準對齊 GPS 座標
-          popupAnchor: [0, -(totalH - 2)]
+          iconSize: [W2, totalH2],
+          iconAnchor: [ax2, dotY], // 🔥 圓點中心永遠精準對齊 GPS 座標
+          popupAnchor: [0, -(totalH2 - 4)]
         })
       });
       
@@ -716,7 +717,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.14）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.16）');
   }
   
   function checkURLParams() {
