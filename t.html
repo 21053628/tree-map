@@ -17,19 +17,26 @@
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 <link rel="apple-touch-icon" href="icons/icon.svg">
 
+<!-- 🔥 LCP 優化：關鍵資源預連線（DNS + TLS 握手） -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
-<!-- 🔥 LCP 優化：預先連線 Google 圖片伺服器，慳返 DNS/TLS 握手時間 -->
 <link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
 <link rel="preconnect" href="https://drive.usercontent.google.com" crossorigin>
-<!-- 🔥 LCP 優化：預先同 API 伺服器握手，慳返 TTFB 時間 -->
 <link rel="preconnect" href="https://script.google.com" crossorigin>
-<!-- 🔥 修正：移除 crossorigin/preload，避免 PWA 快取 CORS 衝突導致 CSS 被瀏覽器拒絕套用 -->
+<!-- 🔥 DNS 預解析（作為 preconnect 的備援） -->
+<link rel="dns-prefetch" href="https://lh3.googleusercontent.com">
+<link rel="dns-prefetch" href="https://drive.google.com">
+
+<!-- 🔥 [修正] 移除 crossorigin 屬性 + 加入多 CDN fallback，避免 PWA 緩存 CORS 衝突阻塞主線程 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
-<!-- DOMPurify for XSS protection -->
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" crossorigin defer></script>
+
+<!-- 🔥 [修正] DOMPurify：移除 crossorigin + 加入多 CDN fallback，根治 LCP 延遲元兇 -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+<script>if(!window.DOMPurify){document.write('<script src="https://unpkg.com/dompurify@3.0.6/dist/purify.min.js"><\/script>');}</script>
+<script>if(!window.DOMPurify){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"><\/script>');}</script>
+
 <style>
   :root{--primary:#2e7d32;--primary-dark:#1b5e20;--secondary:#546e7a;--bg:#f1f5f1;--text:#222;--muted:#666;--card-bg:#fff;--radius:12px;--shadow:0 2px 8px rgba(0,0,0,.08)}
   *{box-sizing:border-box}body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent;line-height:1.6}
@@ -64,7 +71,6 @@
   .photo-preview-remove:hover{background:rgba(255,0,0,1)}
   .photo-count{font-size:13px;color:var(--muted);margin-bottom:8px}
   
-  /* 🔥 新增：骨架屏 (Skeleton) 閃爍動畫，完美消除最後 0.0037 嘅 CLS 移位 */
   .sk{background:linear-gradient(90deg,#e8e8e8,#f5f5f5,#e8e8e8);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:8px}
   @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
@@ -73,7 +79,6 @@
 </style>
 </head>
 <body>
-<!-- 🔥 新增：骨架屏 HTML，預先模擬最終版面高度，避免內容載入時產生位移 -->
 <div class="wrap" id="app">
   <div class="sk" style="height:40px;width:110px;margin-bottom:12px"></div>
   <div class="card">
@@ -87,9 +92,13 @@
   <div class="card"><div class="sk" style="height:120px"></div></div>
 </div>
 
-<!-- 🔥 LCP 優化：加入 defer，唔再阻塞主線程，讓 API 請求同 LCP 圖片搶先載入 -->
+<!-- 🔥 LCP 優化：關鍵腳本加入 defer，唔阻塞主線程 -->
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
+<script>if(!window.L){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>');}</script>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" defer></script>
+<script>if(!window.proj4){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"><\/script>');}</script>
+<script>if(!window.proj4){document.write('<script src="https://unpkg.com/proj4@2.9.2/dist/proj4.js"><\/script>');}</script>
 
 <script>
 (function(){
@@ -132,7 +141,6 @@
   const prj = params.get('prj') || params.get('project_id') || '';
   let TREE = null;
 
-  // 🔥 修正：聰明返回地圖 —— 從地圖入嚟就原路返回（保留原本視野），NFC 直接開就先跳轉定位
   window.goBackToMap = function(e){
     try {
       if (document.referrer && document.referrer.indexOf('index.html') !== -1 && history.length > 1) {
@@ -181,11 +189,9 @@
     }
   }
 
-  // 🔥 [更新] 巡查歷史只顯示日期（yyyy-MM-dd），不顯示時間
-  // 兼容新記錄（純日期字串）同舊記錄（完整日期時間，自動斬剩日期）
   function fmtTime(v){
     const s = String(v);
-    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // 新記錄：純日期，直接顯示
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
     const d = new Date(v);
     if(isNaN(d.getTime())) return s.slice(0,10);
     const p = function(n){ return String(n).padStart(2,'0'); };
@@ -215,7 +221,6 @@
 
   function render(t){
     const hk = toHK(t.lat, t.lng);
-    // 🔥 修正：返回連結加入 lat/lng 雙保險，並使用聰明返回
     var html = '<a class="back" href="index.html?tree_id=' + encodeURIComponent(t.tree_id) + '&project_id=' + encodeURIComponent(t.project_id || '') + '&lat=' + encodeURIComponent(t.lat) + '&lng=' + encodeURIComponent(t.lng) + '" onclick="return goBackToMap(event)">⬅ 地圖</a>' +
     '<div class="card">' +
       '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
@@ -233,7 +238,7 @@
     }
     if(mainPhotos && mainPhotos.length > 0){
       for(var i = 0; i < mainPhotos.length; i++){
-        // 🔥 LCP 優化：第一張相片（LCP 元素）設為 eager + fetchpriority="high"，其餘先 lazy load
+        // 🔥 LCP 優化：第一張相片（LCP 元素）設為 eager + fetchpriority="high"
         const isLCP = (i === 0);
         const loadingAttr = isLCP ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
         html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" ' + loadingAttr + ' decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="zoomImage(this.src)">';
@@ -263,14 +268,12 @@
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // 🔥 終極修正 2：配合 defer 異步加載，自動輪詢等待 Leaflet 準備好
   function initMiniMap(t){
     const lat=+t.lat, lng=+t.lng;
     if(!lat||!lng) return;
 
     let retries = 0;
     function tryInit() {
-      // 如果 Leaflet 仲未下載完，每 100ms 檢查一次
       if (!window.L) {
         if (retries < 50) { retries++; setTimeout(tryInit, 100); }
         return;
