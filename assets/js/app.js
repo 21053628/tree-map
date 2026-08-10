@@ -1,10 +1,12 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.23 - 英文 ID 大小寫容錯）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.24 - 地段 DD/LOT 編號顯示）
  * 
  * 🚀 優化重點：
- * 1-28. [v2.1 - v2.21 核心優化] 包含極簡狀態圓點、搜尋、地段索引圖層、全面效能升級等
- * 29. [v2.22] 建立地盤支援自訂英文 ID（custom_id），專為 NFC tag 設計
- * 30. [v2.23] 英文 project_id 大小寫容錯：NFC/URL 大細階寫錯都搵到正确地盤
+ * 1-30. [v2.1 - v2.23 核心優化] 包含極簡狀態圓點、搜尋、地段索引圖層、全面效能升級、英文 ID 等
+ * 31. [v2.24] 地段索引顯示 DD/LOT 編號：
+ *             - 通用屬性抽取器：自動爬 feature 層收集所有非幾何欄位
+ *             - 優先組合 DD xxx LOT xxx 顯示
+ *             - Debug log 方便驗證
  */
 
 const App = (function() {
@@ -150,13 +152,20 @@ const App = (function() {
     });
   }
 
-  // 🔥 [v2.20] 地段索引：GML 解析器（優化版）
+  // 🔥 [v2.24] 地段索引：GML 解析器（通用屬性抽取版，自動讀取 DD/LOT 等資料）
   function parseGML(gmlText) {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(gmlText, 'text/xml');
     const polygons = [];
     
     const polygonElements = xmlDoc.getElementsByTagNameNS('*', 'Polygon');
+    
+    // 🐞 Debug：印出第一個 feature 嘅 XML，確認屬性元素名
+    if (polygonElements.length > 0) {
+      let feat = polygonElements[0];
+      for (let up = 0; up < 4 && feat.parentElement; up++) feat = feat.parentElement;
+      console.log('🗺️ [Lot GML Debug] Feature 樣本:\n' + (feat.outerHTML || '').slice(0, 2000));
+    }
     
     for (let i = 0, len = polygonElements.length; i < len; i++) {
       const poly = polygonElements[i];
@@ -192,16 +201,51 @@ const App = (function() {
       }
       
       if (coords.length >= 3) {
-        let lotNo = '';
-        const nameEl = poly.getElementsByTagNameNS('*', 'name')[0] || 
-                       poly.getElementsByTagNameNS('*', 'lotNumber')[0];
-        if (nameEl) lotNo = nameEl.textContent.trim();
-        
-        polygons.push({ coords: coords, lotNo: lotNo });
+        polygons.push({ coords: coords, attrs: extractLotAttrs_(poly) });
       }
     }
     
     return polygons;
+  }
+
+   // 🔥 [v2.25] 通用屬性抽取加強版：同時讀 XML attributes + 葉元素，爬升 6 層
+  const GEOM_TAGS_ = ['polygon','multisurface','surface','surfacemember','exterior','interior','linearring','poslist','pos','coordinates','point','curve','linestring','patch','geometryproperty','geometry','multigeometry'];
+  function extractLotAttrs_(poly) {
+    const attrs = {};
+    
+    // 1) 由 Polygon 向上爬，沿途收集 XML attributes（例如 <LOT DD="180" LOT_NO="1234">）
+    let node = poly;
+    for (let up = 0; up < 6 && node; up++) {
+      if (node.attributes && node.attributes.length) {
+        for (let a = 0; a < node.attributes.length; a++) {
+          const at = node.attributes[a];
+          const nm = at.localName || at.name || '';
+          const nml = nm.toLowerCase();
+          const v = (at.value || '').trim();
+          if (v && nml.indexOf('xmlns') === -1 && nml !== 'id' && GEOM_TAGS_.indexOf(nml) === -1) {
+            if (!attrs[nm]) attrs[nm] = v;
+          }
+        }
+      }
+      if (!node.parentElement) break;
+      node = node.parentElement;
+      const ln = (node.localName || '').toLowerCase();
+      // 爬到 featureMember / collection 層就停
+      if (ln === 'featuremember' || ln === 'featurecollection' || ln.indexOf('collection') !== -1) break;
+    }
+    
+    // 2) 由 feature 層遞迴收集所有非幾何葉元素文字
+    (function walk(el) {
+      for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
+        const ln = (c.localName || '').toLowerCase();
+        if (GEOM_TAGS_.indexOf(ln) !== -1) continue;
+        if (c.firstElementChild) { walk(c); continue; }
+        const v = (c.textContent || '').trim();
+        if (v && v.length < 200 && !attrs[c.localName]) attrs[c.localName] = v;
+      }
+    })(node);
+    
+    return attrs;
   }
 
   // 🔥 [v2.21] LRU 快取管理（自動淘汰過期）
@@ -266,7 +310,7 @@ const App = (function() {
       });
   }
 
-  // 🔥 [v2.20] 地段索引：渲染地段多邊形
+  // 🔥 [v2.24] 地段索引：渲染地段多邊形（自動顯示 DD/LOT 編號）
   function renderLots(polygons) {
     lotLayer.clearLayers();
     
@@ -280,16 +324,45 @@ const App = (function() {
         fillOpacity: 0.1
       });
       
-      if (p.lotNo) {
-        polygon.bindPopup('<b>🗺️ 地段編號：</b>' + escapeHtml(p.lotNo));
-      } else {
-        polygon.bindPopup('<b>🗺️ 私人地段</b>');
-      }
-      
+      polygon.bindPopup(buildLotPopup_(p.attrs || {}));
       fragment.addLayer(polygon);
     });
     
     fragment.addTo(lotLayer);
+  }
+
+  // 🔥 [v2.24] 建立地段 popup：優先顯示 DD xxx LOT xxx
+  function buildLotPopup_(a) {
+    const get = function() {
+      for (let i = 0; i < arguments.length; i++) {
+        const want = String(arguments[i]).toLowerCase();
+        for (const key in a) {
+          if (key.toLowerCase() === want) return a[key];
+        }
+      }
+      return '';
+    };
+    const dd   = get('dd', 'demarcationdistrict');
+    const lot  = get('lotno', 'lot_no', 'lotnumber', 'lot');
+    const sub  = get('sublotno', 'sub_lot_no', 'subdivno', 'subdivision');
+    const type = get('lottype', 'type', 'lottypename');
+    
+    let html = '';
+    if (dd || lot) {
+      html += '<b>🗺️ ' + escapeHtml((dd ? 'DD ' + dd : '') + (lot ? ' LOT ' + lot : '') + (sub ? sub : '')) + '</b><br>';
+    } else {
+      html += '<b>🗺️ 私人地段</b><br>';
+    }
+    if (type) html += '類型：' + escapeHtml(type) + '<br>';
+    
+    // 其餘屬性都顯示出嚟（唔漏任何資訊）
+    const used = ['dd','demarcationdistrict','lotno','lot_no','lotnumber','lot','sublotno','sub_lot_no','subdivno','subdivision','lottype','type','lottypename'];
+    for (const k in a) {
+      if (used.indexOf(k.toLowerCase()) !== -1) continue;
+      html += escapeHtml(k) + '：' + escapeHtml(a[k]) + '<br>';
+    }
+    
+    return html || '<b>🗺️ 私人地段</b>';
   }
 
   // 🔥 [v2.20] 地段索引：切換開關
@@ -926,7 +999,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.23）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.24）');
   }
   
   function checkURLParams() {
