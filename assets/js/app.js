@@ -1,5 +1,5 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.7 - 徹底修復 NFC 定位彈去錯地盤中心）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.8 - 雙重防鎖徹底根治 onchange 意外觸發）
  * 
  * 🚀 優化重點：
  * 1-7. [核心優化] Popup 懶載入、空間索引、O(1) 查找、底圖切換等
@@ -9,7 +9,8 @@
  * 11. [v2.4] 選中、NFC定位、新增樹木時，自動將該樹木 Marker 置於最前層 (zIndexOffset)
  * 12. [v2.5] 修復唔同地盤有相同 tree_id 時，Map 互相覆蓋導致 NFC 跳轉去錯地盤嘅 Bug
  * 13. [v2.6] 加入 localStorage 狀態記憶，解決 t.html refresh 後 history.back() 丟失參數導致彈去錯誤位置嘅問題
- * 14. [v2.7] 修復 buildSelect 意外觸發 onchange 導致 performFlyTo 覆蓋正確樹木座標，令地圖彈去地盤中心嘅隱藏 Bug；強化 treesCache 複合 Key
+ * 14. [v2.7] 強化 treesCache 複合 Key
+ * 15. [v2.8] 引入 isLocating 全局鎖 + removeAttribute('onchange') 雙重防鎖，徹底根治 JS 修改 select.value 時意外觸發 onchange 導致 performFlyTo 覆蓋樹木座標嘅終極 Bug
  */
 
 const App = (function() {
@@ -41,6 +42,9 @@ const App = (function() {
   let baseLayers = {};
   let markerCluster = null;
   let currentBaseLayer = null;
+  
+  // 🔥 [v2.8 新增] 全局鎖，防止 locateTree 期間 selectProject 被意外觸發
+  let isLocating = false; 
   
   let perfMetrics = {
     renderTime: 0,
@@ -216,10 +220,24 @@ const App = (function() {
   
   function buildSelect() {
     const sel = $('#projSel');
+    if (!sel) return;
+    
+    // 🔥 [v2.8 雙重保險] 修改 value 前暫時移除 onchange，防止瀏覽器 quirk 意外觸發事件
+    const inlineOnChange = sel.getAttribute('onchange');
+    sel.removeAttribute('onchange');
+    sel.onchange = null;
+    
     sel.innerHTML = '<option value="">🗂️ 全部地盤</option>' +
       PROJECTS.map(function(p) { return '<option value="'+p.project_id+'">🚩 '+p.name+'</option>'; }).join('');
     sel.value = curProject;
     $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
+    
+    // 恢復 onchange
+    if (inlineOnChange) {
+      sel.setAttribute('onchange', inlineOnChange);
+    } else {
+      sel.onchange = function() { App.selectProject(this.value); };
+    }
   }
   
   function drawProjects() {
@@ -274,6 +292,12 @@ const App = (function() {
   }
   
   function selectProject(pid) {
+    // 🔥 [v2.8 核心防禦] 如果正在執行 NFC 定位，絕對唔准觸發飛去地盤中心嘅動作
+    if (isLocating) {
+      console.log('[v2.8] selectProject blocked by isLocating lock');
+      return; 
+    }
+    
     curProject = pid;
     buildSelect();
     saveViewState('', null, null);
@@ -406,9 +430,8 @@ const App = (function() {
       });
       
       markers.push(marker);
-      // 🔥 [v2.7 強化] 使用複合 Key 儲存 marker，徹底杜絕跨地盤同名樹木衝突
       treesCache.set(curProject + '_' + t.tree_id, marker);
-      treesCache.set(t.tree_id, marker); // 保留純 ID key 作兼容
+      treesCache.set(t.tree_id, marker);
     });
     
     if (markers.length > 0) {
@@ -692,7 +715,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.7）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.8）');
   }
   
   function checkURLParams() {
@@ -723,6 +746,8 @@ const App = (function() {
   }
   
   function locateTree(treeId, projectId, lat, lng) {
+    isLocating = true; // 🔥 [v2.8] 上鎖，禁止 selectProject 執行
+    
     let tree = null;
     const targetPid = projectId ? String(projectId) : '';
     
@@ -743,9 +768,13 @@ const App = (function() {
     if (finalPid && String(curProject) !== finalPid) {
       curProject = finalPid;
       
-      // 🔥 [v2.7 核心修復] 直接更新 Select UI，絕對唔調用 buildSelect()，避免觸發 onchange -> selectProject -> performFlyTo 飛去地盤中心
       const sel = $('#projSel');
       if (sel) {
+        // 🔥 [v2.8] 安全地更新 Select UI，剝離 onchange
+        const inlineOnChange = sel.getAttribute('onchange');
+        sel.removeAttribute('onchange');
+        sel.onchange = null;
+        
         let hasOption = false;
         for (let i = 0; i < sel.options.length; i++) {
           if (sel.options[i].value === finalPid) { hasOption = true; break; }
@@ -755,6 +784,9 @@ const App = (function() {
         } else {
           buildSelect();
         }
+        
+        if (inlineOnChange) sel.setAttribute('onchange', inlineOnChange);
+        else sel.onchange = function() { App.selectProject(this.value); };
       }
       $('#addTreeBtn').style.display = curProject ? 'inline-block' : 'none';
       
@@ -791,6 +823,11 @@ const App = (function() {
     }
     
     saveViewState(treeId, targetLat, targetLng);
+    
+    // 🔥 [v2.8] 動畫完成後解鎖 (2秒後)
+    setTimeout(function() { 
+      isLocating = false; 
+    }, 2000);
   }
 
   function saveViewState(treeId, lat, lng) {
