@@ -152,20 +152,23 @@ body.panel-open::before {
   transform: scale(1.15) rotate(3deg);
 }
 
-/* ================= 樹木標記 v2.14：狀態漸變氣球 + 之字形引導線 ================= */
+/* ================= 樹木標記 v2.15：梳齒式扇開（引導線絕不交叉） ================= */
 .treeIcon {
-  display: flex; flex-direction: column; align-items: center;
-  transition: transform .18s cubic-bezier(.34,1.56,.64,1), filter .18s ease;
-  cursor: pointer;
-  will-change: transform, filter;
+  position: relative;
+  pointer-events: none; /* 透明畫布唔阻地圖操作 */
 }
-.treeIcon:hover {
-  transform: translateY(-4px) scale(1.08);
-  filter: drop-shadow(0 8px 14px rgba(0,0,0,.35)) brightness(1.08);
+.treeIcon .leader { position: absolute; inset: 0; overflow: visible; }
+.treeIcon .leader line {
+  stroke: var(--c, #2e7d32);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: .9;
+  filter: drop-shadow(0 1px 1px rgba(255,255,255,.7));
 }
-
-/* 號碼牌：狀態色漸變 + 白邊 + 玻璃光澤 + 立體陰影 */
 .treeIcon .lbl {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: auto;
   background: linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 45%, rgba(0,0,0,.10) 100%), var(--c, #2e7d32);
   color: #fff;
   font-weight: 800;
@@ -177,34 +180,24 @@ body.panel-open::before {
   box-shadow: 0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.35);
   text-shadow: 0 1px 2px rgba(0,0,0,.45);
   white-space: nowrap;
+  cursor: pointer;
   transition: transform .15s ease;
 }
-.treeIcon:hover .lbl { transform: scale(1.06); }
-
-/* 🔥 [v2.14] 之字形引導線：SVG 斜線、狀態色 + 白邊描邊，超級清晰 */
-.treeIcon .leader { 
-  display: block; 
-  margin: 0; 
-  overflow: visible; /* 確保斜線唔會被裁切 */
-}
-.treeIcon .leader line {
-  stroke: var(--c, #2e7d32);
-  stroke-width: 2;
-  stroke-linecap: round;
-  opacity: .9;
-  filter: drop-shadow(0 1px 1px rgba(255,255,255,.7));
-}
-
-/* 圓點：與號碼牌同色，白邊包邊 */
+.treeIcon .lbl:hover { transform: translate(-50%, -100%) scale(1.1); }
 .treeIcon .dot {
+  position: absolute;
+  left: 100px; top: 130px; /* 對應 JS 常數 ax/ay */
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
   width: 12px; height: 12px; border-radius: 50%;
   background: var(--c, #2e7d32);
   border: 2.5px solid #fff;
   box-shadow: 0 1px 4px rgba(0,0,0,.45);
+  cursor: pointer;
   transition: transform .15s ease, box-shadow .15s ease;
 }
-.treeIcon:hover .dot {
-  transform: scale(1.25);
+.treeIcon .dot:hover {
+  transform: translate(-50%, -50%) scale(1.3);
   box-shadow: 0 0 0 4px rgba(255,255,255,.35), 0 2px 6px rgba(0,0,0,.4);
 }
 
@@ -395,7 +388,7 @@ body.panel-open::before {
   
   #panel::before { background: #555; }
 
-  /* 🔥 [v2.14] 深色模式引導線描邊改黑色，確保夜間清晰 */
+  /* 🔥 [v2.15] 深色模式引導線描邊改黑色，確保夜間清晰 */
   .treeIcon .leader line {
     filter: drop-shadow(0 1px 1px rgba(0,0,0,.8));
   }
