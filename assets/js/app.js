@@ -1,5 +1,5 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.4 - 選中樹木置頂）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.5 - 修復跨地盤同名樹木定位錯誤）
  * 
  * 🚀 優化重點：
  * 1. [殺手1] Popup 懶載入 (Lazy Load)
@@ -13,6 +13,7 @@
  * 9. [v2.2] 修復 NFC / t.html 返回地圖時動畫打架導致彈錯位嘅問題
  * 10. [v2.3] 修復新增樹木後，MarkerCluster 重新渲染與 flyTo 動畫打架導致地圖亂彈嘅問題
  * 11. [v2.4] 選中、NFC定位、新增樹木時，自動將該樹木 Marker 置於最前層 (zIndexOffset)
+ * 12. [v2.5] 修復唔同地盤有相同 tree_id 時，Map 互相覆蓋導致 NFC 跳轉去錯地盤嘅 Bug
  */
 
 const App = (function() {
@@ -196,7 +197,8 @@ const App = (function() {
       TREES.forEach(function(t) {
         const pid = String(t.project_id || '');
         treeCountMap.set(pid, (treeCountMap.get(pid) || 0) + 1);
-        treeMap.set(String(t.tree_id), t);
+        // 🔥 [v2.5 修正] 使用 project_id + tree_id 作為複合 Key，解決唔同地盤有相同 tree_id 時 Map 互相覆蓋嘅 Bug
+        treeMap.set(pid + '_' + String(t.tree_id), t);
       });
       
       projectMarkersCache = null;
@@ -659,7 +661,8 @@ const App = (function() {
         await load();
         
         const newId = String(r.tree_id);
-        const nt = treeMap.get(newId) || TREES.find(function(t){ return String(t.tree_id) === newId; });
+        // 🔥 [v2.5 修正] 使用複合 Key 查找新樹
+        const nt = treeMap.get(curProject + '_' + newId) || TREES.find(function(t){ return String(t.tree_id) === newId && String(t.project_id) === curProject; });
         
         if (nt) {
           // 🔥 [v2.3 修復] 使用 setTimeout 避開 MarkerCluster 重新渲染時的視圖爭奪
@@ -695,7 +698,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.4）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.5）');
   }
   
   // 🔥 [v2.2 修復] 支援讀取 t.html 傳過嚟嘅 lat/lng 參數
@@ -711,14 +714,25 @@ const App = (function() {
     }
   }
   
-  // 🔥 [v2.2 修復] 取消兩次 flyTo 打架，靜默切換地盤，一次過直飛樹木位置
+  // 🔥 [v2.5 修正] 徹底修復跨地盤同名樹木定位錯誤
   function locateTree(treeId, projectId, lat, lng) {
     let tree = null;
+    const targetPid = projectId ? String(projectId) : '';
+    
     if (treeId) {
-      tree = treeMap.get(String(treeId)) || TREES.find(function(t){ return String(t.tree_id) === String(treeId); }) || null;
+      // 1. 優先使用複合 Key (project_id_tree_id) 進行 O(1) 精確查找
+      tree = treeMap.get(targetPid + '_' + String(treeId));
+      
+      // 2. 如果複合 Key 搵唔到（例如 URL 冇帶 project_id），就用 Array.find 精確匹配
+      if (!tree) {
+        tree = TREES.find(function(t) { 
+          return String(t.tree_id) === String(treeId) && 
+                 (!targetPid || String(t.project_id) === targetPid); 
+        }) || null;
+      }
     }
 
-    const targetPid = projectId || (tree ? tree.project_id : '');
+    const finalPid = tree ? String(tree.project_id || '') : targetPid;
     const targetLat = tree ? +tree.lat : +lat;
     const targetLng = tree ? +tree.lng : +lng;
 
@@ -727,8 +741,8 @@ const App = (function() {
       return;
     }
 
-    if (targetPid && String(curProject) !== String(targetPid)) {
-      curProject = String(targetPid);
+    if (finalPid && String(curProject) !== finalPid) {
+      curProject = finalPid;
       buildSelect();
       treesCache.clear();
       spatialIndexCache = null;
