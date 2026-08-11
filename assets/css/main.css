@@ -38,13 +38,12 @@ html, body {
   background: var(--bg);
   color: var(--text);
   transition: background-color 0.3s ease, color 0.3s ease;
-  /* 🌟 專業級字體渲染優化 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* 🌟 自訂捲動條 (告別瀏覽器預設粗糙樣式) */
+/* 🌟 自訂捲動條 */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
@@ -53,16 +52,14 @@ html, body {
 #map { height: 100%; width: 100%; }
 button { touch-action: manipulation; cursor: pointer; }
 
-/* ================= 頂部控制列 (優化劉海屏適配) ================= */
+/* ================= 頂部控制列 ================= */
 #bar {
   position: absolute; top: 8px; right: 8px; z-index: 999;
   display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
   padding-top: var(--safe-top);
-  /* 🔥 [v2.25 核心修復] 容器透明區域唔再攞走點擊，popup 喺最頂都撳得到 */
   pointer-events: none;
 }
 
-/* 🔥 [v2.25] 只有真正嘅互動元素先恢復可點擊 */
 #bar select,
 #bar button,
 #bar input,
@@ -75,7 +72,6 @@ button { touch-action: manipulation; cursor: pointer; }
   font-size: 15px; background: rgba(255,255,255,0.85); color: var(--text);
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
   max-width: 46vw;
-  /* 🔥 [v2.29 防 CLS] 固定寬度，option 載入後唔會跳 */
   width: 190px;
   flex: 0 0 auto;
   backdrop-filter: var(--glass-blur);
@@ -98,13 +94,12 @@ button { touch-action: manipulation; cursor: pointer; }
 #bar button.blue { background: var(--accent); box-shadow: 0 2px 6px rgba(21, 101, 192, 0.3); }
 #bar button:active { transform: scale(0.96); }
 
-/* 🔥 [v2.29 防 CLS] 隱藏但保留位置，避免按鈕出現時 re-wrap 移位 */
 .ghost-hidden {
   visibility: hidden !important;
   pointer-events: none !important;
 }
 
-/* 🔥 [v2.19 新增] 搜尋框容器 */
+/* 🔥 搜尋框容器 */
 .search-wrap {
   position: relative;
   flex: 1 1 280px;
@@ -133,7 +128,7 @@ button { touch-action: manipulation; cursor: pointer; }
   color: var(--muted);
 }
 
-/* 🔥 [v2.19 新增] 搜尋結果下拉清單 */
+/* 🔥 搜尋結果下拉清單 */
 .search-results {
   display: none;
   position: absolute;
@@ -149,7 +144,6 @@ button { touch-action: manipulation; cursor: pointer; }
   border: 1px solid rgba(0,0,0,.1);
   overscroll-behavior: contain;
 }
-/* 🌟 搜尋結果滑入動畫 */
 .search-results[style*="display: block"] {
   animation: fadeSlideDown 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
@@ -158,10 +152,10 @@ button { touch-action: manipulation; cursor: pointer; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 🔥 [v2.35] 底部卡片滑入動畫 */
+/* 🔥 [v2.36] popup 滑入動畫（只動畫 wrapper，唔碰 Leaflet 定位） */
 @keyframes sheetUp {
-  from { transform: translateY(40px); opacity: .3; }
-  to { transform: translateY(0); opacity: 1; }
+  from { transform: translateY(24px) scale(.96); opacity: .3; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 .sr-item {
@@ -215,7 +209,6 @@ button { touch-action: manipulation; cursor: pointer; }
   transform: translateY(0); opacity: 1; pointer-events: auto;
 }
 
-/* 🎭 沉浸式背景遮罩 (Backdrop Overlay) */
 body.panel-open::before {
   content: '';
   position: fixed;
@@ -233,7 +226,6 @@ body.panel-open::before {
   width: 100%; padding: 11px; margin-top: 6px;
   border: 1px solid #ccc; border-radius: 8px; font-size: 15px; box-sizing: border-box;
   background: var(--card-bg); color: var(--text);
-  /* 🌟 表單微互動 */
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 #panel input:focus, #panel select:focus, #panel textarea:focus {
@@ -261,7 +253,6 @@ body.panel-open::before {
   pointer-events: none;
   border: 1px solid var(--glass-border);
   transition: opacity 0.3s, background 0.3s, border-color 0.3s, color 0.3s;
-  /* 🌟 狀態列彈跳動畫 */
   animation: slideUpBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 @keyframes slideUpBounce {
@@ -291,7 +282,6 @@ body.panel-open::before {
 .leaflet-marker-icon { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .leaflet-marker-dragging { transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-/* 🌟 地圖互動元素 (地段多邊形) Hover 效果 */
 .leaflet-interactive {
   transition: fill-opacity 0.2s ease, stroke-width 0.2s ease, stroke 0.2s ease;
 }
@@ -334,13 +324,11 @@ body.panel-open::before {
   -webkit-overflow-scrolling: touch;
 }
 
-/* 🔥 [v2.26 修正] 標題右邊預留空間，關閉按鈕唔再遮住文字 */
 .leaflet-popup-content > b:first-child {
   display: block;
-  padding-right: 44px;   /* 預留俾 44px 關閉按鈕 */
+  padding-right: 44px;
   box-sizing: border-box;
 }
-/* 標題變咗 block 之後，隱藏多餘嘅 <br>，避免雙重行距 */
 .leaflet-popup-content > b:first-child + br {
   display: none;
 }
@@ -354,7 +342,6 @@ body.panel-open::before {
 .leaflet-popup-content button:hover { background: var(--accent-dark); }
 .leaflet-popup-content button:active { transform: scale(0.98); }
 
-/* 🔗 Popup 連結按鈕化 (CTA Optimization) */
 .leaflet-popup-content a {
   display: block; margin-top: 12px; padding: 12px 16px;
   background: var(--primary); color: #fff !important; text-decoration: none;
@@ -365,7 +352,6 @@ body.panel-open::before {
 .leaflet-popup-content a:hover { background: var(--primary-dark); }
 .leaflet-popup-content a:active { transform: scale(0.98); }
 
-/* 🔥 [v2.25] 關閉按鈕：44px 無形觸發區 + 32px 視覺圓圈，× 完美置中 */
 .leaflet-popup-close-button {
   position: absolute;
   width: 44px !important;
@@ -381,12 +367,11 @@ body.panel-open::before {
   justify-content: center !important;
   padding: 0 !important;
   text-decoration: none !important;
-  color: transparent !important;   /* 隱藏 Leaflet 原本嘅 × 文字 */
+  color: transparent !important;
   font-size: 0 !important;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-/* 視覺圓圈（32px）：用偽元素畫，觸發區保持 44px */
 .leaflet-popup-close-button::before {
   content: '';
   position: absolute;
@@ -397,7 +382,6 @@ body.panel-open::before {
   -webkit-backdrop-filter: blur(4px);
   transition: background 0.2s ease, transform 0.2s ease;
 }
-/* 新嘅 ×：完美置中 */
 .leaflet-popup-close-button::after {
   content: '×';
   position: relative;
@@ -456,35 +440,28 @@ body.panel-open::before {
   #status { font-size: 12px; bottom: calc(12px + var(--safe-bottom)); max-width: 92%; }
   .layerbar button { padding: 10px 14px; font-size: 12px; }
   
-  /* 🔥 [v2.35] 手機 popup → 底部卡片（Google Maps 風格） */
+  /* 🔥 [v2.36 修復] 手機 popup：保留 Leaflet 定位（跟住 marker），
+     只限尺寸 + 加動態感。千萬唔好用 position:fixed（會喺 transformed pane 入面失蹤）！ */
   .leaflet-popup {
-    position: fixed !important;
-    left: 10px !important;
-    right: 10px !important;
-    bottom: calc(10px + var(--safe-bottom)) !important;
-    top: auto !important;
-    transform: none !important;
-    margin: 0 !important;
-    width: auto !important;
+    max-width: calc(100vw - 20px) !important;
   }
   .leaflet-popup-content-wrapper {
     border-radius: 18px !important;
     padding: 0 !important;
-    max-height: 46vh;
-    overflow: hidden;
-    box-shadow: 0 -6px 30px rgba(0,0,0,.25) !important;
-    animation: sheetUp .28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    max-width: calc(100vw - 20px) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,.3) !important;
+    animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .leaflet-popup-content {
-    margin: 12px 16px calc(12px + var(--safe-bottom)) !important;
+    margin: 12px 16px 14px !important;
     font-size: 15px;
     line-height: 1.6;
-    max-height: calc(46vh - 24px);
+    max-height: 42vh;
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
-  /* 底部卡片小橫條（drag handle 視覺） */
+  /* 卡片小橫條（drag handle 視覺） */
   .leaflet-popup-content::before {
     content: '';
     display: block;
@@ -528,7 +505,7 @@ body.panel-open::before {
   }
 }
 
-/* 🌟 按鈕 Loading 狀態 (供 JS 調用，防止重複點擊) */
+/* 🌟 按鈕 Loading 狀態 */
 button.is-loading {
   position: relative;
   color: transparent !important;
@@ -547,7 +524,7 @@ button.is-loading::after {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 🌙 深色模式具體元素覆蓋 (Dark Mode Overrides) */
+/* 🌙 深色模式具體元素覆蓋 */
 @media (prefers-color-scheme: dark) {
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
   ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
@@ -577,12 +554,10 @@ button.is-loading::after {
   #status.success { color: #81c784; border-color: #81c784; }
   #status.error { color: #ef9a9a; border-color: #ef9a9a; background: rgba(40, 20, 20, 0.9); }
   
-  /* 🔥 [v2.25] 深色模式關閉按鈕 */
   .leaflet-popup-close-button::before { background: rgba(255, 255, 255, 0.18); }
   .leaflet-popup-close-button:active::before { background: rgba(255, 255, 255, 0.32); }
   
   #panel::before { background: #555; }
-  /* 🔥 [v2.35] 深色模式底部卡片小橫條 */
   .leaflet-popup-content::before { background: #555; }
   
   .search-wrap input {
