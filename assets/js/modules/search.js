@@ -1,5 +1,6 @@
 /**
  * 搜尋功能模組
+ * v2.38 - 配合 locate.js：搜尋結果點擊後直達 MAX_ZOOM
  */
 import { state } from './state.js';
 import { DOM, escapeHtml } from './dom.js';
@@ -38,7 +39,7 @@ export function handleSearch(query) {
   }
 
   if (!results.length) {
-    box.innerHTML = '<div class="sr-item sr-hint">🤷 唔到「' + escapeHtml(query) + '」</div>';
+    box.innerHTML = '<div class="sr-item sr-hint">🤷 搵唔到「' + escapeHtml(query) + '」</div>';
     box.style.display = 'block';
     return;
   }
