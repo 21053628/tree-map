@@ -1,12 +1,10 @@
 /**
- * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.24 - 地段 DD/LOT 編號顯示）
+ * 樹木管理系統 - 主應用程式模組（終極效能優化版 v2.27 - 地段 Lot 編號顯示）
  * 
  * 🚀 優化重點：
- * 1-30. [v2.1 - v2.23 核心優化] 包含極簡狀態圓點、搜尋、地段索引圖層、全面效能升級、英文 ID 等
- * 31. [v2.24] 地段索引顯示 DD/LOT 編號：
- *             - 通用屬性抽取器：自動爬 feature 層收集所有非幾何欄位
- *             - 優先組合 DD xxx LOT xxx 顯示
- *             - Debug log 方便驗證
+ * 1-31. [v2.1 - v2.24 核心優化] 包含極簡狀態圓點、搜尋、地段索引圖層、全面效能升級、英文 ID 等
+ * 32. [v2.26] 地段 DD 自動推算（已移除）
+ * 33. [v2.27] 地段 popup 簡化：只顯示 Lot 編號（移除 DD 推算）
  */
 
 const App = (function() {
@@ -208,8 +206,9 @@ const App = (function() {
     return polygons;
   }
 
-   // 🔥 [v2.25] 通用屬性抽取加強版：同時讀 XML attributes + 葉元素，爬升 6 層
-  const GEOM_TAGS_ = ['polygon','multisurface','surface','surfacemember','exterior','interior','linearring','poslist','pos','coordinates','point','curve','linestring','patch','geometryproperty','geometry','multigeometry'];
+   // 🔥 [v2.26] 通用屬性抽取加強版：同時讀 XML attributes + 葉元素，爬升 6 層
+   // 跳過清單加入 boundedBy/Envelope，避免收集坐標噪音
+  const GEOM_TAGS_ = ['polygon','multisurface','surface','surfacemember','exterior','interior','linearring','poslist','pos','coordinates','point','curve','linestring','patch','geometryproperty','geometry','multigeometry','boundedby','envelope'];
   function extractLotAttrs_(poly) {
     const attrs = {};
     
@@ -331,7 +330,7 @@ const App = (function() {
     fragment.addTo(lotLayer);
   }
 
-  // 🔥 [v2.24] 建立地段 popup：優先顯示 DD xxx LOT xxx
+  // 🔥 [v2.27] 地段 popup：只顯示 Lot 編號（移除 DD 推算）
   function buildLotPopup_(a) {
     const get = function() {
       for (let i = 0; i < arguments.length; i++) {
@@ -342,25 +341,21 @@ const App = (function() {
       }
       return '';
     };
-    const dd   = get('dd', 'demarcationdistrict');
-    const lot  = get('lotno', 'lot_no', 'lotnumber', 'lot');
-    const sub  = get('sublotno', 'sub_lot_no', 'subdivno', 'subdivision');
-    const type = get('lottype', 'type', 'lottypename');
+    const disp    = get('cislotdisplayname') || get('lotnumber');
+    const type    = get('lottype');
+    const sec     = get('sectioncode');
+    const updated = get('lastupdatedate');
+    const lotid   = get('lotid');
     
     let html = '';
-    if (dd || lot) {
-      html += '<b>🗺️ ' + escapeHtml((dd ? 'DD ' + dd : '') + (lot ? ' LOT ' + lot : '') + (sub ? sub : '')) + '</b><br>';
+    if (disp) {
+      html += '<b>🗺️ Lot ' + escapeHtml(disp) + '</b><br>';
     } else {
       html += '<b>🗺️ 私人地段</b><br>';
     }
-    if (type) html += '類型：' + escapeHtml(type) + '<br>';
-    
-    // 其餘屬性都顯示出嚟（唔漏任何資訊）
-    const used = ['dd','demarcationdistrict','lotno','lot_no','lotnumber','lot','sublotno','sub_lot_no','subdivno','subdivision','lottype','type','lottypename'];
-    for (const k in a) {
-      if (used.indexOf(k.toLowerCase()) !== -1) continue;
-      html += escapeHtml(k) + '：' + escapeHtml(a[k]) + '<br>';
-    }
+    if (type) html += '類型：' + escapeHtml(type) + (sec ? '（' + escapeHtml(sec) + '）' : '') + '<br>';
+    if (updated) html += '更新：' + escapeHtml(String(updated).slice(0, 10)) + '<br>';
+    if (lotid) html += 'Lot ID：' + escapeHtml(lotid) + '<br>';
     
     return html || '<b>🗺️ 私人地段</b>';
   }
@@ -999,7 +994,7 @@ const App = (function() {
       load().then(function() { checkURLParams(); });
     }
     
-    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.24）');
+    console.log('🌳 樹木管理系統已啟動（終極效能優化版 v2.27）');
   }
   
   function checkURLParams() {
