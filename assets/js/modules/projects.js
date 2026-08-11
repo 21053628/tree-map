@@ -1,11 +1,13 @@
 /**
  * 地盤標記與選擇模組
+ * v2.33 - 加入航拍圖自動刷新
  */
 import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
 import { hideSearch } from './search.js';
 import { saveViewState } from './locate.js';
 import { drawTrees } from './trees.js';
+import { refreshAerial } from './map.js'; // 🔥 [v2.33] 加入航拍圖刷新
 
 export function buildSelect() {
   const sel = DOM.projSel;
@@ -109,6 +111,9 @@ export function selectProject(pid) {
   buildSelect();
   hideSearch();
   saveViewState('', null, null);
+  
+  // 🔥 [v2.33] 轉地盤自動換航拍圖
+  refreshAerial();
 
   if (state.map) {
     state.map.closePopup();

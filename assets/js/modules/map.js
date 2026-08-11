@@ -1,8 +1,10 @@
 /**
  * 地圖初始化模組
  * - Leaflet 初始化
- * - 底圖切換
+ * - 底圖切換（支援 maxNativeZoom 放大）
+ * - 航拍圖疊加層（單圖／切片雙模式）
  * - 圖例
+ * v2.34 - 配合 8000px 縮圖：MAX_ZOOM 改 22
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
@@ -46,19 +48,20 @@ export function initMap() {
     }).addTo(state.map);
   }
 
-  const hkBase = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
-    { attribution: '© 地政總署 LandsD HKSAR', maxZoom: Config.MAP.MAX_ZOOM });
-  const hkLabel = L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',
-    { maxZoom: Config.MAP.MAX_ZOOM });
-
+  // 🔥 [v2.33] 底圖加 maxNativeZoom：原生只到 19，放大到 22 會朦，但航拍圖超清就彌補
   state.baseLayers = {
-    hk: L.layerGroup([hkBase, hkLabel]),
+    hk: L.layerGroup([
+      L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
+        { attribution: '© 地政總署 LandsD HKSAR', maxNativeZoom: 19, maxZoom: Config.MAP.MAX_ZOOM }),
+      L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',
+        { maxNativeZoom: 19, maxZoom: Config.MAP.MAX_ZOOM })
+    ]),
     sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { attribution: '© Esri World Imagery', maxZoom: Config.MAP.MAX_ZOOM }),
+      { attribution: '© Esri World Imagery', maxNativeZoom: 19, maxZoom: Config.MAP.MAX_ZOOM }),
     topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-      { attribution: '© OpenTopoMap (CC-BY-SA)', maxZoom: 17 }),
+      { attribution: '© OpenTopoMap (CC-BY-SA)', maxNativeZoom: 17, maxZoom: Config.MAP.MAX_ZOOM }),
     street: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      { attribution: '© OpenStreetMap', maxZoom: Config.MAP.MAX_ZOOM })
+      { attribution: '© OpenStreetMap', maxNativeZoom: 19, maxZoom: Config.MAP.MAX_ZOOM })
   };
 
   state.baseLayers.hk.addTo(state.map);
@@ -66,6 +69,7 @@ export function initMap() {
 
   state.lotLayer = L.layerGroup();
 
+  // 🔥 [v2.33] layer bar 加入「🛰 航拍」按鈕
   const layerBar = L.control({ position: isMobile ? 'bottomright' : 'bottomleft' });
   layerBar.onAdd = function () {
     const div = L.DomUtil.create('div', 'layerbar');
@@ -73,7 +77,8 @@ export function initMap() {
       '<button data-l="sat">衛星</button>' +
       '<button data-l="topo">地形</button>' +
       '<button data-l="street">街道</button>' +
-      '<button data-l="lot">🗺️ 地段</button>';
+      '<button data-l="lot">🗺️ 地段</button>' +
+      '<button data-l="aerial">🛰 航拍</button>';
     L.DomEvent.disableClickPropagation(div);
 
     div.querySelectorAll('button').forEach((b) => {
@@ -81,6 +86,9 @@ export function initMap() {
         const layerType = b.dataset.l;
         if (layerType === 'lot') {
           toggleLotLayer();
+        } else if (layerType === 'aerial') {
+          // 🔥 [v2.33] 航拍圖 toggle
+          toggleAerial();
         } else {
           if (state.currentBaseLayer) state.map.removeLayer(state.currentBaseLayer);
           state.currentBaseLayer = state.baseLayers[layerType];
@@ -141,4 +149,63 @@ export function initMap() {
   });
 
   return true;
+}
+
+// 🔥 [v2.33] 航拍圖 toggle 函數
+export function toggleAerial() {
+  state.aerialEnabled = !state.aerialEnabled;
+  const btn = document.querySelector('.layerbar button[data-l="aerial"]');
+  if (btn) btn.classList.toggle('on', state.aerialEnabled);
+  refreshAerial();
+  updateStatus(state.aerialEnabled ? '✅ 已開啟航拍圖層' : '✅ 已關閉航拍圖層');
+}
+
+// 🔥 [v2.33] 航拍圖刷新：根據當前地盤自動對位
+export function refreshAerial() {
+  // 移除舊疊加層
+  if (state.aerialLayer) {
+    state.map.removeLayer(state.aerialLayer);
+    state.aerialLayer = null;
+  }
+  if (!state.aerialEnabled || !state.curProject) return;
+
+  // 搵當前地盤嘅航拍配置
+  const p = state.PROJECTS.find((x) => String(x.project_id) === String(state.curProject));
+  if (!p || !p.aerial_url || !p.aerial_n1 || !p.aerial_e1 || !p.aerial_n2 || !p.aerial_e2) {
+    updateStatus('⚠️ 此地盤未配置航拍圖（請喺 projects 表填寫）');
+    return;
+  }
+
+  // HK80 → WGS84 轉換四角
+  const sw = CoordUtils.toWGS84(+p.aerial_n1, +p.aerial_e1); // 左下角
+  const ne = CoordUtils.toWGS84(+p.aerial_n2, +p.aerial_e2); // 右上角
+  if (!sw || !ne) {
+    updateStatus('❌ 航拍座標轉換失敗');
+    return;
+  }
+  const bounds = L.latLngBounds([sw.lat, sw.lng], [ne.lat, ne.lng]);
+
+  // 根據 aerial_type 選擇模式（image / tiles）
+  const mode = String(p.aerial_type || 'image').toLowerCase();
+
+  if (mode === 'tiles') {
+    // 切片模式：超清 + 極速（只載可見範圍）
+    // 🔥 [v2.34] maxNativeZoom 改 22，配合 8000px 縮圖
+    state.aerialLayer = L.tileLayer(p.aerial_url, {
+      bounds: bounds,
+      minNativeZoom: 17,
+      maxNativeZoom: 22,
+      maxZoom: Config.MAP.MAX_ZOOM,
+      opacity: 0.9,
+      zIndex: 500,
+      noWrap: true
+    }).addTo(state.map);
+  } else {
+    // 🏆 單張原圖模式（示範用呢個）
+    state.aerialLayer = L.imageOverlay(p.aerial_url, bounds, {
+      opacity: 0.9,
+      interactive: false, // 唔擋地圖點擊
+      zIndex: 500
+    }).addTo(state.map);
+  }
 }

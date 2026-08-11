@@ -213,7 +213,7 @@
       $('#app').innerHTML = '<div class="card error">❌ 後端連線失敗：<br>' + err.message + '</div>';
     });
 
-  const COLORS = {'Normal':'#2e7d32','Fair':'#f9a825','Poor':'#ef6c00','Very Poor':'#c62828','Dead':'#424242'};
+  const COLORS = {'Normal':'#2E7D32','Fair':'#7CB342','Poor':'#FFB300','Very Poor':'#E53935','Dead':'#000000'};
 
   function render(t){
     const hk = toHK(t.lat, t.lng);
@@ -240,9 +240,13 @@
       }
     }
     html += '<div class="grid">' +
-        '<div>Height<b>' + (t.height||'-') + ' m</b></div>' +
-        '<div>Spread<b>' + (t.spread||'-') + ' m</b></div>' +
-        '<div>DBH<b>' + (t.dbh||'-') + ' cm</b></div>' +
+        '<div>Tree Height<b>' + (t.tree_height||t.height||'-') + ' m</b></div>' +
+        '<div>Crown Width<b>' + (t.crown_width||t.spread||'-') + ' m</b></div>' +
+        '<div>DBH<b>' + (t.dbh||'-') + ' m</b></div>' +
+        '<div>Ground Dia.<b>' + (t.ground_diameter||'-') + ' m</b></div>' +
+        '<div>Stem Length<b>' + (t.stem_length||'-') + ' m</b></div>' +
+        '<div>Crown Area<b>' + (t.crown_area||'-') + ' ㎡</b></div>' +
+        '<div>Crown Vol.<b>' + (t.crown_volume||'-') + ' m³</b></div>' +
       '</div>' +
       '<div class="sub" style="margin-top:8px">' + escapeHtml(t.description||'') + '</div>' +
       '<div class="sub" style="margin-top:6px">📍 <b>HK80：</b>N ' + (hk?f1(hk.N):'—') + ' ／ E ' + (hk?f1(hk.E):'—') + ' ｜ <b>Level：</b>' + (t.level||'-') + ' m</div>' +
@@ -321,8 +325,10 @@
       '<datalist id="tree_list"></datalist>' +
       '<div class="form-group"><label class="form-label">📊 健康狀況</label><select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
       '<div class="form-group"><label class="form-label">🚩 所屬地盤</label><select id="eProject"></select></div>' +
-      '<div class="row2"><div class="form-group"><label class="form-label">Height (m)</label><input id="eHeight" placeholder="高度" inputmode="decimal"></div><div class="form-group"><label class="form-label">Spread (m)</label><input id="eSpread" placeholder="冠幅" inputmode="decimal"></div></div>' +
-      '<div class="form-group"><label class="form-label">DBH (cm)</label><input id="eDbh" placeholder="胸徑" inputmode="decimal"></div>' +
+      '<div class="row2"><div class="form-group"><label class="form-label">Tree Height (m)</label><input id="eHeight" placeholder="樹高" inputmode="decimal"></div><div class="form-group"><label class="form-label">Crown Width (m)</label><input id="eSpread" placeholder="冠寬" inputmode="decimal"></div></div>' +
+      '<div class="row2"><div class="form-group"><label class="form-label">DBH (m)</label><input id="eDbh" placeholder="胸徑" inputmode="decimal"></div><div class="form-group"><label class="form-label">Ground Dia. (m)</label><input id="eGroundDia" placeholder="地徑" inputmode="decimal"></div></div>' +
+      '<div class="row2"><div class="form-group"><label class="form-label">Stem Length (m)</label><input id="eStemLen" placeholder="幹長" inputmode="decimal"></div><div class="form-group"><label class="form-label">Crown Area (㎡)</label><input id="eCrownArea" placeholder="投影面積" inputmode="decimal"></div></div>' +
+      '<div class="form-group"><label class="form-label">Crown Volume (m³)</label><input id="eCrownVol" placeholder="冠幅體積" inputmode="decimal"></div>' +
       '<div class="row2"><div class="form-group"><label class="form-label">HK80 N (Northing)</label><input id="eN" placeholder="北座標" inputmode="decimal"></div><div class="form-group"><label class="form-label">HK80 E (Easting)</label><input id="eE" placeholder="東座標" inputmode="decimal"></div></div>' +
       '<div class="form-group"><label class="form-label">Level (m，高程)</label><input id="eLevel" placeholder="高程" inputmode="decimal"></div>' +
       '<div class="form-group"><label class="form-label">📄 簡介</label><textarea id="eDesc" rows="2" placeholder="樹木簡介"></textarea></div>' +
@@ -332,9 +338,13 @@
 
     $('#eStatus').value = TREE.status || 'Normal';
     $('#eName').value = TREE.name || '';
-    $('#eHeight').value = TREE.height || '';
-    $('#eSpread').value = TREE.spread || '';
+    $('#eHeight').value = TREE.tree_height || TREE.height || '';
+    $('#eSpread').value = TREE.crown_width || TREE.spread || '';
     $('#eDbh').value = TREE.dbh || '';
+    $('#eGroundDia').value = TREE.ground_diameter || '';
+    $('#eStemLen').value = TREE.stem_length || '';
+    $('#eCrownArea').value = TREE.crown_area || '';
+    $('#eCrownVol').value = TREE.crown_volume || '';
     $('#eN').value = hk ? f1(hk.N) : '';
     $('#eE').value = hk ? f1(hk.E) : '';
     $('#eLevel').value = TREE.level || '';
@@ -479,8 +489,11 @@
     try {
       const r = await post({type:'update_tree', tree_id:id, prj:prj,
         name:$('#eName').value, status:$('#eStatus').value,
-        project_id:$('#eProject').value, height:$('#eHeight').value,
-        spread:$('#eSpread').value, dbh:$('#eDbh').value, level:$('#eLevel').value,
+        project_id:$('#eProject').value,
+        tree_height:$('#eHeight').value, crown_width:$('#eSpread').value,
+        dbh:$('#eDbh').value, ground_diameter:$('#eGroundDia').value,
+        stem_length:$('#eStemLen').value, crown_area:$('#eCrownArea').value,
+        crown_volume:$('#eCrownVol').value, level:$('#eLevel').value,
         lat:lat, lng:lng, description:$('#eDesc').value});
       alert(r.ok ? '✅ 已更新！' : '❌ 失敗：' + r.error);
       if(r.ok && !r.queued) setTimeout(function(){ location.reload(); }, 800);

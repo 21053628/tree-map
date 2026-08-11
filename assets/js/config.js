@@ -24,21 +24,21 @@ const Config = {
     WGS84: '+proj=longlat +datum=WGS84 +no_defs'
   },
   
-  // 樹木狀態顏色
-  TREE_STATUS_COLORS: Object.freeze({
-    'Normal': '#2e7d32',
-    'Fair': '#f9a825',
-    'Poor': '#ef6c00',
-    'Very Poor': '#c62828',
-    'Dead': '#424242',
-    'Unknown': '#757575'
-  }),
+  // 🎨 樹木狀態顏色（v2.32 更新）
+  TREE_STATUS_COLORS: {
+    Normal: '#2E7D32',     // 翡翠綠
+    Fair: '#7CB342',       // 草綠色（淺綠）
+    Poor: '#FFB300',       // 琥珀黃
+    'Very Poor': '#E53935', // 鮮紅色
+    Dead: '#000000',       // 純黑色
+    Unknown: '#757575'     // 未知（灰色）
+  },
   
   // 地圖配置
   MAP: {
     DEFAULT_CENTER: [22.40, 114.18],
     DEFAULT_ZOOM: 11,
-    MAX_ZOOM: 20
+    MAX_ZOOM: 22
   }
 };
 

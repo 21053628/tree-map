@@ -28,6 +28,9 @@ export const state = {
   lotLayerEnabled: false,
   lotCache: new Map(), // bboxKey -> {data, timestamp}
   lotLoadTimer: null,
+    // 🔥 [v2.33] 航拍圖疊加層
+  aerialLayer: null,
+  aerialEnabled: false,
   
   isLocating: false,
   

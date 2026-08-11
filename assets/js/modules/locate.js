@@ -1,12 +1,13 @@
 /**
  * URL 參數解析與定位模組
- * v2.28.2 - 修正 updateStatus 未 import 嘅 ReferenceError
+ * v2.33 - 加入航拍圖自動刷新
  */
 import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
 import { buildSelect } from './projects.js';
 import { drawProjects } from './projects.js';
 import { drawTrees } from './trees.js';
+import { refreshAerial } from './map.js'; // 🔥 [v2.33] 加入航拍圖刷新
 
 export function saveViewState(treeId, lat, lng) {
   try {
@@ -79,6 +80,9 @@ export function locateTree(treeId, projectId, lat, lng) {
     state.coordGroupsCache = null;
     drawProjects();
     drawTrees();
+    
+    // 🔥 [v2.33] 定位後同步換航拍圖
+    refreshAerial();
   }
 
   if (targetLat && targetLng && !isNaN(targetLat) && !isNaN(targetLng)) {

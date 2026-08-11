@@ -1,6 +1,6 @@
 /**
  * 表單模組：建立地盤與樹木
- * v2.31.1 - 修正 updateStatus 未 import 嘅 ReferenceError
+ * v5.0 - Step 5：doCreateTree 改用新欄位名 + 補齊新增欄位
  */
 import { state } from './state.js';
 import { $, showPanel, closePanel, updateStatus } from './dom.js';
@@ -77,8 +77,10 @@ export async function openTreeForm() {
     '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）...">' +
     '<datalist id="tree_datalist"></datalist>' +
     '<select id="tStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
-    '<div class="row2"><input id="tHeight" placeholder="Height (m)" inputmode="decimal"><input id="tSpread" placeholder="Spread (m)" inputmode="decimal"></div>' +
-    '<input id="tDbh" placeholder="DBH (cm)" inputmode="decimal">' +
+    '<div class="row2"><input id="tHeight" placeholder="Tree Height (m)" inputmode="decimal"><input id="tSpread" placeholder="Crown Width (m)" inputmode="decimal"></div>' +
+    '<div class="row2"><input id="tDbh" placeholder="DBH (m)" inputmode="decimal"><input id="tGroundDia" placeholder="Ground Dia. (m)" inputmode="decimal"></div>' +
+    '<div class="row2"><input id="tStemLen" placeholder="Stem Length (m)" inputmode="decimal"><input id="tCrownArea" placeholder="Crown Area (㎡)" inputmode="decimal"></div>' +
+    '<input id="tCrownVol" placeholder="Crown Volume (m³)" inputmode="decimal">' +
     '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal"><input id="tE" placeholder="HK80 E" inputmode="decimal"></div>' +
     '<input id="tLevel" placeholder="Level (m)" inputmode="decimal">' +
     '<button onclick="App.doCreateTree()">💾 建立樹木</button>' +
@@ -98,12 +100,19 @@ export async function doCreateTree() {
   if (!w) { alert('HK80 座標轉換失敗'); return; }
 
   try {
+    // 🔥 [v5.0] 改用新欄位名 + 補齊新增欄位
     const r = await ApiService.post({
       type: 'create_tree',
       tree_id: $('#tId').value, project_id: state.curProject,
       name: $('#tName').value, status: $('#tStatus').value,
-      height: $('#tHeight').value, spread: $('#tSpread').value,
-      dbh: $('#tDbh').value, level: $('#tLevel').value,
+      tree_height: $('#tHeight').value,
+      crown_width: $('#tSpread').value,
+      dbh: $('#tDbh').value,
+      ground_diameter: $('#tGroundDia').value,
+      stem_length: $('#tStemLen').value,
+      crown_area: $('#tCrownArea').value,
+      crown_volume: $('#tCrownVol').value,
+      level: $('#tLevel').value,
       lat: w.lat.toFixed(6), lng: w.lng.toFixed(6)
     });
 
