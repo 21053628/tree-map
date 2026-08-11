@@ -158,6 +158,12 @@ button { touch-action: manipulation; cursor: pointer; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* 🔥 [v2.35] 底部卡片滑入動畫 */
+@keyframes sheetUp {
+  from { transform: translateY(40px); opacity: .3; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 .sr-item {
   padding: 10px 14px;
   cursor: pointer;
@@ -450,8 +456,43 @@ body.panel-open::before {
   #status { font-size: 12px; bottom: calc(12px + var(--safe-bottom)); max-width: 92%; }
   .layerbar button { padding: 10px 14px; font-size: 12px; }
   
-  .leaflet-popup-content-wrapper { border-radius: 16px !important; padding: 0 !important; }
-  .leaflet-popup-content { margin: 16px 18px 18px 18px !important; font-size: 15px; line-height: 1.6; }
+  /* 🔥 [v2.35] 手機 popup → 底部卡片（Google Maps 風格） */
+  .leaflet-popup {
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(10px + var(--safe-bottom)) !important;
+    top: auto !important;
+    transform: none !important;
+    margin: 0 !important;
+    width: auto !important;
+  }
+  .leaflet-popup-content-wrapper {
+    border-radius: 18px !important;
+    padding: 0 !important;
+    max-height: 46vh;
+    overflow: hidden;
+    box-shadow: 0 -6px 30px rgba(0,0,0,.25) !important;
+    animation: sheetUp .28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .leaflet-popup-content {
+    margin: 12px 16px calc(12px + var(--safe-bottom)) !important;
+    font-size: 15px;
+    line-height: 1.6;
+    max-height: calc(46vh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* 底部卡片小橫條（drag handle 視覺） */
+  .leaflet-popup-content::before {
+    content: '';
+    display: block;
+    width: 40px; height: 4px;
+    background: #ccc;
+    border-radius: 2px;
+    margin: 0 auto 10px;
+  }
   .leaflet-popup-tip-container { display: none !important; }
 }
 
@@ -541,6 +582,8 @@ button.is-loading::after {
   .leaflet-popup-close-button:active::before { background: rgba(255, 255, 255, 0.32); }
   
   #panel::before { background: #555; }
+  /* 🔥 [v2.35] 深色模式底部卡片小橫條 */
+  .leaflet-popup-content::before { background: #555; }
   
   .search-wrap input {
     background: rgba(30, 36, 30, 0.85);
