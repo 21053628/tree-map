@@ -152,7 +152,7 @@ button { touch-action: manipulation; cursor: pointer; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 🔥 [v2.36] popup 滑入動畫（只動畫 wrapper，唔碰 Leaflet 定位） */
+/* 🔥 [v2.37] popup 滑入動畫（只動畫 wrapper，絕不碰 Leaflet 定位） */
 @keyframes sheetUp {
   from { transform: translateY(24px) scale(.96); opacity: .3; }
   to { transform: translateY(0) scale(1); opacity: 1; }
@@ -440,15 +440,12 @@ body.panel-open::before {
   #status { font-size: 12px; bottom: calc(12px + var(--safe-bottom)); max-width: 92%; }
   .layerbar button { padding: 10px 14px; font-size: 12px; }
   
-  /* 🔥 [v2.36 修復] 手機 popup：保留 Leaflet 定位（跟住 marker），
-     只限尺寸 + 加動態感。千萬唔好用 position:fixed（會喺 transformed pane 入面失蹤）！ */
-  .leaflet-popup {
-    max-width: calc(100vw - 20px) !important;
-  }
+  /* 🔥 [v2.37] 手機 popup：只用安全視覺屬性（圓角/限高/動畫/橫條）
+     ⚠️ 絕對禁止喺 .leaflet-popup 加 position / transform 覆蓋！
+     （Leaflet 用 inline transform 定位，覆蓋咗 popup 就會消失） */
   .leaflet-popup-content-wrapper {
     border-radius: 18px !important;
     padding: 0 !important;
-    max-width: calc(100vw - 20px) !important;
     box-shadow: 0 12px 40px rgba(0,0,0,.3) !important;
     animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
