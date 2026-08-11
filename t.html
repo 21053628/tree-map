@@ -17,8 +17,7 @@
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 <link rel="apple-touch-icon" href="icons/icon.svg">
 
-<!-- 🔥 LCP 優化：關鍵資源預連線（DNS + TLS 握手） -->
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<!-- 🔥 [Tier1-B] LCP 優化：刪除 jsdelivr preconnect，保留真正用嘅目標 -->
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
 <link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
@@ -27,13 +26,8 @@
 <link rel="dns-prefetch" href="https://lh3.googleusercontent.com">
 <link rel="dns-prefetch" href="https://drive.google.com">
 
-<!-- 🔥 CSS Fallback -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
-      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
-
-<!-- 🔥 [修正] DOMPurify：移除 document.write，改用 defer + onerror -->
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" defer
-        onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js'"></script>
+<!-- 🔥 [Tier1-B] 自托管樣式（零 CDN 依賴） -->
+<link rel="stylesheet" href="assets/vendor/leaflet.css">
 
 <style>
   :root{--primary:#2e7d32;--primary-dark:#1b5e20;--secondary:#546e7a;--bg:#f1f5f1;--text:#222;--muted:#666;--card-bg:#fff;--radius:12px;--shadow:0 2px 8px rgba(0,0,0,.08)}
@@ -90,11 +84,10 @@
   <div class="card"><div class="sk" style="height:120px"></div></div>
 </div>
 
-<!-- 🔥 [修正] 移除所有 document.write，改用 defer + onerror -->
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer
-        onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'"></script>
-<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" defer
-        onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js'"></script>
+<!-- 🔥 [Tier1-B] 自托管第三方函式庫（同域、即時執行） -->
+<script src="assets/vendor/leaflet.js"></script>
+<script src="assets/vendor/proj4.js"></script>
+<script src="assets/vendor/purify.min.js"></script>
 
 <script>
 (function(){
@@ -203,7 +196,7 @@
       }
       const t = res.data;
       if(!t){ 
-        $('#app').innerHTML = '<div class="card error">❌ 找不到樹木：<b>' + id + '</b></div>'; 
+        $('#app').innerHTML = '<div class="card error">❌ 搵唔到樹木：<b>' + id + '</b></div>'; 
         return; 
       }
       TREE = t; render(t); initMiniMap(t); loadLogs();
@@ -623,7 +616,7 @@
             }
             photoHtml += '</div>';
           }
-          html += '<div class=\"log\"><span class=\"ok\">' + escapeHtml(r.health) + '</span>｜' +
+          html += '<div class="log"><span class="ok">' + escapeHtml(r.health) + '</span>｜' +
                  escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>';
         });
         $('#logs').innerHTML = html;
@@ -672,7 +665,7 @@
       })
       .catch(function(err){
         window.open(url, '_blank');
-        alert('⚠️ 自動下載失敗，已在新分頁打開圖片，請手動右鍵保存。\n錯誤：' + err.message);
+        alert('⚠️ 自動下載失敗，已喺新分頁打開圖片，請手動右鍵保存。\n錯誤：' + err.message);
       });
   };
 

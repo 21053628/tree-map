@@ -16,17 +16,14 @@
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 <link rel="apple-touch-icon" href="icons/icon.svg">
 
-<!-- 🔥 LCP 優化：關鍵資源預連線 -->
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<!-- 🔥 [Tier1-B] LCP 預連線：只保留真正用嘅兩個目標（刪走 jsdelivr） -->
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
 <link rel="preconnect" href="https://script.google.com" crossorigin>
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
-      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
-      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css';">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
-      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css';">
+<!-- 🔥 [Tier1-B] 自托管樣式（零 CDN 依賴，同域快取） -->
+<link rel="stylesheet" href="assets/vendor/leaflet.css">
+<link rel="stylesheet" href="assets/vendor/MarkerCluster.css">
+<link rel="stylesheet" href="assets/vendor/MarkerCluster.Default.css">
 <link rel="stylesheet" href="assets/css/main.css">
 </head>
 <body>
@@ -53,15 +50,11 @@
 <script src="assets/js/auth.js"></script>
 <script src="offline.js"></script>
 
-<!-- 2️⃣ 第三方函式庫（defer + onerror 備援，依順序執行、唔再阻塞解析） -->
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer
-        onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'"></script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.min.js" defer
-        onerror="this.onerror=null;this.src='https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js'"></script>
-<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" defer
-        onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js'"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" defer
-        onerror="this.onerror=null;this.src='https://unpkg.com/dompurify@3.0.6/dist/purify.min.js'"></script>
+<!-- 2️⃣ [Tier1-B] 自托管第三方函式庫（同域、即時執行、唔使 fallback） -->
+<script src="assets/vendor/leaflet.js"></script>
+<script src="assets/vendor/leaflet.markercluster.js"></script>
+<script src="assets/vendor/proj4.js"></script>
+<script src="assets/vendor/purify.min.js"></script>
 
 <!-- 3️⃣ 主入口（ES Module，最後執行） -->
 <script type="module" src="assets/js/app.js"></script>

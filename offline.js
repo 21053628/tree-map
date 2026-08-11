@@ -1,10 +1,9 @@
 /**
  * 樹木管理系統 - 離線寫入佇列 (IndexedDB Outbox)
- * v1.4.0 - 增強錯誤處理與日誌：
- *          1. 業務邏輯錯誤時顯示具體錯誤信息
- *          2. 網絡錯誤時顯示錯誤信息
- *          3. 重認證失敗時顯示錯誤信息
- *          4. 加入詳細 Console 日誌方便除錯
+ * v1.5.0 - 加入本地快照 (Local-first) 功能：
+ *          1. 新增 snapshot store 儲存 projects/trees 快照
+ *          2. 提供 TreeSnapshot API 俾 app.js 使用
+ *          3. 實現 0 秒首屏載入（本地優先）
  */
 (function() {
   'use strict';
@@ -24,15 +23,20 @@
   var CACHE_KEY_PREFIX = 'tree_cache_';
   var CACHE_MAX_AGE = 24 * 60 * 60 * 1000;
 
+  // 🔥 [v1.5.0] 升級 DB 版本到 3，加入 snapshot store
   function openDB() {
     if (dbPromise) return dbPromise;
     dbPromise = new Promise(function(resolve, reject) {
-      var req = indexedDB.open(DB_NAME, 2);
+      var req = indexedDB.open(DB_NAME, 3); // 版本升做 3
       req.onupgradeneeded = function() {
         var db = req.result;
         if (!db.objectStoreNames.contains(STORE)) {
           var store = db.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
           store.createIndex('ts', 'ts', { unique: false });
+        }
+        // 🔥 [v1.5.0] 新增快照 store
+        if (!db.objectStoreNames.contains('snapshot')) {
+          db.createObjectStore('snapshot', { keyPath: 'key' });
         }
       };
       req.onsuccess = function() { resolve(req.result); };
@@ -187,6 +191,28 @@
         }
       });
     }
+  }
+
+  // 🔥 [v1.5.0] 本地快照 API (IndexedDB snapshot store)
+  function snapSave(key, data) {
+    return openDB().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var tx = db.transaction('snapshot', 'readwrite');
+        tx.objectStore('snapshot').put({ key: key, data: data, ts: Date.now() });
+        tx.oncomplete = function() { resolve(); };
+        tx.onerror = function() { reject(tx.error); };
+      });
+    });
+  }
+
+  function snapLoad(key) {
+    return openDB().then(function(db) {
+      return new Promise(function(resolve) {
+        var req = db.transaction('snapshot', 'readonly').objectStore('snapshot').get(key);
+        req.onsuccess = function() { resolve(req.result ? req.result.data : null); };
+        req.onerror = function() { resolve(null); };
+      });
+    });
   }
 
   /* ---------- 上線後自動同步佇列（v1.4.0 增強版）---------- */
@@ -382,10 +408,12 @@
     if (!document.hidden) syncOutbox(); 
   });
 
+  // 🔥 [v1.5.0] 暴露全域 API 俾 ES Module 同其他地方用
   window.OfflineQueue = OfflineQueue;
   window.pwaToast = pwaToast;
   window.syncOutbox = syncOutbox;
   window.syncNow = syncNow;
+  window.TreeSnapshot = { save: snapSave, load: snapLoad }; // 本地快照 API
   
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     setTimeout(cleanupExpired, 3000);

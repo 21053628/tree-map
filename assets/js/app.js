@@ -1,6 +1,6 @@
 /**
  * 樹木管理系統 - 主入口（ES Modules 版本）
- * v2.31 - 移除 inline onclick，改用 addEventListener 綁定
+ * v2.32 - 加入本地優先啟動 (Local-first)：0 秒首屏載入
  * 
  * 🔥 重要：config / api / utils / auth 係舊式腳本，用 top-level const 宣告。
  *    const 唔會掛去 window，但會進入全域詞法環境，
@@ -30,44 +30,86 @@ setHideSearch(hideSearch);
 setLoad(load);
 setPromptAuth(() => AuthService.promptAuth());
 
-// 全域函數
+// 🔥 [v2.32] 抽出資料處理邏輯，供本地快照同網路刷新共用
+function applyData(projects, trees) {
+  state.PROJECTS = projects;
+  state.TREES = trees;
+
+  state.treeCountMap.clear();
+  state.treeMap.clear();
+  state.TREES.forEach((t) => {
+    const pid = String(t.project_id || '');
+    state.treeCountMap.set(pid, (state.treeCountMap.get(pid) || 0) + 1);
+    state.treeMap.set(pid + '_' + String(t.tree_id), t);
+  });
+
+  buildSearchIndex();
+
+  state.projectMarkersCache = null;
+  state.treesCache.clear();
+  state.spatialIndexCache = null;
+  state.coordGroupsCache = null;
+
+  buildSelect();
+  hideSearch();
+  drawProjects();
+  drawTrees();
+}
+
+// 🔥 [v2.32] 本地優先啟動：先讀快照 0 秒渲染，後台靜靜雞刷新
 async function load() {
   updateStatus('🗺️ 載入中…');
 
+  // 本地優先：即刻用 IndexedDB 快照畫第一屏 (0 秒)
+  let hasSnapshot = false;
+  if (window.TreeSnapshot) {
+    try {
+      const snap = await window.TreeSnapshot.load('main');
+      if (snap && snap.projects && snap.trees) {
+        applyData(snap.projects, snap.trees);
+        hasSnapshot = true;
+        updateStatus('⚡ 本地快取顯示中，後台刷新…');
+      }
+    } catch (e) { 
+      console.warn('Snapshot load failed', e); 
+    }
+  }
+
+  // 後台刷新 (靜靜雞 fetch 最新資料)
   try {
     const [projectsRes, treesRes] = await Promise.all([
       ApiService.get('projects'),
       ApiService.get('trees')
     ]);
 
-    state.PROJECTS = projectsRes.data || [];
-    state.TREES = treesRes.data || [];
+    const projects = projectsRes.data || [];
+    const trees = treesRes.data || [];
+    
+    // 用最新資料重新渲染
+    applyData(projects, trees);
 
-    state.treeCountMap.clear();
-    state.treeMap.clear();
-    state.TREES.forEach((t) => {
-      const pid = String(t.project_id || '');
-      state.treeCountMap.set(pid, (state.treeCountMap.get(pid) || 0) + 1);
-      state.treeMap.set(pid + '_' + String(t.tree_id), t);
-    });
-
-    buildSearchIndex();
-
-    state.projectMarkersCache = null;
-    state.treesCache.clear();
-    state.spatialIndexCache = null;
-    state.coordGroupsCache = null;
-
-    buildSelect();
-    hideSearch();
-    drawProjects();
-    drawTrees();
+    // 存入 IndexedDB 作下次快照
+    if (window.TreeSnapshot) {
+      window.TreeSnapshot.save('main', { projects, trees }).catch(() => {});
+    }
 
     const stats = ApiService.getStats();
     console.log('✅ 資料載入完成', stats);
+    
+    // 如果之前有快照，更新狀態列
+    if (hasSnapshot) {
+      updateStatus('✅ 資料已更新至最新');
+    }
+
     return Promise.resolve();
   } catch (error) {
-    updateStatus('❌ 後端連線失敗：' + error.message);
+    if (hasSnapshot) {
+      // 有快照但網路失敗：保持顯示本地快取
+      updateStatus('📴 後端連線失敗：顯示本地快取');
+    } else {
+      // 無快照且網路失敗：顯示錯誤
+      updateStatus('❌ 後端連線失敗：' + error.message);
+    }
     console.error('載入失敗:', error);
   }
 }
@@ -149,7 +191,7 @@ function init() {
 
   load().then(() => checkURLParams());
 
-  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.31）');
+  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.32 - Local-first）');
 }
 
 document.addEventListener('DOMContentLoaded', init);
