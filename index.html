@@ -16,6 +16,11 @@
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 <link rel="apple-touch-icon" href="icons/icon.svg">
 
+<!-- 🔥 LCP 優化：關鍵資源預連線 -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
+<link rel="preconnect" href="https://script.google.com" crossorigin>
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
@@ -26,13 +31,13 @@
 </head>
 <body>
 <div id="bar">
-  <select id="projSel" onchange="App.selectProject(this.value)"></select>
-  <button class="blue" onclick="App.openProjectForm()">＋ 建立地盤</button>
-  <button id="addTreeBtn" style="display:none" onclick="App.openTreeForm()">🌳 新增樹木</button>
+  <select id="projSel"></select>
+  <button class="blue" id="addProjectBtn">＋ 建立地盤</button>
+  <button id="addTreeBtn" class="ghost-hidden">🌳 新增樹木</button>
   
-  <!-- 🔥 [v2.19 新增] 樹木搜尋框（只搜尋當前地盤） -->
+  <!-- 🔥 樹木搜尋框（只搜尋當前地盤） -->
   <div class="search-wrap">
-    <input type="text" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off" oninput="App.handleSearch(this.value)" onfocus="App.handleSearch(this.value)">
+    <input type="text" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off">
     <div id="searchResults" class="search-results"></div>
   </div>
 </div>
@@ -41,28 +46,27 @@
 <div id="status">🗺️ 載入中…</div>
 <div id="map"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
-<script>if(!window.L){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>');}</script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.min.js"></script>
-<script>if(!window.L || !L.MarkerClusterGroup){document.write('<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"><\/script>');}</script>
-<script>if(!window.L || !L.MarkerClusterGroup){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"><\/script>');}</script>
-<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
-<script>if(!window.proj4){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"><\/script>');}</script>
-<script>if(!window.proj4){document.write('<script src="https://unpkg.com/proj4@2.9.2/dist/proj4.js"><\/script>');}</script>
-
-<!-- DOMPurify for XSS protection -->
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
-<script>if(!window.DOMPurify){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"><\/script>');}</script>
-
+<!-- 1️⃣ 自家全域腳本（即時執行，掛去全域詞法環境） -->
 <script src="assets/js/config.js"></script>
 <script src="assets/js/utils.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
-<script src="assets/js/app.js"></script>
-
-<!-- 🔥 PWA 離線佇列與 Service Worker 註冊 -->
 <script src="offline.js"></script>
+
+<!-- 2️⃣ 第三方函式庫（defer + onerror 備援，依順序執行、唔再阻塞解析） -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer
+        onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.min.js" defer
+        onerror="this.onerror=null;this.src='https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js" defer
+        onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" defer
+        onerror="this.onerror=null;this.src='https://unpkg.com/dompurify@3.0.6/dist/purify.min.js'"></script>
+
+<!-- 3️⃣ 主入口（ES Module，最後執行） -->
+<script type="module" src="assets/js/app.js"></script>
+
+<!-- 🔥 PWA Service Worker 註冊 -->
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {

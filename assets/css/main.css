@@ -75,6 +75,9 @@ button { touch-action: manipulation; cursor: pointer; }
   font-size: 15px; background: rgba(255,255,255,0.85); color: var(--text);
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
   max-width: 46vw;
+  /* 🔥 [v2.29 防 CLS] 固定寬度，option 載入後唔會跳 */
+  width: 190px;
+  flex: 0 0 auto;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
@@ -94,6 +97,12 @@ button { touch-action: manipulation; cursor: pointer; }
 }
 #bar button.blue { background: var(--accent); box-shadow: 0 2px 6px rgba(21, 101, 192, 0.3); }
 #bar button:active { transform: scale(0.96); }
+
+/* 🔥 [v2.29 防 CLS] 隱藏但保留位置，避免按鈕出現時 re-wrap 移位 */
+.ghost-hidden {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 
 /* 🔥 [v2.19 新增] 搜尋框容器 */
 .search-wrap {
@@ -405,7 +414,7 @@ body.panel-open::before {
 /* ================= 手機版響應式優化 ================= */
 @media (max-width: 600px) {
   #bar { left: 8px; right: 8px; top: 8px; flex-wrap: nowrap; gap: 4px; }
-  #bar select { flex: 1; min-width: 0; max-width: none; font-size: 16px; padding: 10px 8px; }
+  #bar select { flex: 1; min-width: 0; max-width: none; width: auto; font-size: 16px; padding: 10px 8px; }
   #bar button { flex: 0 0 auto; padding: 10px 12px; font-size: 14px; white-space: nowrap; }
   
   .search-wrap { flex: 1 1 100%; max-width: none; order: 99; }

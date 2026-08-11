@@ -249,6 +249,7 @@
       '<div class="sub">WGS84：' + f5(t.lat) + ', ' + f5(t.lng) + '</div>' +
       '<div id="minimap"></div>' +
     '</div>' +
+    '<div class="card"><button class="sec" style="background:#00897b" onclick="goNFC()">📱 一鍵寫入 NFC tag</button></div>' +
     '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員</button></div>' +
     '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>' +
     '<div id="imgModal" class="modal" onclick="closeZoom()">' +
@@ -660,6 +661,13 @@
         window.open(url, '_blank');
         alert('⚠️ 自動下載失敗，已在新分頁打開圖片，請手動右鍵保存。\n錯誤：' + err.message);
       });
+  };
+
+  // 🔥 [v2.30] 一鍵跳去 nfc.html，自動帶同樹木 URL
+  window.goNFC = function(){
+    const treeUrl = location.origin + location.pathname +
+      '?id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj);
+    location.href = 'nfc.html?url=' + encodeURIComponent(treeUrl);
   };
 
 })();
