@@ -1,7 +1,7 @@
 /* 樹木管理系統 - Service Worker (PWA 離線模式) v1.1.1
  * 修正：cacheWithMeta 處理 opaque response
  */
-const VERSION = 'v1.1.2';
+const VERSION = 'v1.1.3';
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
