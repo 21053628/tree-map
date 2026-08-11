@@ -86,7 +86,8 @@ export function locateTree(treeId, projectId, lat, lng) {
   }
 
   if (targetLat && targetLng && !isNaN(targetLat) && !isNaN(targetLng)) {
-    state.map.flyTo([targetLat, targetLng], tree ? 19 : (state.map.getZoom() || Config.MAP.MAX_ZOOM), { duration: 1.2 });
+    // 🔥 [v2.38] 搜尋／定位到樹木後直接 zoom 到最大（22）
+    state.map.flyTo([targetLat, targetLng], tree ? Config.MAP.MAX_ZOOM : (state.map.getZoom() || Config.MAP.MAX_ZOOM), { duration: 1.2 });
 
     if (tree) {
       setTimeout(function () {
