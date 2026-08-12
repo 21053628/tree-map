@@ -1,15 +1,26 @@
 {
-  "name": "樹木管理 GIS",
+  "name": "樹木管理 GIS - Tree Management GIS",
   "short_name": "樹木GIS",
-  "description": "樹木互動地圖・巡查・簽到系統",
+  "description": "樹木資訊管理系統：巡查、簽到、NFC、離線記錄",
+  "lang": "zh-HK",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f1f5f1",
+  "background_color": "#f4f7f4",
   "theme_color": "#2e7d32",
-  "lang": "zh-HK",
   "icons": [
-    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
