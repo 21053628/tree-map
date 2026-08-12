@@ -1,7 +1,7 @@
 /* =========================================================
-   樹木管理系統 main.css v2.58
-   - 桌面：頂欄淨返 揀地盤＋搜尋（垂直對齊 300px）
-   - 桌面：建立地盤/新增樹木 移入底 bar；狀態列上移 64px
+   樹木管理系統 main.css v2.59
+   - 動作掣改淡色彩邊風格（和諧化）
+   - 桌面表單搬去正中間 modal
    ========================================================= */
 
 /* ================= 1. 全域變數 ================= */
@@ -65,11 +65,11 @@ input, textarea, select, .leaflet-popup-content, #panel, .sr-item, .log, .legend
 #map { height: 100%; width: 100%; }
 button { touch-action: manipulation; cursor: pointer; }
 
-/* ================= 3. 頂部控制列（垂直對齊版） ================= */
+/* ================= 3. 頂部控制列 ================= */
 #bar {
   position: absolute; top: 8px; right: 8px; z-index: 1001;
-  display: flex; flex-direction: column; gap: 6px;  /* 🔥 [v2.58] 垂直排列 */
-  width: 300px;                                      /* 🔥 [v2.58] 統一闊度 */
+  display: flex; flex-direction: column; gap: 6px;
+  width: 300px;
   padding-top: var(--safe-top);
   pointer-events: none;
 }
@@ -81,14 +81,13 @@ button { touch-action: manipulation; cursor: pointer; }
   pointer-events: auto;
 }
 
-/* 🔥 [v2.58] 兩掣全平台移入底 bar，頂欄永遠隱藏 */
 #bar #addProjectBtn, #bar #addTreeBtn { display: none !important; }
 
 #bar select {
   padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border);
   font-size: 15px; background: rgba(255,255,255,0.85); color: var(--text);
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
-  width: 100%; max-width: none; flex: none;   /* 🔥 [v2.58] 填滿 300px */
+  width: 100%; max-width: none; flex: none;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
@@ -117,7 +116,7 @@ button { touch-action: manipulation; cursor: pointer; }
 /* ================= 4. 搜尋 ================= */
 .search-wrap {
   position: relative;
-  width: 100%; max-width: none; flex: none;  /* 🔥 [v2.58] 同 select 一樣闊 */
+  width: 100%; max-width: none; flex: none;
 }
 .search-wrap input {
   width: 100%;
@@ -205,20 +204,26 @@ button { touch-action: manipulation; cursor: pointer; }
   white-space: nowrap;
 }
 
-/* ================= 5. 面板 (Panel) ================= */
+/* ================= 5. 面板（桌面正中間 modal） ================= */
 #panel {
-  display: none; position: absolute; top: 52px; right: 8px; z-index: 1200;
+  display: none;
+  position: absolute;
+  top: 50%; left: 50%;                 /* 🔥 [v2.59] 正中間 */
+  z-index: 1200;
   background: var(--card-bg); border-radius: var(--radius);
-  padding: 16px; width: 300px; box-shadow: 0 8px 30px rgba(0,0,0,.2);
-  max-height: 80vh; overflow-y: auto;
+  padding: 16px; width: 340px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  max-height: 85vh; overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  transform: translateY(-10px); opacity: 0; pointer-events: none;
+  transform: translate(-50%, -50%) translateY(14px) scale(.97);
+  opacity: 0; pointer-events: none;
   will-change: transform, opacity;
 }
 #panel[style*="display: block"] {
-  transform: translateY(0); opacity: 1; pointer-events: auto;
+  transform: translate(-50%, -50%);
+  opacity: 1; pointer-events: auto;
 }
 
 body.panel-open::before {
@@ -258,7 +263,7 @@ body.panel-open::before {
 
 /* ================= 6. 狀態列＋圖例 ================= */
 #status {
-  position: absolute; bottom: 64px; left: 50%;   /* 🔥 [v2.58] 24→64px 避開底 bar */
+  position: absolute; bottom: 64px; left: 50%;
   transform: translateX(-50%) scale(1);
   z-index: 999;
   background: rgba(255,255,255,0.9);
@@ -309,7 +314,7 @@ body.panel-open::before {
   cursor: pointer;
 }
 
-/* ================= 8. Layer Bar＋FAB＋動作掣（全平台） ================= */
+/* ================= 8. Layer Bar＋FAB＋動作掣 ================= */
 .layerbar-wrap {
   position: relative;
   display: flex;
@@ -331,15 +336,23 @@ body.panel-open::before {
 .layerbar button.on { background: var(--accent); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
 .layerbar button:active { transform: scale(0.95); }
 
-/* 🔥 [v2.58] 動作掣：桌面橫排顯示（藍/綠），手機抽屜再覆寫 */
+/* 🔥 [v2.59] 動作掣：淡色底＋彩邊＋彩字，和諧唔突兀 */
 button.drawer-action {
   border: none; border-radius: 8px;
   padding: 8px 12px; font-size: 13px; font-weight: 600;
-  color: #fff;
   transition: all 0.15s ease;
 }
-button.drawer-action.act-project { background: var(--accent); }
-button.drawer-action.act-tree { background: var(--primary); }
+button.drawer-action.act-project {
+  background: rgba(21, 101, 192, 0.12);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(21, 101, 192, 0.4);
+}
+button.drawer-action.act-tree {
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px rgba(46, 125, 50, 0.4);
+}
+button.drawer-action:hover { filter: brightness(1.05); }
 button.drawer-action:active { transform: scale(0.95); }
 .drawer-sep {
   width: 1px;
@@ -348,7 +361,7 @@ button.drawer-action:active { transform: scale(0.95); }
   margin: 6px 2px;
 }
 
-.layerbar-fab { display: none; }  /* 桌面隱藏 FAB */
+.layerbar-fab { display: none; }
 
 /* ================= 9. Popup 彈窗 ================= */
 .leaflet-popup-content-wrapper {
@@ -473,14 +486,12 @@ button.is-loading::after {
 
 /* ================= 12. 手機版整合佈局 ================= */
 @media (max-width: 600px) {
-  /* 頂欄：返返橫排一行（揀地盤＋搜尋） */
   #bar { left: 8px; right: 8px; top: 8px; width: auto; flex-direction: row; flex-wrap: nowrap; gap: 4px; }
   #bar select { flex: 0 1 42%; min-width: 0; width: auto; font-size: 16px; padding: 10px 8px; }
   .search-wrap { flex: 1 1 160px; width: auto; order: 2; min-width: 0; }
   .search-wrap input { font-size: 16px; padding: 10px; }
   .search-wrap input:focus { background: rgba(255,255,255,0.98); }
 
-  /* 搜尋結果下拉 */
   .search-results {
     position: absolute !important;
     top: calc(100% + 6px) !important;
@@ -495,7 +506,6 @@ button.is-loading::after {
   }
   .search-results .sr-item { padding: 14px 16px; font-size: 15px; }
 
-  /* 縮放掣左下角 */
   .leaflet-top.leaflet-left {
     top: auto;
     bottom: calc(10px + var(--safe-bottom));
@@ -518,7 +528,6 @@ button.is-loading::after {
     max-width: 92%;
   }
 
-  /* FAB 浮掣 */
   .layerbar-fab {
     display: flex;
     align-items: center;
@@ -535,7 +544,6 @@ button.is-loading::after {
   .layerbar-fab:active { transform: scale(.92); }
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 
-  /* 抽屜垂直 */
   .layerbar {
     display: none;
     flex-direction: column;
@@ -550,10 +558,9 @@ button.is-loading::after {
     animation: sheetUp .22s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
-  .layerbar button.drawer-action { padding: 13px 16px; font-size: 14px; text-align: left; }
   .drawer-sep { width: auto; height: 1px; align-self: auto; margin: 4px 2px; }
 
-  /* Panel 底部抽屜 */
+  /* 手機：表單維持底部抽屜 */
   #panel {
     position: fixed; top: auto; bottom: 0; left: 0; right: 0;
     width: auto; max-height: 85vh;
@@ -571,7 +578,6 @@ button.is-loading::after {
   #panel input, #panel select { font-size: 16px; padding: 12px; }
   #panel button { padding: 14px; font-size: 16px; }
 
-  /* Popup 手機版 */
   .leaflet-popup-content-wrapper {
     border-radius: 18px !important;
     padding: 0 !important;
@@ -612,7 +618,7 @@ button.is-loading::after {
 @media (min-width: 601px) and (max-width: 1024px) {
   #bar { left: 12px; right: 12px; top: calc(10px + var(--safe-top)); width: 320px; }
   #bar select { font-size: 16px; padding: 11px; }
-  #panel { width: 320px; top: calc(58px + var(--safe-top)); right: 12px; }
+  #panel { width: 360px; }
   .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
 }
 
@@ -635,9 +641,21 @@ button.is-loading::after {
   .layerbar button { color: #bbb; }
   .layerbar button.on { background: var(--accent); color: #fff; }
 
+  /* 🔥 [v2.59] 深色模式動作掣：亮色字＋淡色底 */
+  .layerbar button.drawer-action.act-project {
+    background: rgba(33, 150, 243, 0.16);
+    color: #64b5f6;
+    box-shadow: inset 0 0 0 1px rgba(100, 181, 246, 0.4);
+  }
+  .layerbar button.drawer-action.act-tree {
+    background: rgba(129, 199, 132, 0.16);
+    color: #81c784;
+    box-shadow: inset 0 0 0 1px rgba(129, 199, 132, 0.4);
+  }
+  .layerbar .drawer-sep { background: rgba(255,255,255,.15); }
+
   .layerbar-fab { background: #1976d2; }
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
-  .layerbar .drawer-sep { background: rgba(255,255,255,.15); }
 
   #status {
     background: rgba(30, 36, 30, 0.9);
