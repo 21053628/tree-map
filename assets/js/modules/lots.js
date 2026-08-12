@@ -3,6 +3,7 @@
  * - GML 解析
  * - DD/Lot 編號顯示
  * - LRU 快取
+ * v2.48 - 地段標題對齊航拍圖格式：「Lot 533 S.J ss.1」→「Lot 533 J,1」
  */
 import { state, LOT_CACHE_MAX } from './state.js';
 import { $, escapeHtml, debounce, updateStatus } from './dom.js';
@@ -55,7 +56,7 @@ function extractLotAttrs_(poly) {
   (function walk(el) {
     for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
       const ln = (c.localName || '').toLowerCase();
-      if (GEOM_TAGS_.indexOf(ln) !== -1) continue;
+      if (GEOM_TAGS_.indexOf(ln) === -1) continue;
       if (c.firstElementChild) { walk(c); continue; }
       const v = (c.textContent || '').trim();
       if (v && v.length < 200 && !attrs[c.localName]) attrs[c.localName] = v;
@@ -118,6 +119,16 @@ function parseGML(gmlText) {
   return polygons;
 }
 
+// 🔥 [v2.48] 將原始 sublot 寫法清洗做航拍圖格式：「S.J ss.1」→「J,1」
+function cleanSublot_(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  s = s.replace(/^S\.\s*/i, '');        // 剷走開頭 "S."
+  s = s.replace(/\s*ss\.?\s*/i, ',');   // " ss.1" → ",1"
+  s = s.replace(/\s+/g, ',');           // 空格 → ","（"F RP" → "F,RP"）
+  return s;
+}
+
 function buildLotPopup_(a) {
   const get = function () {
     for (let i = 0; i < arguments.length; i++) {
@@ -134,9 +145,19 @@ function buildLotPopup_(a) {
   const updated = get('lastupdatedate');
   const lotid = get('lotid');
 
-  let html = '';
+  // 🔥 [v2.48] 新標題格式：對齊航拍圖（DD184 533 J,1 → 「Lot 533 J,1」）
+  // 優先用 sectioncode（本身已係 "J,1" 格式）；冇就先取 lotnumber，再清洗 disp 剩餘部分
+  let title = '';
   if (disp) {
-    html += '<b>🗺️ Lot ' + escapeHtml(disp) + '</b><br>';
+    const lotNo = get('lotnumber') || String(disp).trim().split(/\s+/)[0];
+    const remainder = String(disp).trim().replace(/^\S+\s*/, ''); // 剷走 lot 號剩低 "S.J ss.1"
+    const sublot = sec || cleanSublot_(remainder);
+    title = 'Lot ' + lotNo + (sublot ? ' ' + sublot : '');
+  }
+
+  let html = '';
+  if (title) {
+    html += '<b>🗺️ ' + escapeHtml(title) + '</b><br>';
   } else {
     html += '<b>🗺️ 私人地段</b><br>';
   }
