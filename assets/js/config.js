@@ -38,7 +38,9 @@ const Config = {
   MAP: {
     DEFAULT_CENTER: [22.40, 114.18],
     DEFAULT_ZOOM: 11,
-    MAX_ZOOM: 22
+    MAX_ZOOM: 22,
+    PROJECT_ZOOM: 19,  // 🔥 揀地盤：19（政府底圖原生最清＋睇晒全盤）
+    TREE_ZOOM: 22      // 🔥 搵樹：22（極清近鏡）
   }
 };
 

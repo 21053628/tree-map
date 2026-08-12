@@ -1,6 +1,6 @@
 /**
  * URL 參數解析與定位模組
- * v2.33 - 加入航拍圖自動刷新
+ * v2.39 - 配合 config.js 新增 TREE_ZOOM / PROJECT_ZOOM
  */
 import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
@@ -86,8 +86,8 @@ export function locateTree(treeId, projectId, lat, lng) {
   }
 
   if (targetLat && targetLng && !isNaN(targetLat) && !isNaN(targetLng)) {
-    // 🔥 [v2.38] 搜尋／定位到樹木後直接 zoom 到最大（22）
-    state.map.flyTo([targetLat, targetLng], tree ? Config.MAP.MAX_ZOOM : (state.map.getZoom() || Config.MAP.MAX_ZOOM), { duration: 1.2 });
+    // 🔥 [v2.39] 搜尋／定位到樹木後使用 TREE_ZOOM (22)，只給座標使用 MAX_ZOOM
+    state.map.flyTo([targetLat, targetLng], tree ? Config.MAP.TREE_ZOOM : (state.map.getZoom() || Config.MAP.MAX_ZOOM), { duration: 1.2 });
 
     if (tree) {
       setTimeout(function () {
@@ -105,7 +105,8 @@ export function locateTree(treeId, projectId, lat, lng) {
   } else if (finalPid) {
     const p = state.PROJECTS.find((x) => String(x.project_id) === finalPid);
     if (p) {
-      state.map.flyTo([+p.lat, +p.lng], Config.MAP.MAX_ZOOM, { duration: 1.2 });
+      // 🔥 [v2.39] 純地盤定位使用 PROJECT_ZOOM (19)
+      state.map.flyTo([+p.lat, +p.lng], Config.MAP.PROJECT_ZOOM, { duration: 1.2 });
     }
   }
 

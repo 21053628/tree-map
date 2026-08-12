@@ -4,7 +4,7 @@
  * - 底圖切換（支援 maxNativeZoom 放大）
  * - 航拍圖疊加層（單圖／切片雙模式）
  * - 圖例
- * v2.34 - 配合 8000px 縮圖：MAX_ZOOM 改 22
+ * v2.41 - 修正航拍圖 zIndex，確保地段圖層（lot layer）顯示喺最頂
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
@@ -197,7 +197,7 @@ export function refreshAerial() {
       maxNativeZoom: 22,
       maxZoom: Config.MAP.MAX_ZOOM,
       opacity: 0.9,
-      zIndex: 500,
+      zIndex: 250,   // 🔥 [v2.41] 改低：夾喺底圖(200)同地段(400)之間，確保地段線顯示喺最頂
       noWrap: true
     }).addTo(state.map);
   } else {
@@ -205,7 +205,7 @@ export function refreshAerial() {
     state.aerialLayer = L.imageOverlay(p.aerial_url, bounds, {
       opacity: 0.9,
       interactive: false, // 唔擋地圖點擊
-      zIndex: 500
+      zIndex: 250      // 🔥 [v2.41] 改低：夾喺底圖(200)同地段(400)之間，確保地段線顯示喺最頂
     }).addTo(state.map);
   }
 }
