@@ -1,18 +1,21 @@
 /**
  * 樹木標記與 popup 模組
- * v4.2 - 新增樹木編號標籤：A) zoom>=19 自動顯示 + B) 手動 🔢 開關
- * v4.1 - L.circleMarker + Canvas 渲染，2000 棵樹 0 延遲
+ * v4.3 - 🔢 掣升級做三模式循環：智能(默認) → 恆常 → 關閉 → 智能…
+ * v4.2 - 樹木編號標籤系統
+ * v4.1 - L.circleMarker + Canvas 渲染
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
 
 /* =========================================================
- * 🔥 [v4.2] 樹木編號標籤系統（性能保護版）
+ * 🔥 [v4.3] 樹木編號標籤系統（三模式版）
+ * mode: 'auto' = 智能（zoom>=19 先顯示，默認）
+ *       'on'   = 恆常顯示
+ *       'off'  = 全部關閉
  * ========================================================= */
-const LABEL_MIN_ZOOM = 19;      // 自動顯示嘅最低 zoom
-const LABEL_MAX_COUNT = 400;    // 可見標籤上限，超過即跳過（防 DOM 爆炸）
-let labelsAuto = true;          // A：高 zoom 自動顯示
-let labelsForced = false;       // B：手動強制顯示
+const LABEL_MIN_ZOOM = 20;
+const LABEL_MAX_COUNT = 400;
+let labelMode = 'auto';
 let labelLayer = null;
 let _labelTimer = null;
 
@@ -21,19 +24,41 @@ function escapeHtml(str){
 }
 
 function labelsShouldShow(){
-  return labelsForced || (labelsAuto && state.map && state.map.getZoom() >= LABEL_MIN_ZOOM);
+  if (labelMode === 'on') return true;
+  if (labelMode === 'off') return false;
+  return !!(state.map && state.map.getZoom() >= LABEL_MIN_ZOOM); // auto
 }
 
-// 🔥 B：手動開關（layer bar 🔢 ）
-export function toggleTreeLabels(){
-  labelsForced = !labelsForced;
+// 🔥 按鈕外觀跟住模式變
+function updateLabelBtn(){
   const btn = document.querySelector('.layerbar button[data-l="labels"]');
-  if (btn) btn.classList.toggle('on', labelsForced);
-  refreshLabels();
-  if (labelsForced && !labelLayer && state.curProject) {
-    updateStatus('⚠️ 可見樹木太多，請放大先顯示編號');
+  if (!btn) return;
+  btn.classList.toggle('on', labelMode === 'on');
+  if (labelMode === 'off') {
+    btn.style.opacity = '0.45';
+    btn.style.filter = 'grayscale(1)';
   } else {
-    updateStatus(labelsForced ? '✅ 樹木編號：恆常顯示' : '✅ 樹木編號：自動（放大顯示）');
+    btn.style.opacity = '';
+    btn.style.filter = '';
+  }
+  btn.title = labelMode === 'on' ? '樹木編號：恆常顯示（撳切換）'
+        : labelMode === 'off' ? '樹木編號：關閉（撳切換）'
+        : '樹木編號：智能（撳切換）';
+}
+
+// 🔥 三模式循環（map.js 嘅 🔢 掣 call 呢個）
+export function toggleTreeLabels(){
+  labelMode = labelMode === 'auto' ? 'on' : (labelMode === 'on' ? 'off' : 'auto');
+  updateLabelBtn();
+  refreshLabels();
+  if (labelMode === 'on' && !labelLayer && state.curProject) {
+    updateStatus('⚠️ 可見樹木太多，請放大先顯示編號');
+  } else if (labelMode === 'on') {
+    updateStatus('✅ 樹木編號：恆常顯示');
+  } else if (labelMode === 'off') {
+    updateStatus('🚫 樹木編號：已關閉');
+  } else {
+    updateStatus('✅ 樹木編號：智能（放大顯示）');
   }
 }
 
@@ -72,7 +97,7 @@ export function refreshLabels(){
   labelLayer.addTo(state.map);
 }
 
-// 🔥 防抖版本（俾 moveend 用，避免拖圖狂重建）
+// 🔥 防抖版本（俾 moveend 用）
 export function scheduleRefreshLabels(){
   clearTimeout(_labelTimer);
   _labelTimer = setTimeout(refreshLabels, 120);
@@ -87,7 +112,7 @@ export function drawTrees() {
 
   if (!state.curProject) {
     updateStatus('👉 請先選擇地盤，即可查看樹木');
-    refreshLabels(); // 🔥 [v4.2] 清埋標籤
+    refreshLabels();
     return;
   }
 
@@ -168,7 +193,8 @@ export function drawTrees() {
   state.perfMetrics.totalRenders++;
   state.perfMetrics.renderTime = performance.now() - startTime;
 
-  refreshLabels(); // 🔥 [v4.2] 數據變咗，標籤跟住重建
+  refreshLabels();
+  updateLabelBtn(); // 🔥 [v4.3] 確保按鈕外觀同步
 
   const pname = (state.PROJECTS.find((x) => String(x.project_id) === String(state.curProject)) || {}).name;
   updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹（耗時 ' + state.perfMetrics.renderTime.toFixed(1) + 'ms）');
