@@ -1,5 +1,5 @@
 /* ================= 全域變數與基礎設定 ================= */
-/* v2.51 - 手機版層疊優化：狀態列避開 layer bar、超窄屏 layer bar 自動換行 */
+/* v2.52 - 手機版零重疊修正：狀態列 100px、縮放掣搬左下角、頂欄允許換行 */
 :root {
   --primary: #2e7d32;
   --primary-dark: #1b5e20;
@@ -18,7 +18,7 @@
   --glass-blur: blur(12px) saturate(180%);
 }
 
-/* 🌙 深色模式變數 (Dark Mode) - 自動適配系統設定 */
+/* 🌙 深色模式變數 */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #121412;
@@ -47,13 +47,11 @@ html, body {
   user-select: none;
 }
 
-/* 恢復需要選取/輸入嘅元素 */
 input, textarea, select, .leaflet-popup-content, #panel, .sr-item, .log, .legend {
   -webkit-user-select: text;
   user-select: text;
 }
 
-/* 🌟 自訂捲動條 */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
@@ -109,7 +107,6 @@ button { touch-action: manipulation; cursor: pointer; }
   pointer-events: none !important;
 }
 
-/* 🔥 搜尋框容器 */
 .search-wrap {
   position: relative;
   flex: 1 1 280px;
@@ -138,7 +135,6 @@ button { touch-action: manipulation; cursor: pointer; }
   color: var(--muted);
 }
 
-/* 🔥 搜尋結果下拉清單 */
 .search-results {
   display: none;
   position: absolute;
@@ -162,7 +158,6 @@ button { touch-action: manipulation; cursor: pointer; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 🔥 [v2.37] popup 滑入動畫 */
 @keyframes sheetUp {
   from { transform: translateY(24px) scale(.98); opacity: .5; }
   to { transform: translateY(0) scale(1); opacity: 1; }
@@ -206,7 +201,7 @@ button { touch-action: manipulation; cursor: pointer; }
   white-space: nowrap;
 }
 
-/* ================= 側邊/底部面板 (Panel) ================= */
+/* ================= 面板 (Panel) ================= */
 #panel {
   display: none; position: absolute; top: 52px; right: 8px; z-index: 1200;
   background: var(--card-bg); border-radius: var(--radius);
@@ -263,6 +258,7 @@ body.panel-open::before {
   z-index: 999; background: rgba(255,255,255,0.9); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
   padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;
   box-shadow: 0 4px 12px rgba(0,0,0,.1); max-width: 85%; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
   pointer-events: none;
   border: 1px solid var(--glass-border);
   transition: opacity 0.3s, background 0.3s, border-color 0.3s, color 0.3s;
@@ -304,7 +300,7 @@ body.panel-open::before {
   cursor: pointer;
 }
 
-/* ================= 底圖切換按鈕 (Layer Bar) ================= */
+/* ================= Layer Bar ================= */
 .layerbar {
   background: rgba(255,255,255,0.9); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
   border-radius: 10px; padding: 4px; display: flex; gap: 4px;
@@ -319,7 +315,7 @@ body.panel-open::before {
 .layerbar button.on { background: var(--accent); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
 .layerbar button:active { transform: scale(0.95); }
 
-/* ================= Popup 彈窗優化 ================= */
+/* ================= Popup 彈窗 ================= */
 .leaflet-popup-content-wrapper {
   max-width: calc(100vw - 32px) !important;
   box-sizing: border-box; overflow: hidden;
@@ -414,18 +410,16 @@ body.panel-open::before {
   display: block; margin: 8px 0; box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 
-/* ================= 🔥 手機版終極響應式優化 (v2.51) ================= */
+/* ================= 🔥 手機版零重疊佈局 (v2.52) ================= */
 @media (max-width: 600px) {
-  #bar { left: 8px; right: 8px; top: 8px; flex-wrap: nowrap; gap: 4px; }
+  /* 頂欄：允許換行，搜尋框做第二行 */
+  #bar { left: 8px; right: 8px; top: 8px; flex-wrap: wrap; gap: 4px; }
   #bar select { flex: 1; min-width: 0; max-width: none; width: auto; font-size: 16px; padding: 10px 8px; }
   #bar button { flex: 0 0 auto; padding: 10px 12px; font-size: 14px; white-space: nowrap; }
   
   .search-wrap { flex: 1 1 100%; max-width: none; order: 99; }
   .search-wrap input { font-size: 16px; padding: 10px; }
-  
-  .search-wrap input:focus {
-    background: rgba(255,255,255,0.98);
-  }
+  .search-wrap input:focus { background: rgba(255,255,255,0.98); }
 
   /* 搜尋結果底部抽屜 */
   .search-results {
@@ -445,17 +439,40 @@ body.panel-open::before {
     content: ''; display: block; width: 40px; height: 4px;
     background: #ccc; border-radius: 2px; margin: 8px auto 4px;
   }
-  .search-results .sr-item {
-    padding: 14px 16px;
-    font-size: 15px;
-  }
+  .search-results .sr-item { padding: 14px 16px; font-size: 15px; }
   
-  .leaflet-top.leaflet-left { top: calc(60px + var(--safe-top)); left: 6px; }
-  .leaflet-bottom.leaflet-right { bottom: calc(40px + var(--safe-bottom)); right: 6px; max-width: calc(100vw - 12px); }
+  /* 🔥 [v2.52] 縮放掣搬去左下角，徹底避開頂欄 */
+  .leaflet-top.leaflet-left {
+    top: auto;
+    bottom: calc(10px + var(--safe-bottom));
+    left: 6px;
+  }
   .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
+  
+  /* 🔥 [v2.52] 右下角：layer bar 貼底 */
+  .leaflet-bottom.leaflet-right {
+    bottom: calc(10px + var(--safe-bottom));
+    right: 6px;
+    max-width: calc(100vw - 12px);
+  }
   
   .legend { display: none; }
   body.panel-open .layerbar { display: none; }
+  
+  /* 🔥 [v2.52] 狀態列：浮喺所有底部控制之上（100px），加 ellipsis 防溢出 */
+  #status { 
+    font-size: 12px; 
+    bottom: calc(100px + var(--safe-bottom)) !important; 
+    max-width: 92%; 
+  }
+  
+  .layerbar {
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: calc(100vw - 12px);
+  }
+  .layerbar button { padding: 12px 14px; font-size: 13px; }
   
   #panel {
     position: fixed; top: auto; bottom: 0; left: 0; right: 0;
@@ -467,33 +484,12 @@ body.panel-open::before {
     transform: translateY(100%);
   }
   #panel[style*="display: block"] { transform: translateY(0); }
-  
   #panel::before {
     content: ''; display: block; width: 40px; height: 4px;
     background: #ccc; border-radius: 2px; margin: 0 auto 12px;
   }
-  
   #panel input, #panel select { font-size: 16px; padding: 12px; }
   #panel button { padding: 14px; font-size: 16px; }
-  
-  /* 🔥 [v2.51] 狀態列上移：避開右下角 layer bar，唔再視覺疊埋 */
-  #status { 
-    font-size: 12px; 
-    bottom: calc(76px + var(--safe-bottom)) !important; 
-    max-width: 92%; 
-  }
-  
-  /* 🔥 [v2.51] Layer bar 防爆邊：窄屏自動換行 */
-  .layerbar {
-    box-shadow: 0 4px 16px rgba(0,0,0,.15);
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    max-width: calc(100vw - 12px);
-  }
-  .layerbar button { 
-    padding: 12px 14px; 
-    font-size: 13px; 
-  }
   
   .leaflet-popup-content-wrapper {
     border-radius: 18px !important;
@@ -526,12 +522,10 @@ body.panel-open::before {
     top: 2px !important;
     right: 2px !important;
   }
-  .leaflet-popup-close-button::after {
-    font-size: 24px;
-  }
+  .leaflet-popup-close-button::after { font-size: 24px; }
 }
 
-/* 🔥 [v2.51] 超窄屏（<400px）：layer bar 極簡模式 */
+/* 🔥 超窄屏（<400px）極簡模式 */
 @media (max-width: 400px) {
   .layerbar { gap: 2px; padding: 3px; }
   .layerbar button { padding: 10px 9px; font-size: 12px; }
@@ -547,7 +541,7 @@ body.panel-open::before {
   .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
 }
 
-/* ================= 通用觸控與無障礙優化 ================= */
+/* ================= 通用觸控與無障礙 ================= */
 .leaflet-touch .leaflet-bar { border-radius: 10px; overflow: hidden; }
 .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
 .leaflet-container { touch-action: none; }
@@ -589,7 +583,7 @@ button.is-loading::after {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 🌙 深色模式具體元素覆蓋 */
+/* 🌙 深色模式覆蓋 */
 @media (prefers-color-scheme: dark) {
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
   ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
@@ -630,9 +624,7 @@ button.is-loading::after {
     border-color: #444;
     color: #e0e0e0;
   }
-  .search-wrap input:focus {
-    background: rgba(30, 36, 30, 0.98);
-  }
+  .search-wrap input:focus { background: rgba(30, 36, 30, 0.98); }
   .search-wrap input::placeholder { color: #777; }
   .search-results {
     background: #1e241e;
