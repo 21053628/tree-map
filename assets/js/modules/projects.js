@@ -1,6 +1,6 @@
 /**
  * 地盤標記與選擇模組
- * v2.33 - 加入航拍圖自動刷新
+ * v2.43 - 修正「前往地盤」按鈕嘅 zoom 級別
  */
 import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
@@ -87,12 +87,13 @@ function performFlyTo(pid) {
   if (pid) {
     const p = state.PROJECTS.find((x) => String(x.project_id) === String(pid));
     if (p) {
-      state.map.flyTo([+p.lat, +p.lng], Config.MAP.MAX_ZOOM, { duration: 1.2, easeLineProxy: 0.25 });
+      // 🔥 [v2.43 修正] 前往地盤：使用 PROJECT_ZOOM (19)，移除無效參數 easeLineProxy
+      state.map.flyTo([+p.lat, +p.lng], Config.MAP.PROJECT_ZOOM || 19, { duration: 1.2 });
       state.map.once('moveend', function () { drawProjects(); drawTrees(); });
       return;
     }
   } else {
-    state.map.flyTo(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM, { duration: 1.0, easeLineProxy: 0.25 });
+    state.map.flyTo(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM, { duration: 1.0 });
     state.map.once('moveend', function () { drawProjects(); drawTrees(); });
     return;
   }
