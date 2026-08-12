@@ -1,7 +1,7 @@
 /* =========================================================
-   樹木管理系統 main.css v2.56（重整版）
-   - 修復：手機頂欄「建立地盤/新增樹木」剷唔走（pointer:coarse 覆蓋 bug）
-   - 整合：FAB 抽屜、頂欄極簡、狀態雲彈前漸退、零重疊佈局
+   樹木管理系統 main.css v2.57
+   - 修復：手機搜尋結果改返下拉式（底部抽屜會被虛擬鍵盤擋住）
+   - 頂欄 z-index 提升至 1001，確保下拉壓過地圖控制
    ========================================================= */
 
 /* ================= 1. 全域變數 ================= */
@@ -67,7 +67,7 @@ button { touch-action: manipulation; cursor: pointer; }
 
 /* ================= 3. 頂部控制列 ================= */
 #bar {
-  position: absolute; top: 8px; right: 8px; z-index: 999;
+  position: absolute; top: 8px; right: 8px; z-index: 1001; /* 🔥 [v2.57] 999→1001 壓過地圖控制 */
   display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
   padding-top: var(--safe-top);
   pointer-events: none;
@@ -152,6 +152,7 @@ button { touch-action: manipulation; cursor: pointer; }
   z-index: 1000;
   border: 1px solid rgba(0,0,0,.1);
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .search-results[style*="display: block"] {
   animation: fadeSlideDown 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
@@ -254,7 +255,7 @@ body.panel-open::before {
 #panel .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 #panel .x { background: #78909c; box-shadow: none; }
 
-/* ================= 6. 狀態列（含彈前漸退）＋圖例 ================= */
+/* ================= 6. 狀態列＋圖例 ================= */
 #status {
   position: absolute; bottom: 24px; left: 50%;
   transform: translateX(-50%) scale(1);
@@ -270,7 +271,6 @@ body.panel-open::before {
   transition: opacity .3s, background .3s, border-color .3s, color .3s,
               transform .35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow .35s ease;
 }
-/* 🔥 [v2.55] 更新時彈到最前 3 秒，然後漸變退返後面 */
 #status.status-front {
   z-index: 1250;
   transform: translateX(-50%) scale(1.08);
@@ -308,7 +308,7 @@ body.panel-open::before {
   cursor: pointer;
 }
 
-/* ================= 8. Layer Bar＋FAB 抽屜（整合版） ================= */
+/* ================= 8. Layer Bar＋FAB 抽屜 ================= */
 .layerbar-wrap {
   position: relative;
   display: flex;
@@ -330,7 +330,6 @@ body.panel-open::before {
 .layerbar button.on { background: var(--accent); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
 .layerbar button:active { transform: scale(0.95); }
 
-/* 桌面隱藏 FAB 同抽屜動作掣（!important 防 touch 覆蓋） */
 .layerbar-fab { display: none; }
 button.drawer-action { display: none !important; }
 .drawer-sep { display: none !important; }
@@ -458,32 +457,31 @@ button.is-loading::after {
 
 /* ================= 12. 手機版整合佈局 ================= */
 @media (max-width: 600px) {
-  /* 🔥 頂欄極簡：剷走兩掣（雙 ID + !important 杜絕覆蓋） */
+  /* 頂欄極簡 */
   #bar #addProjectBtn, #bar #addTreeBtn { display: none !important; }
   #bar { left: 8px; right: 8px; top: 8px; flex-wrap: nowrap; gap: 4px; }
   #bar select { flex: 0 1 42%; min-width: 0; max-width: none; width: auto; font-size: 16px; padding: 10px 8px; }
-  .search-wrap { flex: 1 1 160px; order: 2; max-width: none; }
+  .search-wrap { flex: 1 1 160px; order: 2; max-width: none; min-width: 0; }
   .search-wrap input { font-size: 16px; padding: 10px; }
   .search-wrap input:focus { background: rgba(255,255,255,0.98); }
 
-  /* 搜尋結果底部抽屜 */
+  /* 🔥 [v2.57] 搜尋結果：改返搜尋框正下方下拉（鍵盤擋唔到） */
   .search-results {
-    position: fixed !important;
-    top: auto !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
-    max-height: 65vh !important;
-    border-radius: 20px 20px 0 0 !important;
-    box-shadow: 0 -8px 30px rgba(0,0,0,.25) !important;
-    margin-bottom: var(--safe-bottom);
-    border: none !important;
-    animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
-  }
-  .search-results::before {
-    content: ''; display: block; width: 40px; height: 4px;
-    background: #ccc; border-radius: 2px; margin: 8px auto 4px;
+    position: absolute !important;
+    top: calc(100% + 6px) !important;
+    bottom: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    max-height: 45vh !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25) !important;
+    margin-bottom: 0 !important;
+    border: 1px solid rgba(0,0,0,.1) !important;
+    -webkit-overflow-scrolling: touch;
   }
   .search-results .sr-item { padding: 14px 16px; font-size: 15px; }
 
-  /* 縮放掣搬左下角 */
+  /* 縮放掣左下角 */
   .leaflet-top.leaflet-left {
     top: auto;
     bottom: calc(10px + var(--safe-bottom));
@@ -491,7 +489,6 @@ button.is-loading::after {
   }
   .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
 
-  /* 右下角貼底 */
   .leaflet-bottom.leaflet-right {
     bottom: calc(10px + var(--safe-bottom));
     right: 6px;
@@ -501,14 +498,13 @@ button.is-loading::after {
   .legend { display: none; }
   body.panel-open .layerbar { display: none; }
 
-  /* 狀態列：浮喺底部控制之上 */
   #status {
     font-size: 12px;
     bottom: calc(100px + var(--safe-bottom)) !important;
     max-width: 92%;
   }
 
-  /* 🔥 FAB 浮掣 */
+  /* FAB 浮掣 */
   .layerbar-fab {
     display: flex;
     align-items: center;
@@ -525,7 +521,7 @@ button.is-loading::after {
   .layerbar-fab:active { transform: scale(.92); }
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 
-  /* 🔥 抽：默认收起，展開變垂直 */
+  /* 抽屜垂直 */
   .layerbar {
     display: none;
     flex-direction: column;
@@ -541,7 +537,6 @@ button.is-loading::after {
   }
   .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
 
-  /* 🔥 抽屜動作掣 */
   .layerbar button.drawer-action {
     display: flex !important;
     align-items: center;
@@ -665,7 +660,6 @@ button.is-loading::after {
   .search-wrap input:focus { background: rgba(30, 36, 30, 0.98); }
   .search-wrap input::placeholder { color: #777; }
   .search-results { background: #1e241e; border-color: rgba(255,255,255,.1); }
-  .search-results::before { background: #555; }
 
   .sr-item { border-bottom-color: rgba(255,255,255,.08); }
   .sr-item:hover { background: rgba(129, 199, 132, 0.15); }
