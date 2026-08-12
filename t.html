@@ -96,11 +96,18 @@
 <script src="assets/vendor/proj4.js"></script>
 <script src="assets/vendor/purify.min.js"></script>
 
+<!-- 🔥 [v2.56 修正] 引入 config.js，統一 API URL 管理，解決 404 問題 -->
+<script src="assets/js/config.js"></script>
+
 <script>
 (function(){
   'use strict';
   
-  const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
+  // 🔥 [v2.56 修正] 優先讀取 config.js，以後改 URL 只需改一個檔案
+  const API = (typeof Config !== 'undefined' && Config.API_ENDPOINT)
+    ? Config.API_ENDPOINT
+    : 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
+  
   const $ = function(s){ return document.querySelector(s); };
   
   const HK80  = '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs';
