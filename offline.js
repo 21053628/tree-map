@@ -1,8 +1,9 @@
 /**
  * 樹木管理系統 - 離線寫入佇列 (IndexedDB Outbox)
- * v1.6.0 - 完美配合 api.js v2.1：
- *          1. GET/POST 攔截器加入 TIMEOUT 處理（防止 GAS 極端冷啟動導致白屏或寫入失敗）
- *          2. 保留 v1.5.0 嘅 Local-first 快照功能
+ * v1.7.0 - 配合 api.js v2.4 / app.js v2.54：
+ *          1. 新增 GAS 暖機 (warmGAS)，上線/頁面顯示時自動 ping，加速後端響應
+ *          2. TIMEOUT fallback 加 stale:true，與「拒絕過期快取」邏輯對齊
+ *          3. 防止同步後重複 reload
  */
 (function() {
   'use strict';
@@ -22,18 +23,25 @@
   var CACHE_KEY_PREFIX = 'tree_cache_';
   var CACHE_MAX_AGE = 24 * 60 * 60 * 1000;
 
+  // 🔥 [v1.7.0] GAS 暖機：背景 ping 一次，令後端保持暖狀態
+  var _reloading = false;
+  function warmGAS() {
+    try {
+      fetch(API_URL + '?action=ping', { method: 'GET' }).catch(function(){});
+    } catch (e) {}
+  }
+
   // 🔥 [v1.5.0] 升級 DB 版本到 3，加入 snapshot store
   function openDB() {
     if (dbPromise) return dbPromise;
     dbPromise = new Promise(function(resolve, reject) {
-      var req = indexedDB.open(DB_NAME, 3); // 版本升做 3
+      var req = indexedDB.open(DB_NAME, 3);
       req.onupgradeneeded = function() {
         var db = req.result;
         if (!db.objectStoreNames.contains(STORE)) {
           var store = db.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
           store.createIndex('ts', 'ts', { unique: false });
         }
-        // 🔥 [v1.5.0] 新增快照 store
         if (!db.objectStoreNames.contains('snapshot')) {
           db.createObjectStore('snapshot', { keyPath: 'key' });
         }
@@ -214,7 +222,7 @@
     });
   }
 
-  /* ---------- 上線後自動同步佇列（v1.4.0 增強版）---------- */
+  /* ---------- 上線後自動同步佇列 ---------- */
   var _syncing = false;
   async function syncOutbox() {
     if (!navigator.onLine || _syncing) return;
@@ -251,7 +259,6 @@
       var tk = getCurrentToken();
       if (tk) {
         item.payload.token = tk;
-        console.log('🔄 [Sync] 已附加 token');
       } else {
         console.warn('🔄 [Sync] 無有效 token，嘗試繼續...');
       }
@@ -281,7 +288,6 @@
               break;
             }
             console.log('🔄 [Sync] ✅ 重新認證成功，重發當前記錄');
-            // 唔 i++，下一圈用新 token 重發當前記錄
           } else { 
             console.error('🔄 [Sync] ❌ AuthService 不可用');
             failed++;
@@ -290,21 +296,15 @@
           }
         }
         else { 
-          // 🔥 [v1.4.0] 業務邏輯錯誤：顯示具體錯誤信息
           var errMsg = (json && json.error) ? json.error : '未知錯誤';
           console.error('🔄 [Sync] ❌ 業務邏輯錯誤:', errMsg);
-          console.error('🔄 [Sync] 完整響應:', json);
-          
           pwaToast('❌ 同步失敗：' + errMsg, 4000);
           await remove(item.id); 
           failed++; 
           i++;
         }
       } catch (e) { 
-        // 🔥 [v1.4.0] 網絡錯誤：顯示錯誤信息
         console.error('🔄 [Sync] ❌ 網絡錯誤:', e.message || e);
-        console.error('🔄 [Sync] 完整錯誤:', e);
-        
         pwaToast('❌ 網絡錯誤：' + (e.message || '連線失敗'), 4000);
         
         await incrementRetry(item.id);
@@ -323,11 +323,14 @@
       console.log('🔄 [Sync] ✅ 同步完成：成功 ' + synced + ' 筆，失敗 ' + failed + ' 筆');
       pwaToast('☁️ 已同步 ' + synced + ' 筆離線記錄', 3000);
       clearCache();
-      setTimeout(function() { location.reload(); }, 1500);
+      // 🔥 [v1.7.0] 防止重複 reload
+      if (!_reloading) {
+        _reloading = true;
+        setTimeout(function() { location.reload(); }, 1500);
+      }
     } else if (failed > 0) {
       console.error('🔄 [Sync] ❌ 同步失敗：成功 ' + synced + ' 筆，失敗 ' + failed + ' 筆');
       if (synced === 0 && failed > 0) {
-        // 如果全部失敗，顯示更明確的提示
         pwaToast('❌ 同步完全失敗：請檢查 Console', 4000);
       }
     }
@@ -364,7 +367,6 @@
         return result;
       } catch (err) {
         console.warn('📥 [Offline] 網絡錯誤：push 到佇列', err.message);
-        // 🔥 [v1.6.0] 加入 TIMEOUT：萬一 GAS 慢到連 30 秒都等唔到，寫入動作照樣入佇列
         if (err instanceof TypeError || !navigator.onLine || err.message === 'TIMEOUT') {
           await push(attachToken(payload));
           pwaToast('📥 網路不穩，已離線暫存');
@@ -383,15 +385,15 @@
         }
         return result;
       } catch (err) {
-        // 🔥 [v1.6.0] 加入 TIMEOUT：就算 api.js 超時，都乖乖用 localStorage 快取顯示地圖
         if (!navigator.onLine || err.message === 'OFFLINE' || err.message === 'TIMEOUT') {
           var cached = getCache(action);
           if (cached) {
             console.log('📴 離線/超時模式：使用快取資料 (' + action + ')');
-            return { data: cached, offline: true };
+            // 🔥 [v1.7.0] 加 stale:true，與 app.js 拒絕過期快取邏輯對齊
+            return { data: cached, offline: true, stale: true };
           }
           console.warn('📴 離線/超時模式：無快取，返回空陣列 (' + action + ')');
-          return { data: [], offline: true };
+          return { data: [], offline: true, stale: true };
         }
         throw err;
       }
@@ -403,18 +405,26 @@
   window.addEventListener('offline', function() { pwaToast('📴 離線模式：可繼續巡查，記錄會暫存'); });
   window.addEventListener('online', function() { 
     pwaToast('🟢 已連線：正在同步…'); 
+    warmGAS(); // 🔥 [v1.7.0] 上線即暖機
     setTimeout(syncOutbox, 800);
   });
   document.addEventListener('visibilitychange', function() { 
-    if (!document.hidden) syncOutbox(); 
+    if (!document.hidden) {
+      warmGAS(); // 🔥 [v1.7.0] 頁面顯示即暖機
+      syncOutbox(); 
+    }
   });
 
-  // 🔥 [v1.5.0] 暴露全域 API 俾 ES Module 同其他地方用
+  // 🔥 [v1.7.0] 啟動後 2 秒暖機一次
+  setTimeout(warmGAS, 2000);
+
+  // 🔥 [v1.5.0] 暴露全域 API
   window.OfflineQueue = OfflineQueue;
   window.pwaToast = pwaToast;
   window.syncOutbox = syncOutbox;
   window.syncNow = syncNow;
-  window.TreeSnapshot = { save: snapSave, load: snapLoad }; // 本地快照 API
+  window.warmGAS = warmGAS;
+  window.TreeSnapshot = { save: snapSave, load: snapLoad };
   
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     setTimeout(cleanupExpired, 3000);
