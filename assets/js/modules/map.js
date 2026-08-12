@@ -1,17 +1,14 @@
 /**
  * 地圖初始化模組
- * - Leaflet 初始化
- * - 底圖切換（支援 maxNativeZoom 放大）
- * - 航拍圖疊加層（單圖／切片雙模式）
- * - 圖例
- * v2.47 - 衛星層改用地政總署 Imagery Map API（官方航拍，原生 z20，比 Esri 更清）
- * v2.46 - 航拍圖改用獨立 aerialPane (z-index 250)，樹木/地段線永遠顯示喺航拍圖上面
+ * v2.48 - layer bar 新增 🔢 編號開關 + moveend 自動刷新標籤
+ * v2.47 - 衛星層改用地政總署 Imagery Map API
+ * v2.46 - 航拍圖獨立 aerialPane (z-index 250)
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
 import { toggleLotLayer } from './lots.js';
+import { toggleTreeLabels, scheduleRefreshLabels } from './trees.js'; // 🔥 [v2.48]
 
-// 閉包引用（避免循環依賴，會喺 init 時綁定）
 let _closePanel = null;
 let _hideSearch = null;
 
@@ -35,7 +32,7 @@ export function initMap() {
     markerZoomAnimation: !isMobile,
     tap: isTouch,
     tapTolerance: 15,
-    preferCanvas: true  // 🔥 樹木/地段用 Canvas 渲染，2000 棵樹都順滑
+    preferCanvas: true
   };
 
   state.map = L.map('map', mapOptions).setView(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM);
@@ -50,14 +47,11 @@ export function initMap() {
     }).addTo(state.map);
   }
 
-  // 🔥 [v2.46] 航拍圖獨立 pane：z-index 250（夾喺底圖 200 同矢量層 400 之間）
-  // 確保樹木圓點、地段線永遠顯示喺航拍圖上面
   if (!state.map.getPane('aerialPane')) {
     const aerialPane = state.map.createPane('aerialPane');
     aerialPane.style.zIndex = 250;
   }
 
-  // 🔥 [v2.47] 底圖配置：接入地政總署官方 API
   state.baseLayers = {
     hk: L.layerGroup([
       L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
@@ -65,10 +59,9 @@ export function initMap() {
       L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',
         { maxNativeZoom: 19, maxZoom: Config.MAP.MAX_ZOOM })
     ]),
-    // 🔥 [v2.47] 替換 Esri：改用地政總署 Imagery Map API（官方航拍，原生 z20）
     sat: L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/imagery/WGS84/{z}/{x}/{y}.png', {
       attribution: 'Aerial Photograph from Lands Department',
-      maxNativeZoom: 20,          // 官方原生去到 z20！
+      maxNativeZoom: 20,
       maxZoom: Config.MAP.MAX_ZOOM
     }),
     topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
@@ -82,14 +75,14 @@ export function initMap() {
 
   state.lotLayer = L.layerGroup();
 
-  // 🔥 [v2.47] layer bar 按鈕文字更新
   const layerBar = L.control({ position: isMobile ? 'bottomright' : 'bottomleft' });
   layerBar.onAdd = function () {
     const div = L.DomUtil.create('div', 'layerbar');
     div.innerHTML = '<button data-l="hk" class="on">政府</button>' +
-      '<button data-l="sat">官航</button>' +  // 🔥 改為「官航」以區別地盤專屬航拍
+      '<button data-l="sat">官航</button>' +
       '<button data-l="topo">地形</button>' +
       '<button data-l="street">街道</button>' +
+      '<button data-l="labels">🔢</button>' +   // 🔥 [v2.48] 編號開關
       '<button data-l="lot">🗺️ 地段</button>' +
       '<button data-l="aerial">🛰 航拍</button>';
     L.DomEvent.disableClickPropagation(div);
@@ -101,6 +94,8 @@ export function initMap() {
           toggleLotLayer();
         } else if (layerType === 'aerial') {
           toggleAerial();
+        } else if (layerType === 'labels') {
+          toggleTreeLabels(); // 🔥 [v2.48]
         } else {
           if (state.currentBaseLayer) state.map.removeLayer(state.currentBaseLayer);
           state.currentBaseLayer = state.baseLayers[layerType];
@@ -119,6 +114,9 @@ export function initMap() {
     return div;
   };
   layerBar.addTo(state.map);
+
+  // 🔥 [v2.48] 拖圖／縮放後防抖刷新標籤
+  state.map.on('moveend', scheduleRefreshLabels);
 
   state.markerCluster = L.markerClusterGroup({
     showCoverageOnHover: false,
@@ -163,7 +161,6 @@ export function initMap() {
   return true;
 }
 
-// 🔥 [v2.33] 航拍圖 toggle 函數
 export function toggleAerial() {
   state.aerialEnabled = !state.aerialEnabled;
   const btn = document.querySelector('.layerbar button[data-l="aerial"]');
@@ -172,51 +169,44 @@ export function toggleAerial() {
   updateStatus(state.aerialEnabled ? '✅ 已開啟航拍圖層' : '✅ 已關閉航拍圖層');
 }
 
-// 🔥 [v2.46] 航拍圖刷新：改用 aerialPane，樹木/地段線永遠喺最頂
 export function refreshAerial() {
-  // 移除舊疊加層
   if (state.aerialLayer) {
     state.map.removeLayer(state.aerialLayer);
     state.aerialLayer = null;
   }
   if (!state.aerialEnabled || !state.curProject) return;
 
-  // 搵當前地盤嘅航拍配置
   const p = state.PROJECTS.find((x) => String(x.project_id) === String(state.curProject));
   if (!p || !p.aerial_url || !p.aerial_n1 || !p.aerial_e1 || !p.aerial_n2 || !p.aerial_e2) {
     updateStatus('⚠️ 此地盤未配置航拍圖（請喺 projects 表填寫）');
     return;
   }
 
-  // HK80 → WGS84 轉換四角
-  const sw = CoordUtils.toWGS84(+p.aerial_n1, +p.aerial_e1); // 左下角
-  const ne = CoordUtils.toWGS84(+p.aerial_n2, +p.aerial_e2); // 右上角
+  const sw = CoordUtils.toWGS84(+p.aerial_n1, +p.aerial_e1);
+  const ne = CoordUtils.toWGS84(+p.aerial_n2, +p.aerial_e2);
   if (!sw || !ne) {
     updateStatus('❌ 航拍座標轉換失敗');
     return;
   }
   const bounds = L.latLngBounds([sw.lat, sw.lng], [ne.lat, ne.lng]);
 
-  // 根據 aerial_type 選擇模式（image / tiles）
   const mode = String(p.aerial_type || 'image').toLowerCase();
 
   if (mode === 'tiles') {
-    // 切片模式：超清 + 極速（只載可見範圍）
     state.aerialLayer = L.tileLayer(p.aerial_url, {
       bounds: bounds,
       minNativeZoom: 17,
       maxNativeZoom: 22,
       maxZoom: Config.MAP.MAX_ZOOM,
       opacity: 0.9,
-      pane: 'aerialPane',   // 🔥 [v2.46] 獨立 pane，唔再蓋住樹木
+      pane: 'aerialPane',
       noWrap: true
     }).addTo(state.map);
   } else {
-    // 🏆 單張原圖模式
     state.aerialLayer = L.imageOverlay(p.aerial_url, bounds, {
       opacity: 0.9,
-      interactive: false, // 唔擋地圖點擊
-      pane: 'aerialPane'  // 🔥 [v2.46] 獨立 pane，唔再蓋住樹木
+      interactive: false,
+      pane: 'aerialPane'
     }).addTo(state.map);
   }
 }
