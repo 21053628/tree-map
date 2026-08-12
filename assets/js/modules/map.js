@@ -1,5 +1,6 @@
 /**
  * 地圖初始化模組
+ * v2.49 - 移除「地形」「街道」底圖，layer bar 精簡為：政府｜官航｜🔢｜地段｜航拍
  * v2.48 - layer bar 新增 🔢 編號開關 + moveend 自動刷新標籤
  * v2.47 - 衛星層改用地政總署 Imagery Map API
  * v2.46 - 航拍圖獨立 aerialPane (z-index 250)
@@ -7,7 +8,7 @@
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
 import { toggleLotLayer } from './lots.js';
-import { toggleTreeLabels, scheduleRefreshLabels } from './trees.js'; // 🔥 [v2.48]
+import { toggleTreeLabels, scheduleRefreshLabels } from './trees.js';
 
 let _closePanel = null;
 let _hideSearch = null;
@@ -32,7 +33,7 @@ export function initMap() {
     markerZoomAnimation: !isMobile,
     tap: isTouch,
     tapTolerance: 15,
-    preferCanvas: true
+    preferCanvas: true  // 🔥 樹木/地段用 Canvas 渲染，2000 棵樹都順滑
   };
 
   state.map = L.map('map', mapOptions).setView(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM);
@@ -47,11 +48,13 @@ export function initMap() {
     }).addTo(state.map);
   }
 
+  // 🔥 [v2.46] 航拍圖獨立 pane：z-index 250（夾喺底圖 200 同矢量層 400 之間）
   if (!state.map.getPane('aerialPane')) {
     const aerialPane = state.map.createPane('aerialPane');
     aerialPane.style.zIndex = 250;
   }
 
+  // 🔥 [v2.49] 底圖精簡：只保留 政府 + 官航
   state.baseLayers = {
     hk: L.layerGroup([
       L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
@@ -63,11 +66,7 @@ export function initMap() {
       attribution: 'Aerial Photograph from Lands Department',
       maxNativeZoom: 20,
       maxZoom: Config.MAP.MAX_ZOOM
-    }),
-    topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-      { attribution: '© OpenTopoMap (CC-BY-SA)', maxNativeZoom: 17, maxZoom: Config.MAP.MAX_ZOOM }),
-    street: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      { attribution: '© OpenStreetMap', maxNativeZoom: 19, maxZoom: Config.MAP.MAX_ZOOM })
+    })
   };
 
   state.baseLayers.hk.addTo(state.map);
@@ -75,14 +74,13 @@ export function initMap() {
 
   state.lotLayer = L.layerGroup();
 
+  // 🔥 [v2.49] layer bar 精簡版
   const layerBar = L.control({ position: isMobile ? 'bottomright' : 'bottomleft' });
   layerBar.onAdd = function () {
     const div = L.DomUtil.create('div', 'layerbar');
     div.innerHTML = '<button data-l="hk" class="on">政府</button>' +
       '<button data-l="sat">官航</button>' +
-      '<button data-l="topo">地形</button>' +
-      '<button data-l="street">街道</button>' +
-      '<button data-l="labels">🔢</button>' +   // 🔥 [v2.48] 編號開關
+      '<button data-l="labels">🔢</button>' +
       '<button data-l="lot">🗺️ 地段</button>' +
       '<button data-l="aerial">🛰 航拍</button>';
     L.DomEvent.disableClickPropagation(div);
@@ -95,12 +93,12 @@ export function initMap() {
         } else if (layerType === 'aerial') {
           toggleAerial();
         } else if (layerType === 'labels') {
-          toggleTreeLabels(); // 🔥 [v2.48]
+          toggleTreeLabels();
         } else {
           if (state.currentBaseLayer) state.map.removeLayer(state.currentBaseLayer);
           state.currentBaseLayer = state.baseLayers[layerType];
           state.currentBaseLayer.addTo(state.map);
-          div.querySelectorAll('button[data-l="hk"], button[data-l="sat"], button[data-l="topo"], button[data-l="street"]')
+          div.querySelectorAll('button[data-l="hk"], button[data-l="sat"]')
             .forEach((x) => { x.classList.toggle('on', x.dataset.l === layerType); });
         }
       };
@@ -161,6 +159,7 @@ export function initMap() {
   return true;
 }
 
+// 🔥 [v2.33] 航拍圖 toggle 函數
 export function toggleAerial() {
   state.aerialEnabled = !state.aerialEnabled;
   const btn = document.querySelector('.layerbar button[data-l="aerial"]');
@@ -169,6 +168,7 @@ export function toggleAerial() {
   updateStatus(state.aerialEnabled ? '✅ 已開啟航拍圖層' : '✅ 已關閉航拍圖層');
 }
 
+// 🔥 [v2.46] 航拍圖刷新：改用 aerialPane，樹木/地段線永遠喺最頂
 export function refreshAerial() {
   if (state.aerialLayer) {
     state.map.removeLayer(state.aerialLayer);
