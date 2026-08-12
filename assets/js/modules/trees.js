@@ -1,5 +1,6 @@
 /**
  * 樹木標記與 popup 模組
+ * v4.4 - 加入狀態過濾（配合 filters.js）
  * v4.3 - 🔢 掣升級做三模式循環：智能(默認) → 恆常 → 關閉 → 智能…
  * v4.2 - 樹木編號標籤系統
  * v4.1 - L.circleMarker + Canvas 渲染
@@ -8,8 +9,25 @@ import { state } from './state.js';
 import { updateStatus } from './dom.js';
 
 /* =========================================================
+ * 🔥 [v4.4] 狀態過濾（null = 全部顯示）
+ * ========================================================= */
+let statusFilter = null;
+
+export function setStatusFilter(set) {
+  statusFilter = (set && set.size) ? set : null;
+  drawTrees();
+}
+
+export function getStatusFilter() { return statusFilter; }
+
+function currentTrees() {
+  const list = state.treeSearchIndex.get(state.curProject) || [];
+  return statusFilter ? list.filter((t) => statusFilter.has(t.status)) : list;
+}
+
+/* =========================================================
  * 🔥 [v4.3] 樹木編號標籤系統（三模式版）
- * mode: 'auto' = 智能（zoom>=19 先顯示，默認）
+ * mode: 'auto' = 智能（zoom>=20 先顯示，默認）
  *       'on'   = 恆常顯示
  *       'off'  = 全部關閉
  * ========================================================= */
@@ -69,7 +87,7 @@ export function refreshLabels(){
   if (!labelsShouldShow() || !state.curProject) return;
 
   const bounds = state.map.getBounds();
-  const list = state.treeSearchIndex.get(state.curProject) || [];
+  const list = currentTrees(); // 🔥 [v4.4] 使用過濾後嘅樹木
   const visible = [];
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
@@ -116,7 +134,8 @@ export function drawTrees() {
     return;
   }
 
-  const list = state.treeSearchIndex.get(state.curProject) || [];
+  const allTrees = state.treeSearchIndex.get(state.curProject) || [];
+  const list = currentTrees(); // 🔥 [v4.4] 使用過濾後嘅樹木
   const markers = [];
 
   list.forEach((t) => {
@@ -194,8 +213,10 @@ export function drawTrees() {
   state.perfMetrics.renderTime = performance.now() - startTime;
 
   refreshLabels();
-  updateLabelBtn(); // 🔥 [v4.3] 確保按鈕外觀同步
+  updateLabelBtn(); 
 
   const pname = (state.PROJECTS.find((x) => String(x.project_id) === String(state.curProject)) || {}).name;
-  updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + ' 棵樹（耗時 ' + state.perfMetrics.renderTime.toFixed(1) + 'ms）');
+  // 🔥 [v4.4] 狀態列顯示過濾對比（例如：顯示 12/50 棵樹（已過濾））
+  const filterText = statusFilter ? '（已過濾）' : '';
+  updateStatus('✅ 地盤：' + pname + '｜顯示 ' + list.length + '/' + allTrees.length + ' 棵樹' + filterText + '（耗時 ' + state.perfMetrics.renderTime.toFixed(1) + 'ms）');
 }
