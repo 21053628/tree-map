@@ -167,6 +167,9 @@ button { touch-action: manipulation; cursor: pointer; }
   border-bottom: 1px solid rgba(0,0,0,.06);
   transition: background 0.15s ease;
   font-size: 14px;
+  /* 🔥 [v2.47 性能優化] 瀏覽器原生虛擬列表，跳過螢幕外嘅 DOM 渲染 */
+  content-visibility: auto;
+  contain-intrinsic-size: 44px;
 }
 .sr-item:last-child { border-bottom: none; }
 .sr-item:hover { background: rgba(46, 125, 50, 0.08); }
@@ -175,6 +178,8 @@ button { touch-action: manipulation; cursor: pointer; }
   cursor: default;
   font-style: italic;
   justify-content: center;
+  /* hint 唔需要虛擬列表 */
+  content-visibility: visible; 
 }
 .sr-item.sr-hint:hover { background: transparent; }
 .sr-dot {
@@ -440,9 +445,7 @@ body.panel-open::before {
   #status { font-size: 12px; bottom: calc(12px + var(--safe-bottom)); max-width: 92%; }
   .layerbar button { padding: 10px 14px; font-size: 12px; }
   
-  /* 🔥 [v2.37] 手機 popup：只用安全視覺屬性（圓角/限高/動畫/橫條）
-     ⚠️ 絕對禁止喺 .leaflet-popup 加 position / transform 覆蓋！
-     （Leaflet 用 inline transform 定位，覆蓋咗 popup 就會消失） */
+  /* 🔥 [v2.37] 手機 popup：只用安全視覺屬性（圓角/限高/動畫/橫條） */
   .leaflet-popup-content-wrapper {
     border-radius: 18px !important;
     padding: 0 !important;
@@ -458,7 +461,6 @@ body.panel-open::before {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
-  /* 卡片小橫條（drag handle 視覺） */
   .leaflet-popup-content::before {
     content: '';
     display: block;

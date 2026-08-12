@@ -4,7 +4,7 @@
  * - 底圖切換（支援 maxNativeZoom 放大）
  * - 航拍圖疊加層（單圖／切片雙模式）
  * - 圖例
- * v2.41 - 修正航拍圖 zIndex，確保地段圖層（lot layer）顯示喺最頂
+ * v2.45 - 加入 Canvas 渲染優化 (FPS 大幅提升)
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
@@ -33,7 +33,8 @@ export function initMap() {
     fadeAnimation: !isMobile,
     markerZoomAnimation: !isMobile,
     tap: isTouch,
-    tapTolerance: 15
+    tapTolerance: 15,
+    preferCanvas: true  // 🔥 [v2.45 性能優化] 地段多邊形改用 Canvas 渲染，大幅提升縮放/平移 FPS
   };
 
   state.map = L.map('map', mapOptions).setView(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM);
