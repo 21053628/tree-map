@@ -11,7 +11,7 @@ const ApiService = (function() {
 
   // 🔥 [v2.3] 極限超時設定
   const DEFAULT_TIMEOUT = 8000;      // 8秒：用戶交互請求 (如 get tree details)
-  const BACKGROUND_TIMEOUT = 3000;   // 3秒：背景刷新 (bootstrap)，超時果斷放棄！
+  const BACKGROUND_TIMEOUT = 30000;  // 🔥 [v2.4] 30秒：UI 唔會被阻塞（三段式已秒開），俾足時間等 GAS 冷啟動
   const POST_TIMEOUT = 20000;        // 20秒：寫入請求 (需要確保成功)
   
   const MAX_RETRIES = 1;             // 只重試 1 次 (針對偶發網路波動)

@@ -1,7 +1,9 @@
-/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.2
- * 🔥 修正：移除不存在嘅 icon-180.png，避免預快取報錯
+/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.3
+ * 🔥 修正：catch 冇快取時改為「直接拋錯」，
+ *      徹底消滅 respondWith(undefined) 導致的
+ *      "Failed to convert value to 'Response'" 錯誤
  */
-const VERSION = 'v1.2.2';
+const VERSION = 'v1.2.3';
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -29,7 +31,6 @@ const PRECACHE = [
   './data/trees_data.json',
   './data/bootstrap.json',
   './icons/icon.svg'
-  // 🔥 移除不存在嘅 './icons/icon-180.png'
 ];
 
 self.addEventListener('install', function(e) {
@@ -76,7 +77,6 @@ function normalizeImgUrl(url) {
   return url.replace(/=[wsh]\d+(-c)?$/g, '');
 }
 
-/* ---------- 🔥 修正版：接收「已同步克隆」嘅 response，唔再 clone ---------- */
 function cacheAPIResponse(cache, req, clonedRes) {
   if (clonedRes.type === 'opaque' || clonedRes.status === 0) {
     return cache.put(req, clonedRes).catch(function(){});
@@ -133,13 +133,17 @@ self.addEventListener('fetch', function(e) {
       caches.match(req).then(function(cached) {
         var fetchPromise = fetch(req).then(function(res) {
           if (res.ok) {
-            var copy = res.clone(); // 🔥 同步克隆
+            var copy = res.clone();
             caches.open(STATIC_CACHE).then(function(c) {
               return cacheAPIResponse(c, req, copy);
             }).catch(function(){});
           }
           return res;
-        }).catch(function() { return cached; });
+        }).catch(function(err) {
+          // 🔥 [v1.2.3] 有快取返快取，冇快取直接拋錯（絕不返 undefined）
+          if (cached) return cached;
+          throw err;
+        });
         return cached || fetchPromise;
       })
     );
@@ -151,7 +155,7 @@ self.addEventListener('fetch', function(e) {
     e.respondWith(
       fetch(req).then(function(res) {
         if (res.ok) {
-          var copy = res.clone(); // 🔥 同步克隆（喺頁面消耗 body 之前）
+          var copy = res.clone();
           caches.open(DATA_CACHE).then(function(c) {
             return cacheAPIResponse(c, req, copy);
           }).catch(function(){});
@@ -185,7 +189,7 @@ self.addEventListener('fetch', function(e) {
         if (cached) return cached;
         return fetch(req).then(function(res) {
           if (res.ok) {
-            var copy = res.clone(); // 🔥 同步克隆
+            var copy = res.clone();
             caches.open(TILE_CACHE).then(function(c) {
               return c.put(req, copy).then(function() {
                 return trimCache(TILE_CACHE, TILE_MAX);
@@ -193,7 +197,11 @@ self.addEventListener('fetch', function(e) {
             }).catch(function(){});
           }
           return res;
-        }).catch(function() { return cached; });
+        }).catch(function(err) {
+          // 🔥 [v1.2.3] Leaflet 取消 tile 請求時，冇快取就直接拋錯
+          if (cached) return cached;
+          throw err;
+        });
       })
     );
     return;
@@ -213,7 +221,7 @@ self.addEventListener('fetch', function(e) {
           if (cached2) return cached2;
           return fetch(req).then(function(res) {
             if (res.ok) {
-              var copy = res.clone(); // 🔥 同步克隆
+              var copy = res.clone();
               caches.open(IMG_CACHE).then(function(c) {
                 return c.put(normalizedUrl, copy).then(function() {
                   return trimCache(IMG_CACHE, IMG_MAX);
@@ -221,6 +229,9 @@ self.addEventListener('fetch', function(e) {
               }).catch(function(){});
             }
             return res;
+          }).catch(function(err) {
+            // 🔥 [v1.2.3] 補上缺失嘅 catch
+            throw err;
           });
         });
       })
@@ -234,7 +245,7 @@ self.addEventListener('fetch', function(e) {
       if (cached) return cached;
       return fetch(req).then(function(res) {
         if (res.ok || res.type === 'opaque') {
-          var copy = res.clone(); // 🔥 同步克隆
+          var copy = res.clone();
           caches.open(RUNTIME_CACHE).then(function(c) {
             return c.put(req, copy).then(function() {
               return trimCache(RUNTIME_CACHE, RUNTIME_MAX);
@@ -242,7 +253,11 @@ self.addEventListener('fetch', function(e) {
           }).catch(function(){});
         }
         return res;
-      }).catch(function() { return cached; });
+      }).catch(function(err) {
+        // 🔥 [v1.2.3] 絕不返 undefined
+        if (cached) return cached;
+        throw err;
+      });
     })
   );
 });
