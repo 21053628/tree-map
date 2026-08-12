@@ -1,5 +1,10 @@
-/* ================= 全域變數與基礎設定 ================= */
-/* v2.52 - 手機版零重疊修正：狀態列 100px、縮放掣搬左下角、頂欄允許換行 */
+/* =========================================================
+   樹木管理系統 main.css v2.56（重整版）
+   - 修復：手機頂欄「建立地盤/新增樹木」剷唔走（pointer:coarse 覆蓋 bug）
+   - 整合：FAB 抽屜、頂欄極簡、狀態雲彈前漸退、零重疊佈局
+   ========================================================= */
+
+/* ================= 1. 全域變數 ================= */
 :root {
   --primary: #2e7d32;
   --primary-dark: #1b5e20;
@@ -18,7 +23,6 @@
   --glass-blur: blur(12px) saturate(180%);
 }
 
-/* 🌙 深色模式變數 */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #121412;
@@ -31,6 +35,7 @@
   }
 }
 
+/* ================= 2. 基礎 ================= */
 html, body {
   margin: 0; height: 100%;
   font-family: system-ui, -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif;
@@ -60,7 +65,7 @@ input, textarea, select, .leaflet-popup-content, #panel, .sr-item, .log, .legend
 #map { height: 100%; width: 100%; }
 button { touch-action: manipulation; cursor: pointer; }
 
-/* ================= 頂部控制列 ================= */
+/* ================= 3. 頂部控制列 ================= */
 #bar {
   position: absolute; top: 8px; right: 8px; z-index: 999;
   display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
@@ -107,6 +112,7 @@ button { touch-action: manipulation; cursor: pointer; }
   pointer-events: none !important;
 }
 
+/* ================= 4. 搜尋 ================= */
 .search-wrap {
   position: relative;
   flex: 1 1 280px;
@@ -131,16 +137,13 @@ button { touch-action: manipulation; cursor: pointer; }
   box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.15);
   outline: none;
 }
-.search-wrap input::placeholder {
-  color: var(--muted);
-}
+.search-wrap input::placeholder { color: var(--muted); }
 
 .search-results {
   display: none;
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
-  right: 0;
+  left: 0; right: 0;
   background: var(--card-bg);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,.2);
@@ -157,7 +160,6 @@ button { touch-action: manipulation; cursor: pointer; }
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes sheetUp {
   from { transform: translateY(24px) scale(.98); opacity: .5; }
   to { transform: translateY(0) scale(1); opacity: 1; }
@@ -182,7 +184,7 @@ button { touch-action: manipulation; cursor: pointer; }
   cursor: default;
   font-style: italic;
   justify-content: center;
-  content-visibility: visible; 
+  content-visibility: visible;
 }
 .sr-item.sr-hint:hover { background: transparent; }
 .sr-dot {
@@ -201,7 +203,7 @@ button { touch-action: manipulation; cursor: pointer; }
   white-space: nowrap;
 }
 
-/* ================= 面板 (Panel) ================= */
+/* ================= 5. 面板 (Panel) ================= */
 #panel {
   display: none; position: absolute; top: 52px; right: 8px; z-index: 1200;
   background: var(--card-bg); border-radius: var(--radius);
@@ -237,7 +239,7 @@ body.panel-open::before {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 #panel input:focus, #panel select:focus, #panel textarea:focus {
-  border-color: var(--primary); 
+  border-color: var(--primary);
   box-shadow: 0 4px 12px rgba(46, 125, 50, 0.15), 0 0 0 3px rgba(46, 125, 50, 0.1);
   outline: none;
   transform: translateY(-1px);
@@ -252,21 +254,27 @@ body.panel-open::before {
 #panel .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 #panel .x { background: #78909c; box-shadow: none; }
 
-/* ================= 狀態列與圖例 ================= */
+/* ================= 6. 狀態列（含彈前漸退）＋圖例 ================= */
 #status {
-  position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-  z-index: 999; background: rgba(255,255,255,0.9); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  position: absolute; bottom: 24px; left: 50%;
+  transform: translateX(-50%) scale(1);
+  z-index: 999;
+  background: rgba(255,255,255,0.9);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
   padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;
-  box-shadow: 0 4px 12px rgba(0,0,0,.1); max-width: 85%; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,.1);
+  max-width: 85%; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
   pointer-events: none;
   border: 1px solid var(--glass-border);
-  transition: opacity 0.3s, background 0.3s, border-color 0.3s, color 0.3s;
-  animation: slideUpBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transition: opacity .3s, background .3s, border-color .3s, color .3s,
+              transform .35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow .35s ease;
 }
-@keyframes slideUpBounce {
-  0% { transform: translate(-50%, 15px); opacity: 0; }
-  100% { transform: translate(-50%, 0); opacity: 1; }
+/* 🔥 [v2.55] 更新時彈到最前 3 秒，然後漸變退返後面 */
+#status.status-front {
+  z-index: 1250;
+  transform: translateX(-50%) scale(1.08);
+  box-shadow: 0 10px 30px rgba(0,0,0,.3);
 }
 #status.success { border-color: var(--primary); color: var(--primary-dark); }
 #status.error { border-color: #c62828; color: #c62828; background: rgba(255, 235, 238, 0.95); }
@@ -278,7 +286,7 @@ body.panel-open::before {
   border: 1px solid var(--glass-border);
 }
 
-/* ================= 地圖標記與圖標動畫 ================= */
+/* ================= 7. 地圖標記動畫 ================= */
 .prjIcon {
   background: var(--accent); color: #fff; border-radius: 6px;
   padding: 3px 8px; font-size: 13px; font-weight: 600; border: 2px solid #fff;
@@ -300,7 +308,14 @@ body.panel-open::before {
   cursor: pointer;
 }
 
-/* ================= Layer Bar ================= */
+/* ================= 8. Layer Bar＋FAB 抽屜（整合版） ================= */
+.layerbar-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
 .layerbar {
   background: rgba(255,255,255,0.9); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
   border-radius: 10px; padding: 4px; display: flex; gap: 4px;
@@ -315,7 +330,12 @@ body.panel-open::before {
 .layerbar button.on { background: var(--accent); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
 .layerbar button:active { transform: scale(0.95); }
 
-/* ================= Popup 彈窗 ================= */
+/* 桌面隱藏 FAB 同抽屜動作掣（!important 防 touch 覆蓋） */
+.layerbar-fab { display: none; }
+button.drawer-action { display: none !important; }
+.drawer-sep { display: none !important; }
+
+/* ================= 9. Popup 彈窗 ================= */
 .leaflet-popup-content-wrapper {
   max-width: calc(100vw - 32px) !important;
   box-sizing: border-box; overflow: hidden;
@@ -332,15 +352,12 @@ body.panel-open::before {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
-
 .leaflet-popup-content > b:first-child {
   display: block;
   padding-right: 44px;
   box-sizing: border-box;
 }
-.leaflet-popup-content > b:first-child + br {
-  display: none;
-}
+.leaflet-popup-content > b:first-child + br { display: none; }
 
 .leaflet-popup-content button {
   padding: 10px 14px; font-size: 14px; border: none; border-radius: 8px;
@@ -363,40 +380,27 @@ body.panel-open::before {
 
 .leaflet-popup-close-button {
   position: absolute;
-  width: 44px !important;
-  height: 44px !important;
-  top: 4px !important;
-  right: 4px !important;
+  width: 44px !important; height: 44px !important;
+  top: 4px !important; right: 4px !important;
   z-index: 1000;
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 0 !important;
-  text-decoration: none !important;
-  color: transparent !important;
-  font-size: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 50% !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  padding: 0 !important; text-decoration: none !important;
+  color: transparent !important; font-size: 0 !important;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 .leaflet-popup-close-button::before {
   content: '';
-  position: absolute;
-  inset: 6px;
-  border-radius: 50%;
+  position: absolute; inset: 6px; border-radius: 50%;
   background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   transition: background 0.2s ease, transform 0.2s ease;
 }
 .leaflet-popup-close-button::after {
   content: '×';
-  position: relative;
-  z-index: 1;
-  font-size: 20px;
-  line-height: 1;
+  position: relative; z-index: 1;
+  font-size: 20px; line-height: 1;
   font-family: system-ui, sans-serif;
   color: #fff;
 }
@@ -410,138 +414,26 @@ body.panel-open::before {
   display: block; margin: 8px 0; box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 
-/* ================= 🔥 手機版零重疊佈局 (v2.52) ================= */
-@media (max-width: 600px) {
-  /* 頂欄：允許換行，搜尋框做第二行 */
-  #bar { left: 8px; right: 8px; top: 8px; flex-wrap: wrap; gap: 4px; }
-  #bar select { flex: 1; min-width: 0; max-width: none; width: auto; font-size: 16px; padding: 10px 8px; }
-  #bar button { flex: 0 0 auto; padding: 10px 12px; font-size: 14px; white-space: nowrap; }
-  
-  .search-wrap { flex: 1 1 100%; max-width: none; order: 99; }
-  .search-wrap input { font-size: 16px; padding: 10px; }
-  .search-wrap input:focus { background: rgba(255,255,255,0.98); }
-
-  /* 搜尋結果底部抽屜 */
-  .search-results {
-    position: fixed !important;
-    top: auto !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    max-height: 65vh !important;
-    border-radius: 20px 20px 0 0 !important;
-    box-shadow: 0 -8px 30px rgba(0,0,0,.25) !important;
-    margin-bottom: var(--safe-bottom);
-    border: none !important;
-    animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
-  }
-  .search-results::before {
-    content: ''; display: block; width: 40px; height: 4px;
-    background: #ccc; border-radius: 2px; margin: 8px auto 4px;
-  }
-  .search-results .sr-item { padding: 14px 16px; font-size: 15px; }
-  
-  /* 🔥 [v2.52] 縮放掣搬去左下角，徹底避開頂欄 */
-  .leaflet-top.leaflet-left {
-    top: auto;
-    bottom: calc(10px + var(--safe-bottom));
-    left: 6px;
-  }
-  .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
-  
-  /* 🔥 [v2.52] 右下角：layer bar 貼底 */
-  .leaflet-bottom.leaflet-right {
-    bottom: calc(10px + var(--safe-bottom));
-    right: 6px;
-    max-width: calc(100vw - 12px);
-  }
-  
-  .legend { display: none; }
-  body.panel-open .layerbar { display: none; }
-  
-  /* 🔥 [v2.52] 狀態列：浮喺所有底部控制之上（100px），加 ellipsis 防溢出 */
-  #status { 
-    font-size: 12px; 
-    bottom: calc(100px + var(--safe-bottom)) !important; 
-    max-width: 92%; 
-  }
-  
-  .layerbar {
-    box-shadow: 0 4px 16px rgba(0,0,0,.15);
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    max-width: calc(100vw - 12px);
-  }
-  .layerbar button { padding: 12px 14px; font-size: 13px; }
-  
-  #panel {
-    position: fixed; top: auto; bottom: 0; left: 0; right: 0;
-    width: auto; max-height: 85vh;
-    border-radius: 20px 20px 0 0;
-    padding: 12px 16px calc(16px + var(--safe-bottom));
-    box-shadow: 0 -4px 30px rgba(0,0,0,.2);
-    z-index: 1300;
-    transform: translateY(100%);
-  }
-  #panel[style*="display: block"] { transform: translateY(0); }
-  #panel::before {
-    content: ''; display: block; width: 40px; height: 4px;
-    background: #ccc; border-radius: 2px; margin: 0 auto 12px;
-  }
-  #panel input, #panel select { font-size: 16px; padding: 12px; }
-  #panel button { padding: 14px; font-size: 16px; }
-  
-  .leaflet-popup-content-wrapper {
-    border-radius: 18px !important;
-    padding: 0 !important;
-    box-shadow: 0 12px 40px rgba(0,0,0,.3) !important;
-    animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-  .leaflet-popup-content {
-    margin: 12px 16px 14px !important;
-    font-size: 15px;
-    line-height: 1.6;
-    max-height: 42vh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-  .leaflet-popup-content::before {
-    content: '';
-    display: block;
-    width: 40px; height: 4px;
-    background: #ccc;
-    border-radius: 2px;
-    margin: 0 auto 10px;
-  }
-  .leaflet-popup-tip-container { display: none !important; }
-
-  .leaflet-popup-close-button {
-    width: 48px !important;
-    height: 48px !important;
-    top: 2px !important;
-    right: 2px !important;
-  }
-  .leaflet-popup-close-button::after { font-size: 24px; }
+/* ================= 10. 按鈕 Loading ================= */
+button.is-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
 }
-
-/* 🔥 超窄屏（<400px）極簡模式 */
-@media (max-width: 400px) {
-  .layerbar { gap: 2px; padding: 3px; }
-  .layerbar button { padding: 10px 9px; font-size: 12px; }
-  #status { font-size: 11px; }
+button.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 16px; height: 16px;
+  top: 50%; left: 50%;
+  margin-left: -8px; margin-top: -8px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.6s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ================= 平板電腦優化 ================= */
-@media (min-width: 601px) and (max-width: 1024px) {
-  #bar { left: 12px; right: 12px; top: calc(10px + var(--safe-top)); }
-  #bar select { font-size: 16px; padding: 11px; }
-  #bar button { padding: 11px 14px; font-size: 15px; }
-  #panel { width: 320px; top: calc(58px + var(--safe-top)); right: 12px; }
-  .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
-}
-
-/* ================= 通用觸控與無障礙 ================= */
+/* ================= 11. 通用觸控與無障礙 ================= */
 .leaflet-touch .leaflet-bar { border-radius: 10px; overflow: hidden; }
 .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
 .leaflet-container { touch-action: none; }
@@ -564,98 +456,64 @@ body.panel-open::before {
   }
 }
 
-/* 🌟 按鈕 Loading 狀態 */
-button.is-loading {
-  position: relative;
-  color: transparent !important;
-  pointer-events: none;
-}
-button.is-loading::after {
-  content: "";
-  position: absolute;
-  width: 16px; height: 16px;
-  top: 50%; left: 50%;
-  margin-left: -8px; margin-top: -8px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-radius: 50%;
-  border-top-color: #fff;
-  animation: spin 0.6s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* 🌙 深色模式覆蓋 */
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
-
-  #bar select, #panel input, #panel select, #panel textarea {
-    background: #2c332c;
-    border-color: #444;
-    color: #e0e0e0;
-  }
-  #bar select, #bar button, .search-wrap input {
-    background: rgba(30, 36, 30, 0.85);
-  }
-  #panel input::placeholder, #panel textarea::placeholder { color: #777; }
-  
-  .layerbar, .legend {
-    background: rgba(30, 36, 30, 0.85);
-    color: #e0e0e0;
-  }
-  .layerbar button { color: #bbb; }
-  .layerbar button.on { background: var(--accent); color: #fff; }
-  
-  #status { 
-    background: rgba(30, 36, 30, 0.9); 
-    color: #e0e0e0; 
-    border-color: #444;
-  }
-  #status.success { color: #81c784; border-color: #81c784; }
-  #status.error { color: #ef9a9a; border-color: #ef9a9a; background: rgba(40, 20, 20, 0.9); }
-  
-  .leaflet-popup-close-button::before { background: rgba(255, 255, 255, 0.18); }
-  .leaflet-popup-close-button:active::before { background: rgba(255, 255, 255, 0.32); }
-  
-  #panel::before { background: #555; }
-  .leaflet-popup-content::before { background: #555; }
-  
-  .search-wrap input {
-    background: rgba(30, 36, 30, 0.85);
-    border-color: #444;
-    color: #e0e0e0;
-  }
-  .search-wrap input:focus { background: rgba(30, 36, 30, 0.98); }
-  .search-wrap input::placeholder { color: #777; }
-  .search-results {
-    background: #1e241e;
-    border-color: rgba(255,255,255,.1);
-  }
-  .search-results::before { background: #555; }
-  
-  .sr-item { border-bottom-color: rgba(255,255,255,.08); }
-  .sr-item:hover { background: rgba(129, 199, 132, 0.15); }
-  .sr-id { color: #e0e0e0; }
-  .sr-name { color: #9e9e9e; }
-  .sr-dot { border-color: #1e241e; }
-}
-/* ================= 🔥 [v2.53] 手機版 FAB 圖層抽屜 ================= */
-.layerbar-wrap {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-.layerbar-fab { display: none; } /* 桌面隱藏 */
-
+/* ================= 12. 手機版整合佈局 ================= */
 @media (max-width: 600px) {
-  /* 🔥 圓形浮掣 */
+  /* 🔥 頂欄極簡：剷走兩掣（雙 ID + !important 杜絕覆蓋） */
+  #bar #addProjectBtn, #bar #addTreeBtn { display: none !important; }
+  #bar { left: 8px; right: 8px; top: 8px; flex-wrap: nowrap; gap: 4px; }
+  #bar select { flex: 0 1 42%; min-width: 0; max-width: none; width: auto; font-size: 16px; padding: 10px 8px; }
+  .search-wrap { flex: 1 1 160px; order: 2; max-width: none; }
+  .search-wrap input { font-size: 16px; padding: 10px; }
+  .search-wrap input:focus { background: rgba(255,255,255,0.98); }
+
+  /* 搜尋結果底部抽屜 */
+  .search-results {
+    position: fixed !important;
+    top: auto !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
+    max-height: 65vh !important;
+    border-radius: 20px 20px 0 0 !important;
+    box-shadow: 0 -8px 30px rgba(0,0,0,.25) !important;
+    margin-bottom: var(--safe-bottom);
+    border: none !important;
+    animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+  }
+  .search-results::before {
+    content: ''; display: block; width: 40px; height: 4px;
+    background: #ccc; border-radius: 2px; margin: 8px auto 4px;
+  }
+  .search-results .sr-item { padding: 14px 16px; font-size: 15px; }
+
+  /* 縮放掣搬左下角 */
+  .leaflet-top.leaflet-left {
+    top: auto;
+    bottom: calc(10px + var(--safe-bottom));
+    left: 6px;
+  }
+  .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
+
+  /* 右下角貼底 */
+  .leaflet-bottom.leaflet-right {
+    bottom: calc(10px + var(--safe-bottom));
+    right: 6px;
+    max-width: calc(100vw - 12px);
+  }
+
+  .legend { display: none; }
+  body.panel-open .layerbar { display: none; }
+
+  /* 狀態列：浮喺底部控制之上 */
+  #status {
+    font-size: 12px;
+    bottom: calc(100px + var(--safe-bottom)) !important;
+    max-width: 92%;
+  }
+
+  /* 🔥 FAB 浮掣 */
   .layerbar-fab {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 52px;
-    height: 52px;
+    width: 52px; height: 52px;
     border-radius: 50%;
     border: none;
     background: var(--accent);
@@ -667,7 +525,7 @@ button.is-loading::after {
   .layerbar-fab:active { transform: scale(.92); }
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 
-  /* 🔥 抽屜：默认收起 */
+  /* 🔥 抽：默认收起，展開變垂直 */
   .layerbar {
     display: none;
     flex-direction: column;
@@ -681,31 +539,11 @@ button.is-loading::after {
     display: flex;
     animation: sheetUp .22s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
-  .layerbar button {
-    padding: 13px 16px;
-    font-size: 14px;
-    text-align: left;
-  }
-}
+  .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
 
-@media (prefers-color-scheme: dark) {
-  .layerbar-fab { background: #1976d2; }
-  .layerbar-wrap.open .layerbar-fab { background: #37474f; }
-}
-/* ================= 🔥 [v2.54] 手機頂欄極簡化＋抽屜動作掣 ================= */
-button.drawer-action { display: none; }   /* 桌面隱藏 */
-.drawer-sep { display: none; }
-
-@media (max-width: 600px) {
-  /* 🔥 頂欄：淨返 揀地盤＋搜尋，一行過 */
-  #addProjectBtn, #addTreeBtn { display: none; }
-  #bar { flex-wrap: nowrap; }
-  #bar select { flex: 0 1 42%; min-width: 0; }
-  .search-wrap { flex: 1 1 160px; order: 2; max-width: none; }
-
-  /* 🔥 抽屜動作掣：藍＝建地盤，綠＝新增樹木 */
+  /* 🔥 抽屜動作掣 */
   .layerbar button.drawer-action {
-    display: flex;
+    display: flex !important;
     align-items: center;
     color: #fff;
     font-weight: 600;
@@ -713,9 +551,125 @@ button.drawer-action { display: none; }   /* 桌面隱藏 */
   .layerbar button.drawer-action.act-project { background: var(--accent); }
   .layerbar button.drawer-action.act-tree { background: var(--primary); }
   .layerbar .drawer-sep {
-    display: block;
+    display: block !important;
     height: 1px;
     background: rgba(128,128,128,.3);
     margin: 4px 2px;
   }
+
+  /* Panel 底部抽屜 */
+  #panel {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0;
+    width: auto; max-height: 85vh;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 16px calc(16px + var(--safe-bottom));
+    box-shadow: 0 -4px 30px rgba(0,0,0,.2);
+    z-index: 1300;
+    transform: translateY(100%);
+  }
+  #panel[style*="display: block"] { transform: translateY(0); }
+  #panel::before {
+    content: ''; display: block; width: 40px; height: 4px;
+    background: #ccc; border-radius: 2px; margin: 0 auto 12px;
+  }
+  #panel input, #panel select { font-size: 16px; padding: 12px; }
+  #panel button { padding: 14px; font-size: 16px; }
+
+  /* Popup 手機版 */
+  .leaflet-popup-content-wrapper {
+    border-radius: 18px !important;
+    padding: 0 !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,.3) !important;
+    animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .leaflet-popup-content {
+    margin: 12px 16px 14px !important;
+    font-size: 15px; line-height: 1.6;
+    max-height: 42vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .leaflet-popup-content::before {
+    content: '';
+    display: block;
+    width: 40px; height: 4px;
+    background: #ccc; border-radius: 2px;
+    margin: 0 auto 10px;
+  }
+  .leaflet-popup-tip-container { display: none !important; }
+  .leaflet-popup-close-button {
+    width: 48px !important; height: 48px !important;
+    top: 2px !important; right: 2px !important;
+  }
+  .leaflet-popup-close-button::after { font-size: 24px; }
+}
+
+/* 超窄屏極簡 */
+@media (max-width: 400px) {
+  .layerbar { gap: 2px; padding: 3px; }
+  .layerbar button { padding: 10px 9px; font-size: 12px; }
+  #status { font-size: 11px; }
+}
+
+/* ================= 13. 平板 ================= */
+@media (min-width: 601px) and (max-width: 1024px) {
+  #bar { left: 12px; right: 12px; top: calc(10px + var(--safe-top)); }
+  #bar select { font-size: 16px; padding: 11px; }
+  #bar button { padding: 11px 14px; font-size: 15px; }
+  #panel { width: 320px; top: calc(58px + var(--safe-top)); right: 12px; }
+  .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
+}
+
+/* ================= 14. 深色模式覆蓋 ================= */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+  #bar select, #panel input, #panel select, #panel textarea {
+    background: #2c332c; border-color: #444; color: #e0e0e0;
+  }
+  #bar select, #bar button, .search-wrap input {
+    background: rgba(30, 36, 30, 0.85);
+  }
+  #panel input::placeholder, #panel textarea::placeholder { color: #777; }
+
+  .layerbar, .legend {
+    background: rgba(30, 36, 30, 0.85); color: #e0e0e0;
+  }
+  .layerbar button { color: #bbb; }
+  .layerbar button.on { background: var(--accent); color: #fff; }
+
+  .layerbar-fab { background: #1976d2; }
+  .layerbar-wrap.open .layerbar-fab { background: #37474f; }
+  .layerbar .drawer-sep { background: rgba(255,255,255,.15); }
+
+  #status {
+    background: rgba(30, 36, 30, 0.9);
+    color: #e0e0e0;
+    border-color: #444;
+  }
+  #status.success { color: #81c784; border-color: #81c784; }
+  #status.error { color: #ef9a9a; border-color: #ef9a9a; background: rgba(40, 20, 20, 0.9); }
+
+  .leaflet-popup-close-button::before { background: rgba(255, 255, 255, 0.18); }
+  .leaflet-popup-close-button:active::before { background: rgba(255, 255, 255, 0.32); }
+
+  #panel::before { background: #555; }
+  .leaflet-popup-content::before { background: #555; }
+
+  .search-wrap input {
+    background: rgba(30, 36, 30, 0.85);
+    border-color: #444; color: #e0e0e0;
+  }
+  .search-wrap input:focus { background: rgba(30, 36, 30, 0.98); }
+  .search-wrap input::placeholder { color: #777; }
+  .search-results { background: #1e241e; border-color: rgba(255,255,255,.1); }
+  .search-results::before { background: #555; }
+
+  .sr-item { border-bottom-color: rgba(255,255,255,.08); }
+  .sr-item:hover { background: rgba(129, 199, 132, 0.15); }
+  .sr-id { color: #e0e0e0; }
+  .sr-name { color: #9e9e9e; }
+  .sr-dot { border-color: #1e241e; }
 }
