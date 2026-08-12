@@ -1,10 +1,7 @@
 /**
  * 樹木管理系統 - 主入口（ES Modules 版本）
- * v2.54 - 移除靜態 bootstrap.json 依賴，兩段式載入：快照 → GAS 背景刷新
- * 
- * 🔥 重要：config / api / utils / auth 係舊式腳本，用 top-level const 宣告。
- *    const 唔會掛去 window，但會進入全域詞法環境，
- *    所以 module 入面直接用「裸名」就可以，千萬唔好用 window.XXX！
+ * v2.55 - 狀態雲「彈前→漸退」：更新時浮到最前 3 秒，然後漸變退返後面
+ * v2.54 - 兩段式載入：快照 → GAS 背景刷新
  */
 
 import { state } from './modules/state.js';
@@ -23,7 +20,6 @@ import {
 } from './modules/forms.js';
 
 // 全域依賴注入（避免循環依賴）
-// Config / ApiService / AuthService / CoordUtils 直接用裸名（全域詞法環境）
 ApiService.init(Config.API_ENDPOINT);
 setClosePanel(closePanel);
 setHideSearch(hideSearch);
@@ -56,7 +52,7 @@ function applyData(projects, trees) {
   drawTrees();
 }
 
-// 🔥 [v2.54] 兩段式載入＋拒絕過期快取＋自動重試：快照 → GAS 背景刷新
+// 🔥 [v2.54] 兩段式載入＋拒絕過期快取＋自動重試
 async function load() {
   updateStatus('🗺️ 載入中…');
 
@@ -78,17 +74,14 @@ async function load() {
 
   // 2️⃣ 背景刷新：只接受「真・最新」數據，過期快取一律拒絕＋自動重試
   async function refreshFromGAS() {
-    const res = await ApiService.get('bootstrap'); // GAS 合併讀取端點（保留）
+    const res = await ApiService.get('bootstrap');
 
-    // 🔥 [v2.54 核心修正] offline.js 返回過期快取時會標記 offline:true
-    // 過期快取 ≠ 成功刷新！拒絕套用，逼佢重試直到攞到真數據
     if (!res || res.offline || res.stale) throw new Error('STALE_CACHE');
 
     const projects = (res.data && res.data.projects) || [];
     const trees = (res.data && res.data.trees) || [];
     if (!projects.length && !trees.length) throw new Error('EMPTY_RESPONSE');
 
-    // ✅ 真・最新數據：套用＋更新快照（Excel 刪咗記錄會跟住消失）
     applyData(projects, trees);
     if (window.TreeSnapshot) {
       window.TreeSnapshot.save('main', { projects, trees }).catch(() => {});
@@ -113,14 +106,12 @@ async function load() {
   }
 
   try {
-    await tryRefresh(2); // 即時 1 次 ＋ 5 秒間隔重試 2 次
+    await tryRefresh(2);
     return Promise.resolve();
   } catch (error) {
     if (hasLocal) {
-      // 有本地資料但網路失敗：保持顯示，唔使彈大錯誤
       updateStatus('📴 未能連線後端：顯示本地快取（資料可能較舊）');
     } else {
-      // 完全無資料且網路失敗：顯示錯誤
       updateStatus('❌ 後端連線失敗：' + error.message);
     }
     console.error('載入失敗:', error);
@@ -147,7 +138,6 @@ function clearCache() {
   state.coordGroupsCache = null;
   clearLotCache();
   localStorage.removeItem('tree_map_last_view');
-  // 🔥 [v2.54] 連 localStorage 舊 API 快取都清埋
   if (typeof ApiService !== 'undefined' && ApiService.clearCache) ApiService.clearCache();
   console.log('🗑️ 緩存已清除');
 }
@@ -168,7 +158,19 @@ function init() {
   DOM.searchResults = document.getElementById('searchResults');
   DOM.treeSearch = document.getElementById('treeSearch');
 
-  // 🔥 [v2.31] 綁定事件監聽器（取代 inline onclick）
+  // 🔥 [v2.55] 狀態雲「彈前→漸退」：文字一變就浮到最前 3 秒，然後退返後面
+  if (DOM.statusEl && 'MutationObserver' in window) {
+    let frontTimer = null;
+    const mo = new MutationObserver(function () {
+      DOM.statusEl.classList.add('status-front');
+      clearTimeout(frontTimer);
+      frontTimer = setTimeout(function () {
+        DOM.statusEl.classList.remove('status-front');
+      }, 3000);
+    });
+    mo.observe(DOM.statusEl, { childList: true, characterData: true, subtree: true });
+  }
+
   const addProjectBtn = document.getElementById('addProjectBtn');
   if (addProjectBtn) {
     addProjectBtn.addEventListener('click', () => openProjectForm());
@@ -206,7 +208,7 @@ function init() {
 
   load().then(() => checkURLParams());
 
-  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.54 - 兩段式載入）');
+  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.55 - 狀態雲彈前漸退）');
 }
 
 document.addEventListener('DOMContentLoaded', init);
