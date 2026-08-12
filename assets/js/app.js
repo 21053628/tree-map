@@ -1,6 +1,6 @@
 /**
  * 樹木管理系統 - 主入口（ES Modules 版本）
- * v2.32 - 加入本地優先啟動 (Local-first)：0 秒首屏載入
+ * v2.51 - 三段式極速載入：快照 → 靜態 JSON → GAS 背景刷新
  * 
  * 🔥 重要：config / api / utils / auth 係舊式腳本，用 top-level const 宣告。
  *    const 唔會掛去 window，但會進入全域詞法環境，
@@ -56,18 +56,19 @@ function applyData(projects, trees) {
   drawTrees();
 }
 
-// 🔥 [v2.32] 本地優先啟動：先讀快照 0 秒渲染，後台靜靜雞刷新
+// 🔥 [v2.51] 三段式載入：快照 → 靜態 JSON → GAS 背景刷新
 async function load() {
   updateStatus('🗺️ 載入中…');
 
-  // 本地優先：即刻用 IndexedDB 快照畫第一屏 (0 秒)
-  let hasSnapshot = false;
+  let hasLocal = false;
+
+  // 1️⃣ IndexedDB 快照（回訪用戶 0 秒）
   if (window.TreeSnapshot) {
     try {
       const snap = await window.TreeSnapshot.load('main');
       if (snap && snap.projects && snap.trees) {
         applyData(snap.projects, snap.trees);
-        hasSnapshot = true;
+        hasLocal = true;
         updateStatus('⚡ 本地快取顯示中，後台刷新…');
       }
     } catch (e) { 
@@ -75,15 +76,28 @@ async function load() {
     }
   }
 
-  // 後台刷新 (靜靜雞 fetch 最新資料)
-  try {
-    const [projectsRes, treesRes] = await Promise.all([
-      ApiService.get('projects'),
-      ApiService.get('trees')
-    ]);
+  // 2️⃣ 靜態 JSON（首次用戶都 0 秒，CDN 速度）
+  if (!hasLocal) {
+    try {
+      const r = await fetch('data/bootstrap.json');
+      if (r.ok) {
+        const j = await r.json();
+        if (j && j.projects && j.trees) {
+          applyData(j.projects, j.trees);
+          hasLocal = true;
+          updateStatus('⚡ 靜態資料顯示中，後台刷新…');
+        }
+      }
+    } catch (e) { 
+      console.warn('Static JSON load failed', e);
+    }
+  }
 
-    const projects = projectsRes.data || [];
-    const trees = treesRes.data || [];
+  // 3️⃣ 背景刷新（GAS 單請求；快取／快照已兜底，慢都唔影響體驗）
+  try {
+    const res = await ApiService.get('bootstrap');
+    const projects = (res.data && res.data.projects) || [];
+    const trees = (res.data && res.data.trees) || [];
     
     // 用最新資料重新渲染
     applyData(projects, trees);
@@ -96,18 +110,18 @@ async function load() {
     const stats = ApiService.getStats();
     console.log('✅ 資料載入完成', stats);
     
-    // 如果之前有快照，更新狀態列
-    if (hasSnapshot) {
+    // 如果之前有本地資料，更新狀態列
+    if (hasLocal) {
       updateStatus('✅ 資料已更新至最新');
     }
 
     return Promise.resolve();
   } catch (error) {
-    if (hasSnapshot) {
-      // 有快照但網路失敗：保持顯示本地快取
+    if (hasLocal) {
+      // 有本地資料但網路失敗：保持顯示，唔使彈大錯誤
       updateStatus('📴 後端連線失敗：顯示本地快取');
     } else {
-      // 無快照且網路失敗：顯示錯誤
+      // 完全無資料且網路失敗：顯示錯誤
       updateStatus('❌ 後端連線失敗：' + error.message);
     }
     console.error('載入失敗:', error);
@@ -191,7 +205,7 @@ function init() {
 
   load().then(() => checkURLParams());
 
-  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.32 - Local-first）');
+  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.51 - 三段式極速載入）');
 }
 
 document.addEventListener('DOMContentLoaded', init);
