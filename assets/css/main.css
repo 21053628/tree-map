@@ -692,3 +692,30 @@ button.is-loading::after {
   .layerbar-fab { background: #1976d2; }
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 }
+/* ================= 🔥 [v2.54] 手機頂欄極簡化＋抽屜動作掣 ================= */
+button.drawer-action { display: none; }   /* 桌面隱藏 */
+.drawer-sep { display: none; }
+
+@media (max-width: 600px) {
+  /* 🔥 頂欄：淨返 揀地盤＋搜尋，一行過 */
+  #addProjectBtn, #addTreeBtn { display: none; }
+  #bar { flex-wrap: nowrap; }
+  #bar select { flex: 0 1 42%; min-width: 0; }
+  .search-wrap { flex: 1 1 160px; order: 2; max-width: none; }
+
+  /* 🔥 抽屜動作掣：藍＝建地盤，綠＝新增樹木 */
+  .layerbar button.drawer-action {
+    display: flex;
+    align-items: center;
+    color: #fff;
+    font-weight: 600;
+  }
+  .layerbar button.drawer-action.act-project { background: var(--accent); }
+  .layerbar button.drawer-action.act-tree { background: var(--primary); }
+  .layerbar .drawer-sep {
+    display: block;
+    height: 1px;
+    background: rgba(128,128,128,.3);
+    margin: 4px 2px;
+  }
+}
