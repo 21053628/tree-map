@@ -1,25 +1,26 @@
 /**
- * 樹木管理系統 - API 服務模組（極致性能優化版 v2.1）
+ * 樹木管理系統 - API 服務模組（極致性能優化版 v2.2）
  * 
- * 🚀 優化重點：
- * 1. [效能] 移除 setCache 的 O(N) 全量遍歷，改用 LRU 淘汰策略，寫入速度提升 10 倍
- * 2. [網絡] 引入「離線快速失敗 (Fast Fail)」，斷網時秒級響應，唔再傻等超時
- * 3. [穩定] 重試機制升級為「指數退避 (Exponential Backoff)」，減少網絡擁塞時嘅重試風暴
- * 4. [記憶體] 限制最大快取數量，防止長時間運行導致記憶體洩漏
- * 5. [v2.1 修復] GET/POST 超時加長至 30 秒，並允許 TIMEOUT 重試（解決 GAS 冷啟動問題）
+ * 🚀 v2.2 優化重點：
+ * 1. [智能超時] 背景刷新 (bootstrap) 只等 10 秒，失敗即放棄，絕不阻塞用戶操作
+ * 2. [取消超時重試] 超時代表伺服器異常，重試只會引發雪崩，改為直接報錯
+ * 3. [優先級插隊] 用戶交互請求 (如點擊樹木) 自動插隊，背景請求排最後
+ * 4. [LRU 快取] 維持記憶體穩定
  */
 const ApiService = (function() {
   'use strict';
 
-  // 🔥 [v2.1] 拆開 GET/POST 超時，加長到 30 秒（GAS 冷啟動隨時要 20 秒+）
-  const GET_TIMEOUT = 30000;
-  const POST_TIMEOUT = 30000;
-  const MAX_RETRIES = 2;
+  // 🔥 [v2.2] 智能超時設定
+  const DEFAULT_TIMEOUT = 15000;     // 15秒：用戶交互請求 (如 get tree)
+  const BACKGROUND_TIMEOUT = 10000;  // 10秒：背景刷新 (bootstrap)，失敗即放棄
+  const POST_TIMEOUT = 20000;        // 20秒：寫入請求 (需要確保成功)
+  
+  const MAX_RETRIES = 1;             // 減少重試，避免雪崩
   const RETRY_DELAY = 1000;
-  const CACHE_TTL = 60000; // 1 分鐘
-  const MAX_CONCURRENT = 5;
-  const DEBOUNCE_DELAY = 300;
-  const MAX_CACHE_SIZE = 100; // 限制快取最大數量，防止記憶體暴增
+  const CACHE_TTL = 60000;           // 1 分鐘快取
+  const MAX_CONCURRENT = 5;          // 最大並發數
+  const MAX_CACHE_SIZE = 100;        // LRU 快取上限
+  
   const WRITE_TYPES = ['checkin', 'inspection', 'update_tree', 'create_project', 'create_tree', 'create_aerial'];
 
   let apiEndpoint = null;
@@ -29,7 +30,6 @@ const ApiService = (function() {
   const responseCache = new Map();
   let pendingRequests = [];
   let activeRequests = 0;
-  let debounceTimer = null;
 
   function init(endpoint) {
     if (!endpoint) throw new Error('API 端點未提供');
@@ -39,7 +39,6 @@ const ApiService = (function() {
   function getFromCache(key) {
     const cached = responseCache.get(key);
     if (!cached) return null;
-    // 惰性過期檢查 (Lazy Expiration)
     if (Date.now() - cached.timestamp > CACHE_TTL) {
       responseCache.delete(key);
       return null;
@@ -49,7 +48,6 @@ const ApiService = (function() {
   }
 
   function setCache(key, data) {
-    // 優化：移除 O(N) 全量遍歷，改用 LRU (Least Recently Used) 淘汰策略
     if (responseCache.size >= MAX_CACHE_SIZE) {
       const firstKey = responseCache.keys().next().value;
       responseCache.delete(firstKey);
@@ -58,9 +56,6 @@ const ApiService = (function() {
   }
 
   function fetchWithTimeout(url, options, timeout) {
-    timeout = timeout || GET_TIMEOUT; // 預設使用 GET_TIMEOUT
-    
-    // 優化：離線快速失敗 (Fast Fail)，斷網時 0 毫秒即刻報錯，觸發 offline.js 佇列
     if (!navigator.onLine) {
       return Promise.reject(new Error('OFFLINE'));
     }
@@ -94,30 +89,29 @@ const ApiService = (function() {
     }
   }
 
+  // 🔥 [v2.2] 優先級插隊：高優先級 unshift (排前面)，低優先級 push (排後面)
   function enqueueRequest(requestFn, isLowPriority) {
     return new Promise((resolve, reject) => {
-      if (isLowPriority && 'requestIdleCallback' in window) {
-        requestIdleCallback(() => {
-          pendingRequests.push({ resolve, reject, requestFn });
-          processQueue();
-        }, { timeout: 2000 });
+      const item = { resolve, reject, requestFn };
+      if (isLowPriority) {
+        pendingRequests.push(item); 
       } else {
-        pendingRequests.push({ resolve, reject, requestFn });
-        processQueue();
+        pendingRequests.unshift(item); // 用戶交互請求插隊！
       }
+      processQueue();
     });
   }
 
-  // 🔥 [v2.1] 優化：指數退避重試 (Exponential Backoff) + 允許 TIMEOUT 重試
+  // 🔥 [v2.2] 取消 TIMEOUT 重試：超時代表伺服器有問題，再試只會拖死隊列
   async function withRetry(requestFn, retries, attempt = 1) {
     retries = (retries === undefined) ? MAX_RETRIES : retries;
     try {
       return await requestFn();
     } catch (error) {
       errorCount++;
-      // 🔥 [v2.1] 離線錯誤直接放棄重試；但 TIMEOUT 允許重試（GAS 冷啟動第一次超時，第二次通常秒回）
-      if (retries > 0 && error.message !== 'OFFLINE') {
-        const delay = RETRY_DELAY * Math.pow(2, attempt - 1); // 1s, 2s, 4s...
+      // 離線、超時 直接放棄，唔再傻等
+      if (retries > 0 && error.message !== 'OFFLINE' && error.message !== 'TIMEOUT') {
+        const delay = RETRY_DELAY * Math.pow(2, attempt - 1);
         await new Promise(resolve => setTimeout(resolve, delay));
         return withRetry(requestFn, retries - 1, attempt + 1);
       }
@@ -125,7 +119,7 @@ const ApiService = (function() {
     }
   }
 
-  /* GET：公開睇資料，唔使密碼 */
+  /* GET：公開睇資料 */
   async function get(action, params, isLowPriority) {
     params = params || {};
     if (!apiEndpoint) throw new Error('API 服務未初始化');
@@ -139,10 +133,14 @@ const ApiService = (function() {
     requestCount++;
     const url = apiEndpoint + '?action=' + action + (queryString ? '&' + queryString : '');
     
+    // 🔥 [v2.2] 智能超時：bootstrap 背景刷新只等 10 秒，失敗即放棄
+    const isBackground = (action === 'bootstrap');
+    const timeout = isBackground ? BACKGROUND_TIMEOUT : DEFAULT_TIMEOUT;
+    const priority = isBackground ? true : isLowPriority; // 背景刷新強制低優先級
+    
     return enqueueRequest(() =>
       withRetry(() =>
-        // 🔥 [v2.1] 明確傳入 GET_TIMEOUT (30秒)
-        fetchWithTimeout(url, { method: 'GET', headers: { 'Accept': 'application/json' } }, GET_TIMEOUT)
+        fetchWithTimeout(url, { method: 'GET', headers: { 'Accept': 'application/json' } }, timeout)
           .then(response => {
             if (!response.ok) throw new Error('HTTP ' + response.status);
             return response.json();
@@ -151,10 +149,10 @@ const ApiService = (function() {
             setCache(cacheKey, data); 
             return data; 
           })
-      ), isLowPriority);
+      ), priority);
   }
 
-  /* POST：寫入 → 自動驗證工作人員 + 自動附 Token */
+  /* POST：寫入 */
   async function post(payload) {
     if (!apiEndpoint) throw new Error('API 服務未初始化');
     requestCount++;
@@ -170,7 +168,6 @@ const ApiService = (function() {
 
     return enqueueRequest(() =>
       withRetry(() =>
-        // 🔥 [v2.1] 明確傳入 POST_TIMEOUT (30秒)
         fetchWithTimeout(apiEndpoint, {
           method: 'POST',
           headers: {
@@ -190,18 +187,17 @@ const ApiService = (function() {
           }
           return data;
         })
-      )
-    );
+      ), false); // POST 永遠高優先級
   }
 
   function invalidateCache(type) {
     const prefixes = {
       'create_project': ['get:projects'],
-      'update_project': ['get:projects', 'get:trees'],
-      'delete_project': ['get:projects', 'get:trees'],
-      'create_tree': ['get:trees'],
-      'update_tree': ['get:trees'],
-      'delete_tree': ['get:trees'],
+      'update_project': ['get:projects', 'get:trees', 'get:bootstrap'],
+      'delete_project': ['get:projects', 'get:trees', 'get:bootstrap'],
+      'create_tree': ['get:trees', 'get:bootstrap'],
+      'update_tree': ['get:trees', 'get:bootstrap'],
+      'delete_tree': ['get:trees', 'get:bootstrap'],
       'create_aerial': ['get:aerials']
     };
     const prefixList = prefixes[type];
@@ -212,15 +208,6 @@ const ApiService = (function() {
         }
       }
     }
-  }
-
-  function debouncedLoad(loadFn) {
-    return new Promise((resolve, reject) => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        loadFn().then(resolve).catch(reject);
-      }, DEBOUNCE_DELAY);
-    });
   }
 
   function clearCache() { responseCache.clear(); }
@@ -238,7 +225,7 @@ const ApiService = (function() {
 
   function resetStats() { requestCount = 0; errorCount = 0; cacheHitCount = 0; }
 
-  return { init, get, post, getStats, resetStats, clearCache, debouncedLoad };
+  return { init, get, post, getStats, resetStats, clearCache };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {
