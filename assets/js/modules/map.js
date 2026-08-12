@@ -1,8 +1,7 @@
 /**
  * 地圖初始化模組
- * v2.50 - 手機版 layer bar 變身 FAB 抽屜（▲ 收起／✕ 展開），桌面維持橫排
- * v2.49 - 移除「地形」「街道」底圖
- * v2.48 - 🔢 編號開關 + moveend 自動刷新標籤
+ * v2.51 - 抽屜加入「建立地盤／新增樹木」動作掣（手機頂欄極簡化）
+ * v2.50 - 手機版 layer bar 變身 FAB 抽屜
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
@@ -71,27 +70,37 @@ export function initMap() {
 
   state.lotLayer = L.layerGroup();
 
-  // 🔥 [v2.50] layer bar：手機＝FAB 抽屜，桌面＝橫排
+  // 🔥 [v2.50/2.51] layer bar：手機＝FAB 抽屜（含動作掣），桌面＝橫排
   let layerWrap = null;
+  let closeDrawerFn = null;
   const layerBar = L.control({ position: isMobile ? 'bottomright' : 'bottomleft' });
   layerBar.onAdd = function () {
     layerWrap = L.DomUtil.create('div', 'layerbar-wrap');
 
-    // 🔥 FAB 浮掣（手機先顯示，CSS 控制）
     const fab = L.DomUtil.create('button', 'layerbar-fab', layerWrap);
     fab.type = 'button';
     fab.innerHTML = '▲';
     fab.title = '圖層與功能';
 
     const div = L.DomUtil.create('div', 'layerbar', layerWrap);
-    div.innerHTML = '<button data-l="hk" class="on">政府</button>' +
+    // 🔥 [v2.51] 抽屜頂部：動作掣（手機先顯示）＋分隔線＋圖層掣
+    div.innerHTML =
+      '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
+      '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>' +
+      '<div class="drawer-sep"></div>' +
+      '<button data-l="hk" class="on">政府</button>' +
       '<button data-l="sat">官航</button>' +
       '<button data-l="labels">🔢</button>' +
       '<button data-l="lot">🗺️ 地段</button>' +
       '<button data-l="aerial">🛰 航拍</button>';
     L.DomEvent.disableClickPropagation(layerWrap);
 
-    // 🔥 展開／收起
+    function closeDrawer() {
+      layerWrap.classList.remove('open');
+      fab.innerHTML = '▲';
+    }
+    closeDrawerFn = closeDrawer;
+
     fab.addEventListener('click', function () {
       const open = layerWrap.classList.toggle('open');
       fab.innerHTML = open ? '✕' : '▲';
@@ -99,6 +108,24 @@ export function initMap() {
 
     div.querySelectorAll('button').forEach((b) => {
       b.onclick = function () {
+        // 🔥 [v2.51] 動作掣：代理返去頂欄真實按鈕（復用現有邏輯）
+        if (b.dataset.act === 'addProject') {
+          closeDrawer();
+          const rp = document.getElementById('addProjectBtn');
+          if (rp) rp.click();
+          return;
+        }
+        if (b.dataset.act === 'addTree') {
+          closeDrawer();
+          const rt = document.getElementById('addTreeBtn');
+          if (rt && rt.classList.contains('ghost-hidden')) {
+            updateStatus('👉 請先選擇地盤，先可以新增樹木');
+          } else if (rt) {
+            rt.click();
+          }
+          return;
+        }
+
         const layerType = b.dataset.l;
         if (layerType === 'lot') {
           toggleLotLayer();
@@ -161,11 +188,8 @@ export function initMap() {
   legend.addTo(state.map);
 
   state.map.on('click', function () {
-    // 🔥 [v2.50] 撳地圖自動收起抽屜
-    if (layerWrap && layerWrap.classList.contains('open')) {
-      layerWrap.classList.remove('open');
-      const f = layerWrap.querySelector('.layerbar-fab');
-      if (f) f.innerHTML = '▲';
+    if (closeDrawerFn && layerWrap && layerWrap.classList.contains('open')) {
+      closeDrawerFn();
     }
     if (document.body.classList.contains('panel-open') && _closePanel) {
       _closePanel();
