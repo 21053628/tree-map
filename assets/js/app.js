@@ -1,6 +1,6 @@
 /**
  * 樹木管理系統 - 主入口（ES Modules 版本）
- * v2.53 - 拒絕過期快取：Excel 刪記錄 → 地圖自動跟住刪
+ * v2.54 - 移除靜態 bootstrap.json 依賴，兩段式載入：快照 → GAS 背景刷新
  * 
  * 🔥 重要：config / api / utils / auth 係舊式腳本，用 top-level const 宣告。
  *    const 唔會掛去 window，但會進入全域詞法環境，
@@ -23,6 +23,7 @@ import {
 } from './modules/forms.js';
 
 // 全域依賴注入（避免循環依賴）
+// Config / ApiService / AuthService / CoordUtils 直接用裸名（全域詞法環境）
 ApiService.init(Config.API_ENDPOINT);
 setClosePanel(closePanel);
 setHideSearch(hideSearch);
@@ -55,7 +56,7 @@ function applyData(projects, trees) {
   drawTrees();
 }
 
-// 🔥 [v2.53] 三段式載入＋拒絕過期快取＋自動重試
+// 🔥 [v2.54] 兩段式載入＋拒絕過期快取＋自動重試：快照 → GAS 背景刷新
 async function load() {
   updateStatus('🗺️ 載入中…');
 
@@ -75,28 +76,11 @@ async function load() {
     }
   }
 
-  // 2️⃣ 靜態 JSON（首次用戶都 0 秒，CDN 速度）
-  if (!hasLocal) {
-    try {
-      const r = await fetch('data/bootstrap.json');
-      if (r.ok) {
-        const j = await r.json();
-        if (j && j.projects && j.trees) {
-          applyData(j.projects, j.trees);
-          hasLocal = true;
-          updateStatus('⚡ 靜態資料顯示中，後台刷新…');
-        }
-      }
-    } catch (e) {
-      console.warn('Static JSON load failed', e);
-    }
-  }
-
-  // 3️⃣ 背景刷新：只接受「真・最新」數據，過期快取一律拒絕＋自動重試
+  // 2️⃣ 背景刷新：只接受「真・最新」數據，過期快取一律拒絕＋自動重試
   async function refreshFromGAS() {
-    const res = await ApiService.get('bootstrap');
+    const res = await ApiService.get('bootstrap'); // GAS 合併讀取端點（保留）
 
-    // 🔥 [v2.53 核心修正] offline.js 返回過期快取時會標記 offline:true
+    // 🔥 [v2.54 核心修正] offline.js 返回過期快取時會標記 offline:true
     // 過期快取 ≠ 成功刷新！拒絕套用，逼佢重試直到攞到真數據
     if (!res || res.offline || res.stale) throw new Error('STALE_CACHE');
 
@@ -120,7 +104,7 @@ async function load() {
       return true;
     } catch (err) {
       if (attemptsLeft > 0) {
-        console.log('⏳ 後端未就绪／返回過期快取，5 秒後重試（餘 ' + attemptsLeft + ' 次）');
+        console.log('⏳ 後端未就緒／返回過期快取，5 秒後重試（餘 ' + attemptsLeft + ' 次）');
         await new Promise(function (r) { setTimeout(r, 5000); });
         return tryRefresh(attemptsLeft - 1);
       }
@@ -133,8 +117,10 @@ async function load() {
     return Promise.resolve();
   } catch (error) {
     if (hasLocal) {
+      // 有本地資料但網路失敗：保持顯示，唔使彈大錯誤
       updateStatus('📴 未能連線後端：顯示本地快取（資料可能較舊）');
     } else {
+      // 完全無資料且網路失敗：顯示錯誤
       updateStatus('❌ 後端連線失敗：' + error.message);
     }
     console.error('載入失敗:', error);
@@ -161,7 +147,7 @@ function clearCache() {
   state.coordGroupsCache = null;
   clearLotCache();
   localStorage.removeItem('tree_map_last_view');
-  // 🔥 [v2.53] 連 localStorage 舊 API 快取都清埋
+  // 🔥 [v2.54] 連 localStorage 舊 API 快取都清埋
   if (typeof ApiService !== 'undefined' && ApiService.clearCache) ApiService.clearCache();
   console.log('🗑️ 緩存已清除');
 }
@@ -182,6 +168,7 @@ function init() {
   DOM.searchResults = document.getElementById('searchResults');
   DOM.treeSearch = document.getElementById('treeSearch');
 
+  // 🔥 [v2.31] 綁定事件監聽器（取代 inline onclick）
   const addProjectBtn = document.getElementById('addProjectBtn');
   if (addProjectBtn) {
     addProjectBtn.addEventListener('click', () => openProjectForm());
@@ -219,7 +206,7 @@ function init() {
 
   load().then(() => checkURLParams());
 
-  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.53 - 拒絕過期快取）');
+  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.54 - 兩段式載入）');
 }
 
 document.addEventListener('DOMContentLoaded', init);

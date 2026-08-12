@@ -16,16 +16,17 @@
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
 <link rel="apple-touch-icon" href="icons/icon.svg">
 
-<!-- 🔥 [Tier1-B] LCP 預連線：只保留真正用嘅兩個目標（刪走 jsdelivr） -->
+<!-- 🔥 LCP 預連線：只保留真正用嘅目標 -->
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
 <link rel="preconnect" href="https://script.google.com" crossorigin>
 
-<!-- 🔥 [Tier1-B] 自托管樣式（零 CDN 依賴，同域快取） -->
+<!-- 🔥 自托管樣式（零 CDN 依賴，同域快取） -->
 <link rel="stylesheet" href="assets/vendor/leaflet.css">
 <link rel="stylesheet" href="assets/vendor/MarkerCluster.css">
 <link rel="stylesheet" href="assets/vendor/MarkerCluster.Default.css">
 <link rel="stylesheet" href="assets/css/main.css">
-<!-- 🔥 [v2.52] 極速優化：Modulepreload 消滅 JS 瀑布流，強制瀏覽器並行下載所有模組 -->
+
+<!-- 🔥 [v2.54] 極速優化：Modulepreload 消滅 JS 瀑布流，強制瀏覽器並行下載所有核心模組 -->
 <link rel="modulepreload" href="assets/js/app.js">
 <link rel="modulepreload" href="assets/js/modules/state.js">
 <link rel="modulepreload" href="assets/js/modules/dom.js">
@@ -37,8 +38,6 @@
 <link rel="modulepreload" href="assets/js/modules/locate.js">
 <link rel="modulepreload" href="assets/js/modules/lots.js">
 <link rel="modulepreload" href="assets/js/modules/forms.js">
-
-<!-- 🔥 [v2.52] 極速優化：Preload 靜態數據，確保三段式載入第二段 0 延遲 -->
 </head>
 <body>
 <div id="bar">
@@ -64,7 +63,7 @@
 <script src="assets/js/auth.js"></script>
 <script src="offline.js"></script>
 
-<!-- 2️⃣ [Tier1-B] 自托管第三方函式庫（同域、即時執行、唔使 fallback） -->
+<!-- 2️⃣ 自托管第三方函式庫（同域、即時執行、唔使 fallback） -->
 <script src="assets/vendor/leaflet.js"></script>
 <script src="assets/vendor/leaflet.markercluster.js"></script>
 <script src="assets/vendor/proj4.js"></script>

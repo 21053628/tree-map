@@ -1,9 +1,9 @@
-/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.3
- * 🔥 修正：catch 冇快取時改為「直接拋錯」，
- *      徹底消滅 respondWith(undefined) 導致的
- *      "Failed to convert value to 'Response'" 錯誤
+/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.4
+ * 🔥 配合 app.js v2.54：移除 data/bootstrap.json 預快取
+ * 🔥 繼承 v1.2.3 修正：catch 冇快取時改為「直接拋錯」，
+ *      徹底消滅 respondWith(undefined) 導致的錯誤
  */
-const VERSION = 'v1.2.3';
+const VERSION = 'v1.2.4'; // 🔥 升級版本，強制清理舊快取
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -29,7 +29,7 @@ const PRECACHE = [
   './assets/js/auth.js',
   './assets/js/app.js',
   './data/trees_data.json',
-  './data/bootstrap.json',
+  // 🔥 已移除 './data/bootstrap.json'
   './icons/icon.svg'
 ];
 
@@ -140,7 +140,6 @@ self.addEventListener('fetch', function(e) {
           }
           return res;
         }).catch(function(err) {
-          // 🔥 [v1.2.3] 有快取返快取，冇快取直接拋錯（絕不返 undefined）
           if (cached) return cached;
           throw err;
         });
@@ -198,7 +197,6 @@ self.addEventListener('fetch', function(e) {
           }
           return res;
         }).catch(function(err) {
-          // 🔥 [v1.2.3] Leaflet 取消 tile 請求時，冇快取就直接拋錯
           if (cached) return cached;
           throw err;
         });
@@ -230,7 +228,6 @@ self.addEventListener('fetch', function(e) {
             }
             return res;
           }).catch(function(err) {
-            // 🔥 [v1.2.3] 補上缺失嘅 catch
             throw err;
           });
         });
@@ -254,7 +251,6 @@ self.addEventListener('fetch', function(e) {
         }
         return res;
       }).catch(function(err) {
-        // 🔥 [v1.2.3] 絕不返 undefined
         if (cached) return cached;
         throw err;
       });
