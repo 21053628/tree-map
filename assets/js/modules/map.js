@@ -4,7 +4,7 @@
  * - 底圖切換（支援 maxNativeZoom 放大）
  * - 航拍圖疊加層（單圖／切片雙模式）
  * - 圖例
- * v2.45 - 加入 Canvas 渲染優化 (FPS 大幅提升)
+ * v2.46 - 航拍圖改用獨立 aerialPane (z-index 250)，樹木/地段線永遠顯示喺航拍圖上面
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
@@ -34,7 +34,7 @@ export function initMap() {
     markerZoomAnimation: !isMobile,
     tap: isTouch,
     tapTolerance: 15,
-    preferCanvas: true  // 🔥 [v2.45 性能優化] 地段多邊形改用 Canvas 渲染，大幅提升縮放/平移 FPS
+    preferCanvas: true  // 🔥 樹木/地段用 Canvas 渲染，2000 棵樹都順滑
   };
 
   state.map = L.map('map', mapOptions).setView(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM);
@@ -47,6 +47,13 @@ export function initMap() {
       zoomInTitle: '放大',
       zoomOutTitle: '縮小'
     }).addTo(state.map);
+  }
+
+  // 🔥 [v2.46] 航拍圖獨立 pane：z-index 250（夾喺底圖 200 同矢量層 400 之間）
+  // 確保樹木圓點、地段線永遠顯示喺航拍圖上面
+  if (!state.map.getPane('aerialPane')) {
+    const aerialPane = state.map.createPane('aerialPane');
+    aerialPane.style.zIndex = 250;
   }
 
   // 🔥 [v2.33] 底圖加 maxNativeZoom：原生只到 19，放大到 22 會朦，但航拍圖超清就彌補
@@ -161,7 +168,7 @@ export function toggleAerial() {
   updateStatus(state.aerialEnabled ? '✅ 已開啟航拍圖層' : '✅ 已關閉航拍圖層');
 }
 
-// 🔥 [v2.33] 航拍圖刷新：根據當前地盤自動對位
+// 🔥 [v2.46] 航拍圖刷新：改用 aerialPane，樹木/地段線永遠喺最頂
 export function refreshAerial() {
   // 移除舊疊加層
   if (state.aerialLayer) {
@@ -191,22 +198,21 @@ export function refreshAerial() {
 
   if (mode === 'tiles') {
     // 切片模式：超清 + 極速（只載可見範圍）
-    // 🔥 [v2.34] maxNativeZoom 改 22，配合 8000px 縮圖
     state.aerialLayer = L.tileLayer(p.aerial_url, {
       bounds: bounds,
       minNativeZoom: 17,
       maxNativeZoom: 22,
       maxZoom: Config.MAP.MAX_ZOOM,
       opacity: 0.9,
-      zIndex: 250,   // 🔥 [v2.41] 改低：夾喺底圖(200)同地段(400)之間，確保地段線顯示喺最頂
+      pane: 'aerialPane',   // 🔥 [v2.46] 獨立 pane，唔再蓋住樹木
       noWrap: true
     }).addTo(state.map);
   } else {
-    // 🏆 單張原圖模式（示範用呢個）
+    // 🏆 單張原圖模式
     state.aerialLayer = L.imageOverlay(p.aerial_url, bounds, {
       opacity: 0.9,
       interactive: false, // 唔擋地圖點擊
-      zIndex: 250      // 🔥 [v2.41] 改低：夾喺底圖(200)同地段(400)之間，確保地段線顯示喺最頂
+      pane: 'aerialPane'  // 🔥 [v2.46] 獨立 pane，唔再蓋住樹木
     }).addTo(state.map);
   }
 }
