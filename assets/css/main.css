@@ -1,4 +1,5 @@
 /* ================= 全域變數與基礎設定 ================= */
+/* v2.51 - 手機版層疊優化：狀態列避開 layer bar、超窄屏 layer bar 自動換行 */
 :root {
   --primary: #2e7d32;
   --primary-dark: #1b5e20;
@@ -41,8 +42,6 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  
-  /* 🔥 [v2.50 終極優化] 防止 iOS 橡皮筋滾動效應 & 防止地圖拖拽時意外選取文字 */
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
@@ -139,7 +138,7 @@ button { touch-action: manipulation; cursor: pointer; }
   color: var(--muted);
 }
 
-/* 🔥 搜尋結果下拉清單 (桌面版保持原樣) */
+/* 🔥 搜尋結果下拉清單 */
 .search-results {
   display: none;
   position: absolute;
@@ -415,7 +414,7 @@ body.panel-open::before {
   display: block; margin: 8px 0; box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 
-/* ================= 🔥 手機版終極響應式優化 (v2.50) ================= */
+/* ================= 🔥 手機版終極響應式優化 (v2.51) ================= */
 @media (max-width: 600px) {
   #bar { left: 8px; right: 8px; top: 8px; flex-wrap: nowrap; gap: 4px; }
   #bar select { flex: 1; min-width: 0; max-width: none; width: auto; font-size: 16px; padding: 10px 8px; }
@@ -424,12 +423,11 @@ body.panel-open::before {
   .search-wrap { flex: 1 1 100%; max-width: none; order: 99; }
   .search-wrap input { font-size: 16px; padding: 10px; }
   
-  /* 🔥 [v2.50] 搜尋框 focus 時背景變實，提升複雜地圖上嘅可讀性 */
   .search-wrap input:focus {
     background: rgba(255,255,255,0.98);
   }
 
-  /* 🔥 [v2.50] 搜尋結果變身「底部抽屜 (Bottom Sheet)」，避開虛擬鍵盤 */
+  /* 搜尋結果底部抽屜 */
   .search-results {
     position: fixed !important;
     top: auto !important;
@@ -443,7 +441,6 @@ body.panel-open::before {
     border: none !important;
     animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
   }
-  /* 底部抽屜小橫條 */
   .search-results::before {
     content: ''; display: block; width: 40px; height: 4px;
     background: #ccc; border-radius: 2px; margin: 8px auto 4px;
@@ -454,7 +451,7 @@ body.panel-open::before {
   }
   
   .leaflet-top.leaflet-left { top: calc(60px + var(--safe-top)); left: 6px; }
-  .leaflet-bottom.leaflet-right { bottom: calc(40px + var(--safe-bottom)); right: 6px; }
+  .leaflet-bottom.leaflet-right { bottom: calc(40px + var(--safe-bottom)); right: 6px; max-width: calc(100vw - 12px); }
   .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
   
   .legend { display: none; }
@@ -479,23 +476,25 @@ body.panel-open::before {
   #panel input, #panel select { font-size: 16px; padding: 12px; }
   #panel button { padding: 14px; font-size: 16px; }
   
-  /* 🔥 [v2.50] 狀態列避開 iPhone 底部 Home Indicator */
+  /* 🔥 [v2.51] 狀態列上移：避開右下角 layer bar，唔再視覺疊埋 */
   #status { 
     font-size: 12px; 
-    bottom: calc(16px + var(--safe-bottom)) !important; 
+    bottom: calc(76px + var(--safe-bottom)) !important; 
     max-width: 92%; 
   }
   
-  /* 🔥 [v2.50] Layer bar 按鈕放大，加陰影 */
+  /* 🔥 [v2.51] Layer bar 防爆邊：窄屏自動換行 */
   .layerbar {
     box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: calc(100vw - 12px);
   }
   .layerbar button { 
     padding: 12px 14px; 
     font-size: 13px; 
   }
   
-  /* 🔥 [v2.37] 手機 popup：安全視覺屬性 */
   .leaflet-popup-content-wrapper {
     border-radius: 18px !important;
     padding: 0 !important;
@@ -521,7 +520,6 @@ body.panel-open::before {
   }
   .leaflet-popup-tip-container { display: none !important; }
 
-  /* 🔥 [v2.50] Popup 關閉按鈕放大，極大降低誤觸率 */
   .leaflet-popup-close-button {
     width: 48px !important;
     height: 48px !important;
@@ -531,6 +529,13 @@ body.panel-open::before {
   .leaflet-popup-close-button::after {
     font-size: 24px;
   }
+}
+
+/* 🔥 [v2.51] 超窄屏（<400px）：layer bar 極簡模式 */
+@media (max-width: 400px) {
+  .layerbar { gap: 2px; padding: 3px; }
+  .layerbar button { padding: 10px 9px; font-size: 12px; }
+  #status { font-size: 11px; }
 }
 
 /* ================= 平板電腦優化 ================= */
@@ -625,7 +630,6 @@ button.is-loading::after {
     border-color: #444;
     color: #e0e0e0;
   }
-  /* 🔥 [v2.50] 深色模式搜尋框 focus */
   .search-wrap input:focus {
     background: rgba(30, 36, 30, 0.98);
   }
@@ -634,7 +638,6 @@ button.is-loading::after {
     background: #1e241e;
     border-color: rgba(255,255,255,.1);
   }
-  /* 🔥 [v2.50] 深色模式搜尋抽屜橫條 */
   .search-results::before { background: #555; }
   
   .sr-item { border-bottom-color: rgba(255,255,255,.08); }
