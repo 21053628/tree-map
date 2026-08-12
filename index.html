@@ -25,6 +25,21 @@
 <link rel="stylesheet" href="assets/vendor/MarkerCluster.css">
 <link rel="stylesheet" href="assets/vendor/MarkerCluster.Default.css">
 <link rel="stylesheet" href="assets/css/main.css">
+<!-- 🔥 [v2.52] 極速優化：Modulepreload 消滅 JS 瀑布流，強制瀏覽器並行下載所有模組 -->
+<link rel="modulepreload" href="assets/js/app.js">
+<link rel="modulepreload" href="assets/js/modules/state.js">
+<link rel="modulepreload" href="assets/js/modules/dom.js">
+<link rel="modulepreload" href="assets/js/modules/map.js">
+<link rel="modulepreload" href="assets/js/modules/search.js">
+<link rel="modulepreload" href="assets/js/modules/species.js">
+<link rel="modulepreload" href="assets/js/modules/trees.js">
+<link rel="modulepreload" href="assets/js/modules/projects.js">
+<link rel="modulepreload" href="assets/js/modules/locate.js">
+<link rel="modulepreload" href="assets/js/modules/lots.js">
+<link rel="modulepreload" href="assets/js/modules/forms.js">
+
+<!-- 🔥 [v2.52] 極速優化：Preload 靜態數據，確保三段式載入第二段 0 延遲 -->
+<link rel="preload" href="data/bootstrap.json" as="fetch" crossorigin>
 </head>
 <body>
 <div id="bar">

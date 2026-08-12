@@ -8,3 +8,6 @@ https://script.google.com/macros/s/你最新嘅ID/exec?action=bootstrap
 URL: https://script.google.com/macros/s/你最新嘅ID/exec?action=ping
 Schedule: 每 5 分鐘
 呢步可以確保 GAS 永遠唔會進入休眠，背景刷新永遠都係 1-2 秒內完成！
+
+
+https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec?action=bootstrap
