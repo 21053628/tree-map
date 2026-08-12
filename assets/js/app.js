@@ -1,6 +1,6 @@
 /**
  * 樹木管理系統 - 主入口（ES Modules 版本）
- * v2.51 - 三段式極速載入：快照 → 靜態 JSON → GAS 背景刷新
+ * v2.52 - 三段式極速載入＋智能重試：快照 → 靜態 JSON → GAS 背景刷新
  * 
  * 🔥 重要：config / api / utils / auth 係舊式腳本，用 top-level const 宣告。
  *    const 唔會掛去 window，但會進入全域詞法環境，
@@ -56,7 +56,7 @@ function applyData(projects, trees) {
   drawTrees();
 }
 
-// 🔥 [v2.51] 三段式載入：快照 → 靜態 JSON → GAS 背景刷新
+// 🔥 [v2.52] 三段式載入＋智能重試：快照 → 靜態 JSON → GAS 背景刷新（失敗自動重試）
 async function load() {
   updateStatus('🗺️ 載入中…');
 
@@ -93,38 +93,40 @@ async function load() {
     }
   }
 
-  // 3️⃣ 背景刷新（GAS 單請求；快取／快照已兜底，慢都唔影響體驗）
-  try {
+  // 3️⃣ 背景刷新（GAS 單請求＋智能重試）
+  async function refreshFromGAS() {
     const res = await ApiService.get('bootstrap');
     const projects = (res.data && res.data.projects) || [];
     const trees = (res.data && res.data.trees) || [];
-    
-    // 用最新資料重新渲染
+    if (!projects.length && !trees.length) throw new Error('EMPTY_RESPONSE');
     applyData(projects, trees);
-
-    // 存入 IndexedDB 作下次快照
     if (window.TreeSnapshot) {
       window.TreeSnapshot.save('main', { projects, trees }).catch(() => {});
     }
+    console.log('✅ 資料載入完成', ApiService.getStats());
+    return true;
+  }
 
-    const stats = ApiService.getStats();
-    console.log('✅ 資料載入完成', stats);
-    
-    // 如果之前有本地資料，更新狀態列
-    if (hasLocal) {
-      updateStatus('✅ 資料已更新至最新');
-    }
-
+  try {
+    await refreshFromGAS();
+    if (hasLocal) updateStatus('✅ 資料已更新至最新');
     return Promise.resolve();
   } catch (error) {
     if (hasLocal) {
       // 有本地資料但網路失敗：保持顯示，唔使彈大錯誤
       updateStatus('📴 後端連線失敗：顯示本地快取');
-    } else {
-      // 完全無資料且網路失敗：顯示錯誤
-      updateStatus('❌ 後端連線失敗：' + error.message);
+      return;
     }
-    console.error('載入失敗:', error);
+    // 🔥 [v2.52] 冇本地資料＋首次失敗：5 秒後自動重試（等 GAS 冷啟動完成）
+    updateStatus('⏳ 後端喚醒中，5 秒後自動重試…');
+    setTimeout(function () {
+      refreshFromGAS().then(function () {
+        updateStatus('✅ 資料已更新至最新');
+      }).catch(function (err) {
+        console.error('載入失敗:', err);
+        updateStatus('❌ 後端連線失敗：請確認 GAS 已重新部署');
+      });
+    }, 5000);
   }
 }
 
@@ -205,7 +207,7 @@ function init() {
 
   load().then(() => checkURLParams());
 
-  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.51 - 三段式極速載入）');
+  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.52 - 三段式＋智能重試）');
 }
 
 document.addEventListener('DOMContentLoaded', init);

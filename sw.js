@@ -1,9 +1,7 @@
-/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.1
- * 🔥 修正：徹底解決 "Response body is already used" 錯誤
- *      - 所有 clone() 改為「同步克隆」（先 clone，後異步快取）
- *      - 所有側鏈快取加 .catch()，SW 錯誤絕不影響頁面
+/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.2
+ * 🔥 修正：移除不存在嘅 icon-180.png，避免預快取報錯
  */
-const VERSION = 'v1.2.1';
+const VERSION = 'v1.2.2';
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -30,8 +28,8 @@ const PRECACHE = [
   './assets/js/app.js',
   './data/trees_data.json',
   './data/bootstrap.json',
-  './icons/icon.svg',
-  './icons/icon-180.png'
+  './icons/icon.svg'
+  // 🔥 移除不存在嘅 './icons/icon-180.png'
 ];
 
 self.addEventListener('install', function(e) {
