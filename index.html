@@ -9,25 +9,24 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="樹木GIS">
 <meta name="theme-color" content="#2e7d32">
-"name": "樹木管理 GIS",
-"short_name": "樹木GIS",
+<title>樹木管理 GIS</title>
 
-<!-- 🔥 PWA Manifest & Icons -->
+<!-- 🔥 PWA Manifest & Icons（淨係用 SVG） -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
-<link rel="apple-touch-icon" href="icons/icon-512.png">
+<link rel="apple-touch-icon" href="icons/icon.svg">
 
-<!-- 🔥 LCP 預連線：只保留真正用嘅目標 -->
+<!-- LCP 預連線 -->
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
 <link rel="preconnect" href="https://script.google.com" crossorigin>
 
-<!-- 🔥 自托管樣式（零 CDN 依賴，同域快取） -->
+<!-- 自托管樣式 -->
 <link rel="stylesheet" href="assets/vendor/leaflet.css">
 <link rel="stylesheet" href="assets/vendor/MarkerCluster.css">
 <link rel="stylesheet" href="assets/vendor/MarkerCluster.Default.css">
 <link rel="stylesheet" href="assets/css/main.css">
 
-<!-- 🔥 [v2.54] 極速優化：Modulepreload 消滅 JS 瀑布流，強制瀏覽器並行下載所有核心模組 -->
+<!-- Modulepreload 極速 -->
 <link rel="modulepreload" href="assets/js/app.js">
 <link rel="modulepreload" href="assets/js/modules/state.js">
 <link rel="modulepreload" href="assets/js/modules/dom.js">
@@ -46,7 +45,7 @@
   <button class="blue" id="addProjectBtn">＋ 建立地盤</button>
   <button id="addTreeBtn" class="ghost-hidden">🌳 新增樹木</button>
   
-  <!-- 🔥 樹木搜尋框（只搜尋當前地盤） -->
+  <!-- 🔥 樹木搜尋框 -->
   <div class="search-wrap">
     <input type="text" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off">
     <div id="searchResults" class="search-results"></div>
@@ -57,20 +56,20 @@
 <div id="status">🗺️ 載入中…</div>
 <div id="map"></div>
 
-<!-- 1️⃣ 自家全域腳本（即時執行，掛去全域詞法環境） -->
+<!-- 1️⃣ 自家全域腳本 -->
 <script src="assets/js/config.js"></script>
 <script src="assets/js/utils.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="offline.js"></script>
 
-<!-- 2️⃣ 自托管第三方函式庫（同域、即時執行、唔使 fallback） -->
+<!-- 2️⃣ 自托管第三方函式庫 -->
 <script src="assets/vendor/leaflet.js"></script>
 <script src="assets/vendor/leaflet.markercluster.js"></script>
 <script src="assets/vendor/proj4.js"></script>
 <script src="assets/vendor/purify.min.js"></script>
 
-<!-- 3️⃣ 主入口（ES Module，最後執行） -->
+<!-- 3️⃣ 主入口 -->
 <script type="module" src="assets/js/app.js"></script>
 
 <!-- 🔥 PWA Service Worker 註冊 -->
