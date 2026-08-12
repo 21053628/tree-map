@@ -1,9 +1,8 @@
 /**
  * 樹木管理系統 - 離線寫入佇列 (IndexedDB Outbox)
- * v1.5.0 - 加入本地快照 (Local-first) 功能：
- *          1. 新增 snapshot store 儲存 projects/trees 快照
- *          2. 提供 TreeSnapshot API 俾 app.js 使用
- *          3. 實現 0 秒首屏載入（本地優先）
+ * v1.6.0 - 完美配合 api.js v2.1：
+ *          1. GET/POST 攔截器加入 TIMEOUT 處理（防止 GAS 極端冷啟動導致白屏或寫入失敗）
+ *          2. 保留 v1.5.0 嘅 Local-first 快照功能
  */
 (function() {
   'use strict';
@@ -365,7 +364,8 @@
         return result;
       } catch (err) {
         console.warn('📥 [Offline] 網絡錯誤：push 到佇列', err.message);
-        if (err instanceof TypeError || !navigator.onLine) {
+        // 🔥 [v1.6.0] 加入 TIMEOUT：萬一 GAS 慢到連 30 秒都等唔到，寫入動作照樣入佇列
+        if (err instanceof TypeError || !navigator.onLine || err.message === 'TIMEOUT') {
           await push(attachToken(payload));
           pwaToast('📥 網路不穩，已離線暫存');
           return { ok: true, queued: true };
@@ -383,13 +383,14 @@
         }
         return result;
       } catch (err) {
-        if (!navigator.onLine || err.message === 'OFFLINE') {
+        // 🔥 [v1.6.0] 加入 TIMEOUT：就算 api.js 超時，都乖乖用 localStorage 快取顯示地圖
+        if (!navigator.onLine || err.message === 'OFFLINE' || err.message === 'TIMEOUT') {
           var cached = getCache(action);
           if (cached) {
-            console.log('📴 離線模式：使用快取資料 (' + action + ')');
+            console.log('📴 離線/超時模式：使用快取資料 (' + action + ')');
             return { data: cached, offline: true };
           }
-          console.warn('📴 離線模式：無快取，返回空陣列 (' + action + ')');
+          console.warn('📴 離線/超時模式：無快取，返回空陣列 (' + action + ')');
           return { data: [], offline: true };
         }
         throw err;

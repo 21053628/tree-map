@@ -1,22 +1,25 @@
 /**
- * 樹木管理系統 - API 服務模組（極致性能優化版 v2.0）
+ * 樹木管理系統 - API 服務模組（極致性能優化版 v2.1）
  * 
  * 🚀 優化重點：
  * 1. [效能] 移除 setCache 的 O(N) 全量遍歷，改用 LRU 淘汰策略，寫入速度提升 10 倍
- * 2. [網絡] 引入「離線快速失敗 (Fast Fail)」，斷網時秒級響應，唔再傻等 15 秒超時
+ * 2. [網絡] 引入「離線快速失敗 (Fast Fail)」，斷網時秒級響應，唔再傻等超時
  * 3. [穩定] 重試機制升級為「指數退避 (Exponential Backoff)」，減少網絡擁塞時嘅重試風暴
  * 4. [記憶體] 限制最大快取數量，防止長時間運行導致記憶體洩漏
+ * 5. [v2.1 修復] GET/POST 超時加長至 30 秒，並允許 TIMEOUT 重試（解決 GAS 冷啟動問題）
  */
 const ApiService = (function() {
   'use strict';
 
-  const DEFAULT_TIMEOUT = 15000;
+  // 🔥 [v2.1] 拆開 GET/POST 超時，加長到 30 秒（GAS 冷啟動隨時要 20 秒+）
+  const GET_TIMEOUT = 30000;
+  const POST_TIMEOUT = 30000;
   const MAX_RETRIES = 2;
   const RETRY_DELAY = 1000;
   const CACHE_TTL = 60000; // 1 分鐘
   const MAX_CONCURRENT = 5;
   const DEBOUNCE_DELAY = 300;
-  const MAX_CACHE_SIZE = 100; // 🔥 新增：限制快取最大數量，防止記憶體暴增
+  const MAX_CACHE_SIZE = 100; // 限制快取最大數量，防止記憶體暴增
   const WRITE_TYPES = ['checkin', 'inspection', 'update_tree', 'create_project', 'create_tree', 'create_aerial'];
 
   let apiEndpoint = null;
@@ -46,7 +49,7 @@ const ApiService = (function() {
   }
 
   function setCache(key, data) {
-    // 🔥 優化：移除 O(N) 全量遍歷，改用 LRU (Least Recently Used) 淘汰策略
+    // 優化：移除 O(N) 全量遍歷，改用 LRU (Least Recently Used) 淘汰策略
     if (responseCache.size >= MAX_CACHE_SIZE) {
       const firstKey = responseCache.keys().next().value;
       responseCache.delete(firstKey);
@@ -55,9 +58,9 @@ const ApiService = (function() {
   }
 
   function fetchWithTimeout(url, options, timeout) {
-    timeout = timeout || DEFAULT_TIMEOUT;
+    timeout = timeout || GET_TIMEOUT; // 預設使用 GET_TIMEOUT
     
-    // 🔥 優化：離線快速失敗 (Fast Fail)，斷網時 0 毫秒即刻報錯，觸發 offline.js 佇列
+    // 優化：離線快速失敗 (Fast Fail)，斷網時 0 毫秒即刻報錯，觸發 offline.js 佇列
     if (!navigator.onLine) {
       return Promise.reject(new Error('OFFLINE'));
     }
@@ -105,15 +108,15 @@ const ApiService = (function() {
     });
   }
 
-  // 🔥 優化：指數退避重試 (Exponential Backoff)
+  // 🔥 [v2.1] 優化：指數退避重試 (Exponential Backoff) + 允許 TIMEOUT 重試
   async function withRetry(requestFn, retries, attempt = 1) {
     retries = (retries === undefined) ? MAX_RETRIES : retries;
     try {
       return await requestFn();
     } catch (error) {
       errorCount++;
-      // 離線錯誤直接放棄重試，交由離線佇列處理；其他錯誤先重試
-      if (retries > 0 && error.message !== 'OFFLINE' && error.message !== 'TIMEOUT') {
+      // 🔥 [v2.1] 離線錯誤直接放棄重試；但 TIMEOUT 允許重試（GAS 冷啟動第一次超時，第二次通常秒回）
+      if (retries > 0 && error.message !== 'OFFLINE') {
         const delay = RETRY_DELAY * Math.pow(2, attempt - 1); // 1s, 2s, 4s...
         await new Promise(resolve => setTimeout(resolve, delay));
         return withRetry(requestFn, retries - 1, attempt + 1);
@@ -138,7 +141,8 @@ const ApiService = (function() {
     
     return enqueueRequest(() =>
       withRetry(() =>
-        fetchWithTimeout(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
+        // 🔥 [v2.1] 明確傳入 GET_TIMEOUT (30秒)
+        fetchWithTimeout(url, { method: 'GET', headers: { 'Accept': 'application/json' } }, GET_TIMEOUT)
           .then(response => {
             if (!response.ok) throw new Error('HTTP ' + response.status);
             return response.json();
@@ -166,6 +170,7 @@ const ApiService = (function() {
 
     return enqueueRequest(() =>
       withRetry(() =>
+        // 🔥 [v2.1] 明確傳入 POST_TIMEOUT (30秒)
         fetchWithTimeout(apiEndpoint, {
           method: 'POST',
           headers: {
@@ -173,7 +178,7 @@ const ApiService = (function() {
             'Accept': 'application/json'
           },
           body: JSON.stringify(payload)
-        })
+        }, POST_TIMEOUT)
         .then(response => {
           if (!response.ok) throw new Error('HTTP ' + response.status);
           return response.json();
@@ -197,7 +202,7 @@ const ApiService = (function() {
       'create_tree': ['get:trees'],
       'update_tree': ['get:trees'],
       'delete_tree': ['get:trees'],
-      'create_aerial': ['get:aerials'] // 🔥 補充航拍圖快取失效
+      'create_aerial': ['get:aerials']
     };
     const prefixList = prefixes[type];
     if (prefixList) {
