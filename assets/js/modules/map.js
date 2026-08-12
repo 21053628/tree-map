@@ -1,12 +1,14 @@
 /**
  * 地圖初始化模組
- * v2.51 - 抽屜加入「建立地盤／新增樹木」動作掣（手機頂欄極簡化）
+ * v2.52 - 加入 🎚 狀態過濾掣（配合 filters.js）
+ * v2.51 - 抽屜加入「建立地盤／新增樹木」動作掣
  * v2.50 - 手機版 layer bar 變身 FAB 抽屜
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
 import { toggleLotLayer } from './lots.js';
 import { toggleTreeLabels, scheduleRefreshLabels } from './trees.js';
+import { toggleFilterPanel, closeFilterPanel } from './filters.js'; // 🔥 [v2.52]
 
 let _closePanel = null;
 let _hideSearch = null;
@@ -70,7 +72,6 @@ export function initMap() {
 
   state.lotLayer = L.layerGroup();
 
-  // 🔥 [v2.50/2.51] layer bar：手機＝FAB 抽屜（含動作掣），桌面＝橫排
   let layerWrap = null;
   let closeDrawerFn = null;
   const layerBar = L.control({ position: isMobile ? 'bottomright' : 'bottomleft' });
@@ -83,7 +84,6 @@ export function initMap() {
     fab.title = '圖層與功能';
 
     const div = L.DomUtil.create('div', 'layerbar', layerWrap);
-    // 🔥 [v2.51] 抽屜頂部：動作掣（手機先顯示）＋分隔線＋圖層掣
     div.innerHTML =
       '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
       '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>' +
@@ -91,6 +91,7 @@ export function initMap() {
       '<button data-l="hk" class="on">政府</button>' +
       '<button data-l="sat">官航</button>' +
       '<button data-l="labels">🔢</button>' +
+      '<button data-l="filter">🎚</button>' +   // 🔥 [v2.52] 狀態過濾掣
       '<button data-l="lot">🗺️ 地段</button>' +
       '<button data-l="aerial">🛰 航拍</button>';
     L.DomEvent.disableClickPropagation(layerWrap);
@@ -108,7 +109,6 @@ export function initMap() {
 
     div.querySelectorAll('button').forEach((b) => {
       b.onclick = function () {
-        // 🔥 [v2.51] 動作掣：代理返去頂欄真實按鈕（復用現有邏輯）
         if (b.dataset.act === 'addProject') {
           closeDrawer();
           const rp = document.getElementById('addProjectBtn');
@@ -133,6 +133,10 @@ export function initMap() {
           toggleAerial();
         } else if (layerType === 'labels') {
           toggleTreeLabels();
+        } else if (layerType === 'filter') {
+          // 🔥 [v2.52] 撳 filter 掣：收起抽屜，彈出 filter 面板
+          if (layerWrap && layerWrap.classList.contains('open')) closeDrawer();
+          toggleFilterPanel(b);
         } else {
           if (state.currentBaseLayer) state.map.removeLayer(state.currentBaseLayer);
           state.currentBaseLayer = state.baseLayers[layerType];
@@ -188,6 +192,7 @@ export function initMap() {
   legend.addTo(state.map);
 
   state.map.on('click', function () {
+    closeFilterPanel(); // 🔥 [v2.52] 撳地圖自動收埋 filter 面板
     if (closeDrawerFn && layerWrap && layerWrap.classList.contains('open')) {
       closeDrawerFn();
     }
