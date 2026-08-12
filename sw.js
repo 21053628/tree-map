@@ -1,7 +1,9 @@
-/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.0
- * 🚀 極速透明版：移除靜態資源 blob 轉換，完全配合 api.js v2.3 嘅 3秒放棄策略
+/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.1
+ * 🔥 修正：徹底解決 "Response body is already used" 錯誤
+ *      - 所有 clone() 改為「同步克隆」（先 clone，後異步快取）
+ *      - 所有側鏈快取加 .catch()，SW 錯誤絕不影響頁面
  */
-const VERSION = 'v1.2.0'; // 🔥 升級版本，強制清理舊緩存
+const VERSION = 'v1.2.1';
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -11,9 +13,8 @@ const IMG_CACHE = 'img-' + VERSION;
 const TILE_MAX = 800;
 const IMG_MAX = 300;
 const RUNTIME_MAX = 100;
-const DATA_MAX_AGE = 3600000; // 1 小時
+const DATA_MAX_AGE = 3600000;
 
-// 🔥 補全 Pre-cache 列表，確保首次加載 0 延遲
 const PRECACHE = [
   './',
   './index.html',
@@ -28,9 +29,9 @@ const PRECACHE = [
   './assets/js/auth.js',
   './assets/js/app.js',
   './data/trees_data.json',
-  './data/bootstrap.json', // 🔥 新增：靜態數據快照
+  './data/bootstrap.json',
   './icons/icon.svg',
-  './icons/icon-180.png'  // 🔥 新增：iOS 圖標
+  './icons/icon-180.png'
 ];
 
 self.addEventListener('install', function(e) {
@@ -77,23 +78,21 @@ function normalizeImgUrl(url) {
   return url.replace(/=[wsh]\d+(-c)?$/g, '');
 }
 
-/* ---------- 🔥 優化版：只針對 API JSON 使用 blob 轉換 ---------- */
-function cacheAPIResponse(cache, req, res) {
-  if (res.type === 'opaque' || res.status === 0) {
-    return cache.put(req, res.clone());
+/* ---------- 🔥 修正版：接收「已同步克隆」嘅 response，唔再 clone ---------- */
+function cacheAPIResponse(cache, req, clonedRes) {
+  if (clonedRes.type === 'opaque' || clonedRes.status === 0) {
+    return cache.put(req, clonedRes).catch(function(){});
   }
-  var copy = res.clone();
-  var headers = new Headers(copy.headers);
+  var headers = new Headers(clonedRes.headers);
   headers.set('x-sw-cached-at', String(Date.now()));
-  // JSON 體積細，blob 轉換好快，可以接受
-  return copy.blob().then(function(blob) {
+  return clonedRes.blob().then(function(blob) {
     var newRes = new Response(blob, {
-      status: copy.status,
-      statusText: copy.statusText,
+      status: clonedRes.status,
+      statusText: clonedRes.statusText,
       headers: headers
     });
     return cache.put(req, newRes);
-  });
+  }).catch(function(){});
 }
 
 function isCacheFresh(res, maxAge) {
@@ -125,18 +124,21 @@ self.addEventListener('message', function(e) {
 
 self.addEventListener('fetch', function(e) {
   var req = e.request;
-  if (req.method !== 'GET') return;
+  if (req.method !== 'GET') return; // POST 寫入直達 GAS，絕不攔截
 
   var url;
   try { url = new URL(req.url); } catch (err) { return; }
 
-  // 1. 導航請求 (HTML) - Stale-While-Revalidate
+  // 1. 導航請求 (HTML)
   if (req.mode === 'navigate') {
     e.respondWith(
       caches.match(req).then(function(cached) {
         var fetchPromise = fetch(req).then(function(res) {
           if (res.ok) {
-            caches.open(STATIC_CACHE).then(function(c) { c.put(req, res.clone()); });
+            var copy = res.clone(); // 🔥 同步克隆
+            caches.open(STATIC_CACHE).then(function(c) {
+              return cacheAPIResponse(c, req, copy);
+            }).catch(function(){});
           }
           return res;
         }).catch(function() { return cached; });
@@ -146,33 +148,28 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  // 2. GAS API 請求 - Network First + Cache Fallback (完全信任 api.js 嘅 AbortController)
+  // 2. GAS API 請求
   if (url.hostname.indexOf('script.google.com') !== -1) {
     e.respondWith(
       fetch(req).then(function(res) {
         if (res.ok) {
-          caches.open(DATA_CACHE).then(function(c) { 
-            cacheAPIResponse(c, req, res); 
-          });
+          var copy = res.clone(); // 🔥 同步克隆（喺頁面消耗 body 之前）
+          caches.open(DATA_CACHE).then(function(c) {
+            return cacheAPIResponse(c, req, copy);
+          }).catch(function(){});
         }
         return res;
-      }).catch(function(err) {
-        // 🔥 當 api.js 觸發 3秒 Abort 時，會進入呢度
+      }).catch(function() {
         return caches.match(req).then(function(cached) {
           if (cached) {
-            // 🔥 移除「過期就唔俾」嘅死板邏輯，有 Cache 就即刻返回，保證 UI 絕不卡頓
             if (!isCacheFresh(cached, DATA_MAX_AGE)) {
               console.log('⚠️ API 快取已過期，但仍返回以保證 UI 可用');
             }
             return cached;
           }
-          // 如果完全冇 Cache，返回 OFFLINE JSON 俾 api.js 處理
-          return new Response(JSON.stringify({ 
-            ok: false, 
-            error: 'OFFLINE' 
-          }), { 
+          return new Response(JSON.stringify({ ok: false, error: 'OFFLINE' }), {
             headers: { 'Content-Type': 'application/json' },
-            status: 200 // 返回 200 俾 api.js 解析 JSON，而唔係拋出 HTTP error
+            status: 200
           });
         });
       })
@@ -190,13 +187,15 @@ self.addEventListener('fetch', function(e) {
         if (cached) return cached;
         return fetch(req).then(function(res) {
           if (res.ok) {
+            var copy = res.clone(); // 🔥 同步克隆
             caches.open(TILE_CACHE).then(function(c) {
-              c.put(req, res.clone()); // 🔥 直接 put，唔用 blob 轉換
-              trimCache(TILE_CACHE, TILE_MAX);
-            });
+              return c.put(req, copy).then(function() {
+                return trimCache(TILE_CACHE, TILE_MAX);
+              });
+            }).catch(function(){});
           }
           return res;
-        });
+        }).catch(function() { return cached; });
       })
     );
     return;
@@ -216,10 +215,12 @@ self.addEventListener('fetch', function(e) {
           if (cached2) return cached2;
           return fetch(req).then(function(res) {
             if (res.ok) {
+              var copy = res.clone(); // 🔥 同步克隆
               caches.open(IMG_CACHE).then(function(c) {
-                c.put(normalizedUrl, res.clone()); // 🔥 直接 put
-                trimCache(IMG_CACHE, IMG_MAX);
-              });
+                return c.put(normalizedUrl, copy).then(function() {
+                  return trimCache(IMG_CACHE, IMG_MAX);
+                });
+              }).catch(function(){});
             }
             return res;
           });
@@ -229,19 +230,21 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  // 5. 其他靜態資源 (JS/CSS/Fonts) - Cache First (靠 SW 版本控制更新)
+  // 5. 其他靜態資源 (JS/CSS/Fonts) - Cache First
   e.respondWith(
     caches.match(req).then(function(cached) {
       if (cached) return cached;
       return fetch(req).then(function(res) {
         if (res.ok || res.type === 'opaque') {
-          caches.open(RUNTIME_CACHE).then(function(c) { 
-            c.put(req, res.clone()); // 🔥 移除 blob 轉換，極大提升性能！
-            trimCache(RUNTIME_CACHE, RUNTIME_MAX);
-          });
+          var copy = res.clone(); // 🔥 同步克隆
+          caches.open(RUNTIME_CACHE).then(function(c) {
+            return c.put(req, copy).then(function() {
+              return trimCache(RUNTIME_CACHE, RUNTIME_MAX);
+            });
+          }).catch(function(){});
         }
         return res;
-      });
+      }).catch(function() { return cached; });
     })
   );
 });
