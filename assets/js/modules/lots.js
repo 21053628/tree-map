@@ -3,7 +3,8 @@
  * - GML 解析
  * - DD/Lot 編號顯示
  * - LRU 快取
- * v2.48 - 地段標題對齊航拍圖格式：「Lot 533 S.J ss.1」→「Lot 533 J,1」
+ * v2.49 - 修正 walk() 條件反轉 bug（之前跳過咗數據 tag，導致 popup 淨係顯示「私人地段」）
+ *       - 標題對齊航拍圖格式：「Lot 533 J,1」
  */
 import { state, LOT_CACHE_MAX } from './state.js';
 import { $, escapeHtml, debounce, updateStatus } from './dom.js';
@@ -53,10 +54,11 @@ function extractLotAttrs_(poly) {
     if (ln === 'featuremember' || ln === 'featurecollection' || ln.indexOf('collection') !== -1) break;
   }
 
+  // 🔥 [v2.49 修正] 條件反轉：跳過幾何 tag，收集數據 tag（之前寫反咗，導致屬性全部丟失）
   (function walk(el) {
     for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
       const ln = (c.localName || '').toLowerCase();
-      if (GEOM_TAGS_.indexOf(ln) === -1) continue;
+      if (GEOM_TAGS_.indexOf(ln) !== -1) continue;   // ✅ 跳過幾何/boundedBy
       if (c.firstElementChild) { walk(c); continue; }
       const v = (c.textContent || '').trim();
       if (v && v.length < 200 && !attrs[c.localName]) attrs[c.localName] = v;
@@ -145,14 +147,14 @@ function buildLotPopup_(a) {
   const updated = get('lastupdatedate');
   const lotid = get('lotid');
 
-  // 🔥 [v2.48] 新標題格式：對齊航拍圖（DD184 533 J,1 → 「Lot 533 J,1」）
-  // 優先用 sectioncode（本身已係 "J,1" 格式）；冇就先取 lotnumber，再清洗 disp 剩餘部分
+  // 🔥 [v2.48/49] 標題對齊航拍圖：「533 S.J ss.1」→「Lot 533 J,1」；「STTL 28」→「Lot STTL 28」
   let title = '';
   if (disp) {
-    const lotNo = get('lotnumber') || String(disp).trim().split(/\s+/)[0];
-    const remainder = String(disp).trim().replace(/^\S+\s*/, ''); // 剷走 lot 號剩低 "S.J ss.1"
-    const sublot = sec || cleanSublot_(remainder);
-    title = 'Lot ' + lotNo + (sublot ? ' ' + sublot : '');
+    const m = String(disp).trim().match(/^([A-Za-z]*\s*\d+)\s*(.*)$/);
+    const prefix = m ? m[1] : String(disp).trim();   // "533" 或 "STTL 28"
+    const rest = m ? m[2] : '';                      // "S.J ss.1" 或 ""
+    const sublot = sec || cleanSublot_(rest);
+    title = 'Lot ' + prefix + (sublot ? ' ' + sublot : '');
   }
 
   let html = '';
