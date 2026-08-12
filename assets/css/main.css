@@ -41,6 +41,17 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  
+  /* 🔥 [v2.50 終極優化] 防止 iOS 橡皮筋滾動效應 & 防止地圖拖拽時意外選取文字 */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 恢復需要選取/輸入嘅元素 */
+input, textarea, select, .leaflet-popup-content, #panel, .sr-item, .log, .legend {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* 🌟 自訂捲動條 */
@@ -116,7 +127,7 @@ button { touch-action: manipulation; cursor: pointer; }
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.2s;
   box-sizing: border-box;
 }
 .search-wrap input:focus {
@@ -128,7 +139,7 @@ button { touch-action: manipulation; cursor: pointer; }
   color: var(--muted);
 }
 
-/* 🔥 搜尋結果下拉清單 */
+/* 🔥 搜尋結果下拉清單 (桌面版保持原樣) */
 .search-results {
   display: none;
   position: absolute;
@@ -152,9 +163,9 @@ button { touch-action: manipulation; cursor: pointer; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 🔥 [v2.37] popup 滑入動畫（只動畫 wrapper，絕不碰 Leaflet 定位） */
+/* 🔥 [v2.37] popup 滑入動畫 */
 @keyframes sheetUp {
-  from { transform: translateY(24px) scale(.96); opacity: .3; }
+  from { transform: translateY(24px) scale(.98); opacity: .5; }
   to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
@@ -167,7 +178,6 @@ button { touch-action: manipulation; cursor: pointer; }
   border-bottom: 1px solid rgba(0,0,0,.06);
   transition: background 0.15s ease;
   font-size: 14px;
-  /* 🔥 [v2.47 性能優化] 瀏覽器原生虛擬列表，跳過螢幕外嘅 DOM 渲染 */
   content-visibility: auto;
   contain-intrinsic-size: 44px;
 }
@@ -178,7 +188,6 @@ button { touch-action: manipulation; cursor: pointer; }
   cursor: default;
   font-style: italic;
   justify-content: center;
-  /* hint 唔需要虛擬列表 */
   content-visibility: visible; 
 }
 .sr-item.sr-hint:hover { background: transparent; }
@@ -406,7 +415,7 @@ body.panel-open::before {
   display: block; margin: 8px 0; box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 
-/* ================= 手機版響應式優化 ================= */
+/* ================= 🔥 手機版終極響應式優化 (v2.50) ================= */
 @media (max-width: 600px) {
   #bar { left: 8px; right: 8px; top: 8px; flex-wrap: nowrap; gap: 4px; }
   #bar select { flex: 1; min-width: 0; max-width: none; width: auto; font-size: 16px; padding: 10px 8px; }
@@ -414,7 +423,35 @@ body.panel-open::before {
   
   .search-wrap { flex: 1 1 100%; max-width: none; order: 99; }
   .search-wrap input { font-size: 16px; padding: 10px; }
-  .search-results { max-height: 50vh; }
+  
+  /* 🔥 [v2.50] 搜尋框 focus 時背景變實，提升複雜地圖上嘅可讀性 */
+  .search-wrap input:focus {
+    background: rgba(255,255,255,0.98);
+  }
+
+  /* 🔥 [v2.50] 搜尋結果變身「底部抽屜 (Bottom Sheet)」，避開虛擬鍵盤 */
+  .search-results {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    max-height: 65vh !important;
+    border-radius: 20px 20px 0 0 !important;
+    box-shadow: 0 -8px 30px rgba(0,0,0,.25) !important;
+    margin-bottom: var(--safe-bottom);
+    border: none !important;
+    animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+  }
+  /* 底部抽屜小橫條 */
+  .search-results::before {
+    content: ''; display: block; width: 40px; height: 4px;
+    background: #ccc; border-radius: 2px; margin: 8px auto 4px;
+  }
+  .search-results .sr-item {
+    padding: 14px 16px;
+    font-size: 15px;
+  }
   
   .leaflet-top.leaflet-left { top: calc(60px + var(--safe-top)); left: 6px; }
   .leaflet-bottom.leaflet-right { bottom: calc(40px + var(--safe-bottom)); right: 6px; }
@@ -442,10 +479,23 @@ body.panel-open::before {
   #panel input, #panel select { font-size: 16px; padding: 12px; }
   #panel button { padding: 14px; font-size: 16px; }
   
-  #status { font-size: 12px; bottom: calc(12px + var(--safe-bottom)); max-width: 92%; }
-  .layerbar button { padding: 10px 14px; font-size: 12px; }
+  /* 🔥 [v2.50] 狀態列避開 iPhone 底部 Home Indicator */
+  #status { 
+    font-size: 12px; 
+    bottom: calc(16px + var(--safe-bottom)) !important; 
+    max-width: 92%; 
+  }
   
-  /* 🔥 [v2.37] 手機 popup：只用安全視覺屬性（圓角/限高/動畫/橫條） */
+  /* 🔥 [v2.50] Layer bar 按鈕放大，加陰影 */
+  .layerbar {
+    box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  }
+  .layerbar button { 
+    padding: 12px 14px; 
+    font-size: 13px; 
+  }
+  
+  /* 🔥 [v2.37] 手機 popup：安全視覺屬性 */
   .leaflet-popup-content-wrapper {
     border-radius: 18px !important;
     padding: 0 !important;
@@ -470,6 +520,17 @@ body.panel-open::before {
     margin: 0 auto 10px;
   }
   .leaflet-popup-tip-container { display: none !important; }
+
+  /* 🔥 [v2.50] Popup 關閉按鈕放大，極大降低誤觸率 */
+  .leaflet-popup-close-button {
+    width: 48px !important;
+    height: 48px !important;
+    top: 2px !important;
+    right: 2px !important;
+  }
+  .leaflet-popup-close-button::after {
+    font-size: 24px;
+  }
 }
 
 /* ================= 平板電腦優化 ================= */
@@ -564,11 +625,18 @@ button.is-loading::after {
     border-color: #444;
     color: #e0e0e0;
   }
+  /* 🔥 [v2.50] 深色模式搜尋框 focus */
+  .search-wrap input:focus {
+    background: rgba(30, 36, 30, 0.98);
+  }
   .search-wrap input::placeholder { color: #777; }
   .search-results {
     background: #1e241e;
     border-color: rgba(255,255,255,.1);
   }
+  /* 🔥 [v2.50] 深色模式搜尋抽屜橫條 */
+  .search-results::before { background: #555; }
+  
   .sr-item { border-bottom-color: rgba(255,255,255,.08); }
   .sr-item:hover { background: rgba(129, 199, 132, 0.15); }
   .sr-id { color: #e0e0e0; }
