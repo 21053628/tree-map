@@ -1,6 +1,6 @@
 /**
  * URL 參數解析與定位模組
- * v2.39 - 配合 config.js 新增 TREE_ZOOM / PROJECT_ZOOM
+ * v2.44 - 移除 localStorage 記憶，F5 刷新時回到預設位置
  */
 import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
@@ -10,16 +10,8 @@ import { drawTrees } from './trees.js';
 import { refreshAerial } from './map.js'; // 🔥 [v2.33] 加入航拍圖刷新
 
 export function saveViewState(treeId, lat, lng) {
-  try {
-    localStorage.setItem('tree_map_last_view', JSON.stringify({
-      project_id: state.curProject,
-      tree_id: treeId || '',
-      lat: lat || '',
-      lng: lng || '',
-      zoom: state.map ? state.map.getZoom() : Config.MAP.DEFAULT_ZOOM,
-      time: Date.now()
-    }));
-  } catch (e) { }
+  // 🔥 [v2.44] 移除 localStorage 儲存，F5 刷新時不再跳回上次位置
+  // 保留函數殼避免其他模組 (如 projects.js) 呼叫時出錯
 }
 
 export function locateTree(treeId, projectId, lat, lng) {
@@ -128,20 +120,8 @@ export function checkURLParams() {
   let lat = params.get('lat');
   let lng = params.get('lng');
 
-  if (!treeId && !projectId && !lat && !lng) {
-    try {
-      const saved = JSON.parse(localStorage.getItem('tree_map_last_view'));
-      if (saved && saved.project_id) {
-        projectId = saved.project_id;
-        treeId = saved.tree_id;
-        lat = saved.lat;
-        lng = saved.lng;
-        if (saved.zoom && state.map) {
-          setTimeout(function () { state.map.setZoom(saved.zoom); }, 100);
-        }
-      }
-    } catch (e) { }
-  }
+  // 🔥 [v2.44] 移除 localStorage 讀取：F5 刷新時 URL 乾淨，直接留喺預設位置
+  // 只有當 URL 真正帶有參數（例如由 t.html 撳返回掣）先至會定位
 
   if (treeId || projectId || (lat && lng)) {
     setTimeout(function () { locateTree(treeId, projectId, lat, lng); }, 600);
