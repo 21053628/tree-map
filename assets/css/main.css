@@ -1,7 +1,7 @@
 /* =========================================================
-   樹木管理系統 main.css v2.57
-   - 修復：手機搜尋結果改返下拉式（底部抽屜會被虛擬鍵盤擋住）
-   - 頂欄 z-index 提升至 1001，確保下拉壓過地圖控制
+   樹木管理系統 main.css v2.58
+   - 桌面：頂欄淨返 揀地盤＋搜尋（垂直對齊 300px）
+   - 桌面：建立地盤/新增樹木 移入底 bar；狀態列上移 64px
    ========================================================= */
 
 /* ================= 1. 全域變數 ================= */
@@ -65,10 +65,11 @@ input, textarea, select, .leaflet-popup-content, #panel, .sr-item, .log, .legend
 #map { height: 100%; width: 100%; }
 button { touch-action: manipulation; cursor: pointer; }
 
-/* ================= 3. 頂部控制列 ================= */
+/* ================= 3. 頂部控制列（垂直對齊版） ================= */
 #bar {
-  position: absolute; top: 8px; right: 8px; z-index: 1001; /* 🔥 [v2.57] 999→1001 壓過地圖控制 */
-  display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
+  position: absolute; top: 8px; right: 8px; z-index: 1001;
+  display: flex; flex-direction: column; gap: 6px;  /* 🔥 [v2.58] 垂直排列 */
+  width: 300px;                                      /* 🔥 [v2.58] 統一闊度 */
   padding-top: var(--safe-top);
   pointer-events: none;
 }
@@ -80,13 +81,14 @@ button { touch-action: manipulation; cursor: pointer; }
   pointer-events: auto;
 }
 
+/* 🔥 [v2.58] 兩掣全平台移入底 bar，頂欄永遠隱藏 */
+#bar #addProjectBtn, #bar #addTreeBtn { display: none !important; }
+
 #bar select {
   padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border);
   font-size: 15px; background: rgba(255,255,255,0.85); color: var(--text);
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
-  max-width: 46vw;
-  width: 190px;
-  flex: 0 0 auto;
+  width: 100%; max-width: none; flex: none;   /* 🔥 [v2.58] 填滿 300px */
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
@@ -115,8 +117,7 @@ button { touch-action: manipulation; cursor: pointer; }
 /* ================= 4. 搜尋 ================= */
 .search-wrap {
   position: relative;
-  flex: 1 1 280px;
-  max-width: 400px;
+  width: 100%; max-width: none; flex: none;  /* 🔥 [v2.58] 同 select 一樣闊 */
 }
 .search-wrap input {
   width: 100%;
@@ -257,7 +258,7 @@ body.panel-open::before {
 
 /* ================= 6. 狀態列＋圖例 ================= */
 #status {
-  position: absolute; bottom: 24px; left: 50%;
+  position: absolute; bottom: 64px; left: 50%;   /* 🔥 [v2.58] 24→64px 避開底 bar */
   transform: translateX(-50%) scale(1);
   z-index: 999;
   background: rgba(255,255,255,0.9);
@@ -308,7 +309,7 @@ body.panel-open::before {
   cursor: pointer;
 }
 
-/* ================= 8. Layer Bar＋FAB 抽屜 ================= */
+/* ================= 8. Layer Bar＋FAB＋動作掣（全平台） ================= */
 .layerbar-wrap {
   position: relative;
   display: flex;
@@ -330,9 +331,24 @@ body.panel-open::before {
 .layerbar button.on { background: var(--accent); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
 .layerbar button:active { transform: scale(0.95); }
 
-.layerbar-fab { display: none; }
-button.drawer-action { display: none !important; }
-.drawer-sep { display: none !important; }
+/* 🔥 [v2.58] 動作掣：桌面橫排顯示（藍/綠），手機抽屜再覆寫 */
+button.drawer-action {
+  border: none; border-radius: 8px;
+  padding: 8px 12px; font-size: 13px; font-weight: 600;
+  color: #fff;
+  transition: all 0.15s ease;
+}
+button.drawer-action.act-project { background: var(--accent); }
+button.drawer-action.act-tree { background: var(--primary); }
+button.drawer-action:active { transform: scale(0.95); }
+.drawer-sep {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(128,128,128,.3);
+  margin: 6px 2px;
+}
+
+.layerbar-fab { display: none; }  /* 桌面隱藏 FAB */
 
 /* ================= 9. Popup 彈窗 ================= */
 .leaflet-popup-content-wrapper {
@@ -457,21 +473,19 @@ button.is-loading::after {
 
 /* ================= 12. 手機版整合佈局 ================= */
 @media (max-width: 600px) {
-  /* 頂欄極簡 */
-  #bar #addProjectBtn, #bar #addTreeBtn { display: none !important; }
-  #bar { left: 8px; right: 8px; top: 8px; flex-wrap: nowrap; gap: 4px; }
-  #bar select { flex: 0 1 42%; min-width: 0; max-width: none; width: auto; font-size: 16px; padding: 10px 8px; }
-  .search-wrap { flex: 1 1 160px; order: 2; max-width: none; min-width: 0; }
+  /* 頂欄：返返橫排一行（揀地盤＋搜尋） */
+  #bar { left: 8px; right: 8px; top: 8px; width: auto; flex-direction: row; flex-wrap: nowrap; gap: 4px; }
+  #bar select { flex: 0 1 42%; min-width: 0; width: auto; font-size: 16px; padding: 10px 8px; }
+  .search-wrap { flex: 1 1 160px; width: auto; order: 2; min-width: 0; }
   .search-wrap input { font-size: 16px; padding: 10px; }
   .search-wrap input:focus { background: rgba(255,255,255,0.98); }
 
-  /* 🔥 [v2.57] 搜尋結果：改返搜尋框正下方下拉（鍵盤擋唔到） */
+  /* 搜尋結果下拉 */
   .search-results {
     position: absolute !important;
     top: calc(100% + 6px) !important;
     bottom: auto !important;
-    left: 0 !important;
-    right: 0 !important;
+    left: 0 !important; right: 0 !important;
     max-height: 45vh !important;
     border-radius: 12px !important;
     box-shadow: 0 8px 24px rgba(0,0,0,.25) !important;
@@ -536,21 +550,8 @@ button.is-loading::after {
     animation: sheetUp .22s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
-
-  .layerbar button.drawer-action {
-    display: flex !important;
-    align-items: center;
-    color: #fff;
-    font-weight: 600;
-  }
-  .layerbar button.drawer-action.act-project { background: var(--accent); }
-  .layerbar button.drawer-action.act-tree { background: var(--primary); }
-  .layerbar .drawer-sep {
-    display: block !important;
-    height: 1px;
-    background: rgba(128,128,128,.3);
-    margin: 4px 2px;
-  }
+  .layerbar button.drawer-action { padding: 13px 16px; font-size: 14px; text-align: left; }
+  .drawer-sep { width: auto; height: 1px; align-self: auto; margin: 4px 2px; }
 
   /* Panel 底部抽屜 */
   #panel {
@@ -609,9 +610,8 @@ button.is-loading::after {
 
 /* ================= 13. 平板 ================= */
 @media (min-width: 601px) and (max-width: 1024px) {
-  #bar { left: 12px; right: 12px; top: calc(10px + var(--safe-top)); }
+  #bar { left: 12px; right: 12px; top: calc(10px + var(--safe-top)); width: 320px; }
   #bar select { font-size: 16px; padding: 11px; }
-  #bar button { padding: 11px 14px; font-size: 15px; }
   #panel { width: 320px; top: calc(58px + var(--safe-top)); right: 12px; }
   .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
 }
