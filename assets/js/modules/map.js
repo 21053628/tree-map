@@ -4,6 +4,7 @@
  * - 底圖切換（支援 maxNativeZoom 放大）
  * - 航拍圖疊加層（單圖／切片雙模式）
  * - 圖例
+ * v2.47 - 衛星層改用地政總署 Imagery Map API（官方航拍，原生 z20，比 Esri 更清）
  * v2.46 - 航拍圖改用獨立 aerialPane (z-index 250)，樹木/地段線永遠顯示喺航拍圖上面
  */
 import { state } from './state.js';
@@ -56,7 +57,7 @@ export function initMap() {
     aerialPane.style.zIndex = 250;
   }
 
-  // 🔥 [v2.33] 底圖加 maxNativeZoom：原生只到 19，放大到 22 會朦，但航拍圖超清就彌補
+  // 🔥 [v2.47] 底圖配置：接入地政總署官方 API
   state.baseLayers = {
     hk: L.layerGroup([
       L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
@@ -64,8 +65,12 @@ export function initMap() {
       L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png',
         { maxNativeZoom: 19, maxZoom: Config.MAP.MAX_ZOOM })
     ]),
-    sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { attribution: '© Esri World Imagery', maxNativeZoom: 19, maxZoom: Config.MAP.MAX_ZOOM }),
+    // 🔥 [v2.47] 替換 Esri：改用地政總署 Imagery Map API（官方航拍，原生 z20）
+    sat: L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/imagery/WGS84/{z}/{x}/{y}.png', {
+      attribution: 'Aerial Photograph from Lands Department',
+      maxNativeZoom: 20,          // 官方原生去到 z20！
+      maxZoom: Config.MAP.MAX_ZOOM
+    }),
     topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
       { attribution: '© OpenTopoMap (CC-BY-SA)', maxNativeZoom: 17, maxZoom: Config.MAP.MAX_ZOOM }),
     street: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -77,12 +82,12 @@ export function initMap() {
 
   state.lotLayer = L.layerGroup();
 
-  // 🔥 [v2.33] layer bar 加入「🛰 航拍」按鈕
+  // 🔥 [v2.47] layer bar 按鈕文字更新
   const layerBar = L.control({ position: isMobile ? 'bottomright' : 'bottomleft' });
   layerBar.onAdd = function () {
     const div = L.DomUtil.create('div', 'layerbar');
     div.innerHTML = '<button data-l="hk" class="on">政府</button>' +
-      '<button data-l="sat">衛星</button>' +
+      '<button data-l="sat">官航</button>' +  // 🔥 改為「官航」以區別地盤專屬航拍
       '<button data-l="topo">地形</button>' +
       '<button data-l="street">街道</button>' +
       '<button data-l="lot">🗺️ 地段</button>' +
@@ -95,7 +100,6 @@ export function initMap() {
         if (layerType === 'lot') {
           toggleLotLayer();
         } else if (layerType === 'aerial') {
-          // 🔥 [v2.33] 航拍圖 toggle
           toggleAerial();
         } else {
           if (state.currentBaseLayer) state.map.removeLayer(state.currentBaseLayer);
