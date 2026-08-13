@@ -18,10 +18,14 @@
   .card{background:var(--card-bg);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
   h1{color:var(--primary);margin:0 0 16px;font-size:24px;display:flex;align-items:center;gap:8px}
   h2{color:var(--primary-dark);font-size:18px;margin-top:0}
+  h3{color:var(--primary-dark);font-size:15px;margin:16px 0 8px}
   .step{background:#fff3e0;padding:14px;border-radius:10px;margin:12px 0;border-left:4px solid #ff9800}
   .step strong{color:#e65100}
-  input{width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;font-size:16px;margin-top:10px;box-sizing:border-box;background:#fff;color:var(--text);font-family:inherit}
-  input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(46,125,50,.15)}
+  input,select{width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;font-size:16px;margin-top:10px;box-sizing:border-box;background:#fff;color:var(--text);font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(46,125,50,.15)}
+  select{appearance:none;-webkit-appearance:none}
+  .field{margin-top:12px}
+  .field label{font-size:14px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px}
   button{width:100%;padding:14px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-size:16px;font-weight:600;margin-top:12px;cursor:pointer;touch-action:manipulation;transition:background .2s,transform .1s,opacity .2s}
   button:hover{background:var(--primary-dark)}
   button:active{transform:scale(.98)}
@@ -31,17 +35,19 @@
   button.nfc-write{background:#e65100;font-size:18px;padding:18px;box-shadow:0 4px 12px rgba(230,81,0,.3)}
   button.nfc-write:hover{background:#bf360c}
   button.nfc-write.ready{animation:pulse 1.5s infinite}
+  button.cancel{background:#c62828}
+  button.cancel:hover{background:#8e1f1f}
   @keyframes pulse{0%,100%{box-shadow:0 4px 12px rgba(230,81,0,.3)}50%{box-shadow:0 4px 24px rgba(230,81,0,.7)}}
-  
+
   .back-btn{display:inline-flex;align-items:center;gap:6px;background:var(--secondary);color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;margin-bottom:16px;font-size:15px;transition:opacity .2s}
   .back-btn:hover{opacity:.85}
-  
+
   .tree-preview{background:#e8f5e9;padding:16px;border-radius:10px;margin:12px 0;border:1px solid #c8e6c9}
   .tree-preview h3{margin:0 0 8px;color:var(--primary-dark);font-size:15px}
   .tree-preview .id{font-family:monospace;font-size:16px;color:#1b5e20;font-weight:600}
   .tree-preview .prj{font-size:13px;color:var(--muted);margin-top:4px}
   .tree-preview .name{font-size:14px;color:#37474f;margin-top:6px}
-  
+
   .url-box{
     display: flex;
     align-items: flex-start;
@@ -91,9 +97,25 @@
   .tab-panel{display:none}
   .tab-panel.active{display:block}
 
+  .capacity-hint{font-size:13px;margin-top:6px;color:var(--muted)}
+  .capacity-hint.warn{color:#e65100;font-weight:600}
+
+  .lock-option{display:flex;align-items:center;gap:8px;margin:12px 0;font-size:14px;color:var(--text)}
+  .lock-option input{width:auto;margin-top:0}
+
+  #historyList{list-style:none;padding:0;margin:0}
+  .history-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #e0e0e0;font-size:14px}
+  .history-item:last-child{border-bottom:none}
+  .history-item .h-id{font-family:monospace;font-weight:600;color:var(--primary-dark)}
+  .history-item .h-time{color:var(--muted);font-size:12px}
+
+  table.capacity-table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  table.capacity-table th,table.capacity-table td{border:1px solid #ccc;padding:8px;text-align:left}
+  table.capacity-table th{background:#e8f5e9;color:#1b5e20}
+
   @media (prefers-color-scheme: dark) {
     :root{--bg:#121412;--text:#e0e0e0;--muted:#9e9e9e;--card-bg:#1e241e;--shadow:0 4px 12px rgba(0,0,0,.5)}
-    input{background:#2c332c;border-color:#444;color:#e0e0e0}
+    input,select{background:#2c332c;border-color:#444;color:#e0e0e0}
     .tree-preview{background:#1b3a1b;border-color:#2e7d32}
     .tree-preview h3,.tree-preview .id{color:#81c784}
     .tree-preview .name{color:#bdbdbd}
@@ -105,105 +127,163 @@
     .tabs{background:#2c332c}
     .tabs button.active{background:#1e241e;color:#81c784}
     .tabs button{color:#9e9e9e}
+    .history-item{border-bottom-color:#333}
+    .history-item .h-id{color:#81c784}
+    table.capacity-table th{background:#1b3a1b;color:#a5d6a7}
+    table.capacity-table th,table.capacity-table td{border-color:#444}
   }
 </style>
 </head>
 <body>
 <div class="wrap">
   <a href="#" class="back-btn" id="backBtn" onclick="return goBack(event)">⬅ 返回</a>
-  
+
   <h1>🌳 NFC 樹木標籤產生器</h1>
 
-  <!-- 🔥 步驟 1：輸入 / 自動匯入 -->
+  <!-- 步驟 1：輸入 / 自動匯入 -->
   <div class="card" id="inputCard">
     <h2>🔧 步驟 1：指定樹木</h2>
-    
+
     <div id="autoImportBanner" style="display:none" class="info">
-      ✅ <strong>自動匯入：</strong>由樹木頁面帶過來嘅資料已自動填入
+      ✅ <strong>自動匯入：</strong>由樹木頁面帶來的資料已自動填入
     </div>
-    
-    <p>輸入要寫入 NFC 標籤嘅樹木編號（必填）同地盤代碼（選填，可加速定位）。</p>
+
+    <p>輸入要寫入 NFC 標籤的樹木編號（必填）與地盤代碼（選填，可加速定位）。</p>
     <input type="text" id="treeId" placeholder="樹木編號（例如：A001 或 256C）" autocomplete="off">
     <input type="text" id="projectId" placeholder="地盤代碼（例如：ShingMunRiver，可留空）" autocomplete="off">
-    
+
     <button onclick="generateURL()">🔗 產生 NFC 網址</button>
   </div>
 
-  <!-- 🔥 步驟 2：結果 + 寫入 -->
+  <!-- 步驟 2：結果 + 寫入 -->
   <div class="card" id="resultCard" style="display:none;">
     <h2>🔗 步驟 2：寫入 NFC 標籤</h2>
-    
-    <!-- 樹木預覽（由後端 fetch 返嚟） -->
+
+    <!-- 樹木預覽（由後端 fetch 回來） -->
     <div id="treePreview" style="display:none" class="tree-preview">
-      <h3>📋 準備寫入嘅樹木：</h3>
+      <h3>📋 準備寫入的樹木：</h3>
       <div class="id" id="previewId"></div>
       <div class="name" id="previewName"></div>
       <div class="prj" id="previewPrj"></div>
     </div>
-    
+
     <!-- 寫入方式 tabs -->
     <div class="tabs">
-      <button id="tabWeb" class="active" onclick="switchTab('web')">📱 一撳即寫</button>
+      <button id="tabWeb" class="active" onclick="switchTab('web')">📱 一鍵即寫</button>
       <button id="tabManual" onclick="switchTab('manual')">📋 手動複製</button>
     </div>
-    
+
     <!-- Tab 1: Web NFC 直寫 -->
     <div id="panelWeb" class="tab-panel active">
       <div id="nfcSupportStatus" class="status">🔍 檢查 NFC 支援中...</div>
-      
+
+      <div class="field">
+        <label for="tagType">標籤類型</label>
+        <select id="tagType" onchange="updateCapacityHint()">
+          <option value="215" selected>NTAG215（504 bytes，推薦）</option>
+          <option value="213">NTAG213（144 bytes）</option>
+          <option value="216">NTAG216（888 bytes）</option>
+        </select>
+        <div class="capacity-hint" id="capacityHint"></div>
+      </div>
+
       <button class="nfc-write" id="writeNfcBtn" onclick="writeNFC()" disabled>
-        📡 撳一下 → 手機靠近 NFC 標籤
+        📡 按一下 → 手機靠近 NFC 標籤
       </button>
-      
+
+      <button class="sec cancel" id="cancelNfcBtn" onclick="cancelNFC()" style="display:none">⏹ 取消寫入</button>
+      <button class="sec" id="readNfcBtn" onclick="readNFC()" disabled>🔍 讀取標籤內容</button>
+
+      <label class="lock-option">
+        <input type="checkbox" id="lockTag"> 寫入後鎖定標籤（唯讀，不可逆）
+      </label>
+
       <div id="nfcStatus" style="display:none"></div>
-      
+
       <div class="warn" id="nfcHint" style="display:none">
-        💡 <strong>Android Chrome 限定功能</strong>：需要 Android 8+ 同 Chrome 瀏覽器。iPhone 用戶請改用「手動複製」分頁。
+        💡 <strong>Android Chrome 限定功能</strong>：需要 Android 8+ 與 Chrome 瀏覽器。iPhone 用戶請改用「手動複製」分頁。
       </div>
     </div>
-    
+
     <!-- Tab 2: 手動複製（舊流程） -->
     <div id="panelManual" class="tab-panel">
       <p>複製以下網址，用「NFC Tools」App 寫入標籤：</p>
-      
+
       <div class="url-box">
         <span id="urlText"></span>
         <button class="copy-btn" onclick="copyURL()">📋 複製</button>
       </div>
 
-      <button class="sec" onclick="testJump()">🧪 喺瀏覽器測試跳轉</button>
-      
+      <button class="sec" onclick="testJump()">🧪 在瀏覽器測試跳轉</button>
+
       <div class="info">
         💡 <strong>步驟：</strong>打開 NFC Tools → 選「寫入」→「新增記錄」→「URL」→ 貼上 → 「寫入」→ 手機靠近標籤
       </div>
     </div>
   </div>
 
+  <!-- 寫入歷史 -->
+  <div class="card" id="historyCard" style="display:none">
+    <h2>🕒 寫入歷史</h2>
+    <ul id="historyList"></ul>
+    <button class="sec" onclick="clearHistory()">🗑 清除歷史</button>
+  </div>
+
   <div class="card">
     <h2>❓ 常見問題</h2>
-    <p><strong>Q: 標籤買邊種？</strong><br>推薦 <strong>NTAG215</strong>（500 bytes，防水貼紙），淘寶或 HKTVmall 都有。</p>
-    <p><strong>Q: iPhone 可以掃嗎？</strong><br>可以！iPhone XS 之後嘅機型支援背景 NFC 讀取，靠近就會彈通知。</p>
-    <p><strong>Q: iPhone 點寫入？</strong><br>iOS 唔支援 Web NFC 直寫，要用「NFC Tools」App（App Store 免費下載）配合「手動複製」分頁嘅 URL。</p>
+    <p><strong>Q: 標籤買哪種？</strong><br>推薦 <strong>NTAG215</strong>（504 bytes，防水貼紙），淘寶或 HKTVmall 都有。</p>
+    <p><strong>Q: iPhone 可以掃嗎？</strong><br>可以！iPhone XS 之後的機型支援背景 NFC 讀取，靠近就會彈出通知。</p>
+    <p><strong>Q: iPhone 如何寫入？</strong><br>iOS 不支援 Web NFC 直寫，需使用「NFC Tools」App（App Store 免費下載）配合「手動複製」分頁的 URL。</p>
+  </div>
+
+  <div class="card">
+    <h2>📖 NFC 技術說明</h2>
+
+    <h3>標籤容量對照</h3>
+    <table class="capacity-table">
+      <tr><th>型號</th><th>可用容量</th><th>建議用途</th></tr>
+      <tr><td>NTAG213</td><td>144 bytes</td><td>極短網址，容量緊繃</td></tr>
+      <tr><td>NTAG215</td><td>504 bytes</td><td>✅ 推薦，綽綽有餘</td></tr>
+      <tr><td>NTAG216</td><td>888 bytes</td><td>長網址 / 進階用途</td></tr>
+    </table>
+
+    <h3>什麼是 NDEF？</h3>
+    <p>NDEF（NFC Data Exchange Format）是 NFC 標籤的標準資料格式。寫入 URL 記錄後，任何支援 NFC 的手機靠近標籤，都會自動彈出「開啟網頁」的提示。</p>
+
+    <h3>寫入後如何驗證？</h3>
+    <p>使用本頁「🔍 讀取標籤內容」按鈕，或直接用手機掃描，確認開啟的是正確的樹木頁面。</p>
+
+    <h3>標籤耐用性建議</h3>
+    <p>樹木在戶外環境，建議選用 <strong>抗 UV / 防水貼紙</strong>，避免日曬雨淋導致標籤老化退色。若需黏貼在金屬表面，請選用「抗金屬」款式。</p>
+
+    <h3>權限說明</h3>
+    <p>首次使用 Web NFC 寫入時，瀏覽器會跳出權限請求。若誤按拒絕，可到 Chrome 的「網站設定 → NFC」重新開啟。</p>
+
+    <h3>安全提醒</h3>
+    <p>寫入的網址為明碼，任何能掃描 NFC 的人都能讀取。本系統不涉及敏感資料，但請勿寫入個資或機密。</p>
   </div>
 </div>
 
 <script>
   'use strict';
-  
+
   const API = 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
-  
+
+  const TAG_CAPACITY = { '213': 144, '215': 504, '216': 888 };
+  const TAG_LABELS = { '213': 'NTAG213', '215': 'NTAG215', '216': 'NTAG216' };
+
   let currentURL = '';
   let sourceTreeId = '';
   let sourcePrj = '';
   let ndef = null;
   let abortController = null;
 
-  // 🔥 頁面載入時自動處理
+  // 頁面載入時自動處理
   window.addEventListener('DOMContentLoaded', function() {
     const params = new URLSearchParams(location.search);
     const urlParam = params.get('url');
     const backParam = params.get('back');
-    
+
     // 設定返回按鈕
     const backBtn = document.getElementById('backBtn');
     if (backParam) {
@@ -213,32 +293,35 @@
     } else {
       backBtn.style.display = 'none';
     }
-    
+
+    // 渲染寫入歷史
+    renderHistory();
+
     // 自動匯入 URL 參數
     if (urlParam) {
       autoImportFromURL(urlParam);
     }
   });
 
-  // 🔥 由 t.html 跳轉過嚟，自動填入樹木資訊
+  // 由 t.html 跳轉過來，自動填入樹木資訊
   function autoImportFromURL(url) {
     try {
       const u = new URL(url);
       const p = u.searchParams;
-      
+
       // 支援兩種參數名（舊版 tree_id / 新版 id）
       const tid = p.get('tree_id') || p.get('id') || '';
       const pid = p.get('project_id') || p.get('prj') || '';
-      
+
       if (tid) {
         document.getElementById('treeId').value = tid;
         if (pid) document.getElementById('projectId').value = pid;
-        
+
         sourceTreeId = tid;
         sourcePrj = pid;
-        
+
         document.getElementById('autoImportBanner').style.display = 'block';
-        
+
         // 自動產生 URL
         generateURL(true);
       }
@@ -265,49 +348,52 @@
   function generateURL(silent) {
     const treeId = document.getElementById('treeId').value.trim();
     const projectId = document.getElementById('projectId').value.trim();
-    
+
     if (!treeId) {
       alert('⚠️ 請輸入樹木編號');
       return;
     }
-    
+
     const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
     let url = baseUrl + 'index.html?tree_id=' + encodeURIComponent(treeId);
-    
+
     if (projectId) {
       url += '&project_id=' + encodeURIComponent(projectId);
     }
-    
+
     currentURL = url;
     document.getElementById('urlText').textContent = url;
     document.getElementById('resultCard').style.display = 'block';
-    
+
     if (!silent) {
       document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
     }
-    
+
     // 載入樹木預覽
     loadTreePreview(treeId, projectId);
-    
+
+    // 更新容量提示
+    updateCapacityHint();
+
     // 檢查 Web NFC 支援
     checkNfcSupport();
   }
 
-  // 🔥 由後端 fetch 樹木資料做預覽
+  // 由後端 fetch 樹木資料做預覽
   async function loadTreePreview(treeId, projectId) {
     const preview = document.getElementById('treePreview');
     try {
       const r = await fetch(API + '?action=tree&id=' + encodeURIComponent(treeId) + '&prj=' + encodeURIComponent(projectId || ''));
       const res = await r.json();
-      
+
       if (res && res.data) {
         const t = res.data;
         document.getElementById('previewId').textContent = '🆔 ' + (t.tree_id || treeId);
         document.getElementById('previewName').textContent = '🌳 ' + (t.name || '(未設定樹種)');
-        document.getElementById('previewPrj').textContent = t.project_id ? '🚩 地盤：' + t.project_id : '(不屬任何地盤)';
+        document.getElementById('previewPrj').textContent = t.project_id ? '🚩 地盤：' + t.project_id : '(不屬於任何地盤)';
         preview.style.display = 'block';
       } else {
-        // API 搵唔到，只顯示 ID
+        // API 找不到，只顯示 ID
         document.getElementById('previewId').textContent = '🆔 ' + treeId;
         document.getElementById('previewName').textContent = '⚠️ 樹木資料載入失敗';
         document.getElementById('previewPrj').textContent = projectId ? '🚩 地盤：' + projectId : '';
@@ -326,62 +412,127 @@
     document.getElementById('panelManual').classList.toggle('active', tab === 'manual');
   }
 
-  // 🔥 檢查 Web NFC 支援
+  // 查詢字串的 UTF-8 位元組長度
+  function getByteLength(str) {
+    return new TextEncoder().encode(str).length;
+  }
+
+  // 更新容量提示
+  function updateCapacityHint() {
+    const hint = document.getElementById('capacityHint');
+    if (!hint) return;
+    if (!currentURL) { hint.textContent = ''; return; }
+
+    const tagType = document.getElementById('tagType').value;
+    const capacity = TAG_CAPACITY[tagType] || 504;
+    const overhead = 12; // NDEF 記錄標頭開銷
+    const total = getByteLength(currentURL) + overhead;
+
+    if (total > capacity) {
+      hint.className = 'capacity-hint warn';
+      hint.textContent = '⚠️ 約需 ' + total + ' bytes，超出 ' + TAG_LABELS[tagType] + '（' + capacity + ' bytes），請改用更高容量標籤或縮短地盤代碼';
+    } else {
+      hint.className = 'capacity-hint';
+      hint.textContent = '✅ 約需 ' + total + ' bytes，' + TAG_LABELS[tagType] + ' 容量（' + capacity + ' bytes）足夠';
+    }
+  }
+
+  // 檢查 Web NFC 支援
   function checkNfcSupport() {
     const status = document.getElementById('nfcSupportStatus');
     const btn = document.getElementById('writeNfcBtn');
+    const readBtn = document.getElementById('readNfcBtn');
     const hint = document.getElementById('nfcHint');
-    
+
     if (!('NDEFReader' in window)) {
       status.className = 'status warn';
-      status.innerHTML = '❌ 呢個瀏覽器唔支援 Web NFC<br><small>請用 Android Chrome，或者改去「手動複製」分頁</small>';
+      status.innerHTML = '❌ 此瀏覽器不支援 Web NFC<br><small>請使用 Android Chrome，或改用「手動複製」分頁</small>';
       status.style.background = '#fff3e0';
       status.style.color = '#e65100';
       btn.disabled = true;
+      readBtn.disabled = true;
       hint.style.display = 'block';
       // 自動切換去手動 tab
       switchTab('manual');
       return;
     }
-    
-    // 檢查係咪 HTTPS
+
+    // 檢查是否 HTTPS
     if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
       status.className = 'status';
       status.style.background = '#fff3e0';
       status.style.color = '#e65100';
-      status.innerHTML = '⚠️ Web NFC 需要 HTTPS 環境<br><small>請用正式域名（例如 GitHub Pages）</small>';
+      status.innerHTML = '⚠️ Web NFC 需要 HTTPS 環境<br><small>請使用正式域名（例如 GitHub Pages）</small>';
       btn.disabled = true;
+      readBtn.disabled = true;
+      hint.style.display = 'block';
       return;
     }
-    
+
     status.className = 'status success';
-    status.innerHTML = '✅ 支援 Web NFC — 可以一撳即寫！';
+    status.innerHTML = '✅ 支援 Web NFC — 可以一鍵即寫！';
     btn.disabled = false;
+    readBtn.disabled = false;
     hint.style.display = 'none';
   }
 
-  // 🔥 Web NFC 直寫
+  // NFC 錯誤分類
+  function classifyNfcError(err) {
+    const messages = {
+      'NotAllowedError': '未取得 NFC 權限，請在瀏覽器設定中允許 NFC',
+      'NotSupportedError': '標籤不支援 NDEF 格式，或容量不足（請確認使用 NTAG213/215/216）',
+      'NotReadableError': '無法讀取標籤，請移開後重新靠近',
+      'NetworkError': '找不到 NFC 裝置，請確認手機已開啟 NFC',
+      'InvalidStateError': '已有進行中的 NFC 操作，請稍後再試'
+    };
+    if (messages[err.name]) return messages[err.name];
+    return err.message || String(err);
+  }
+
+  // Web NFC 直寫
   async function writeNFC() {
     if (!currentURL) return;
-    
+
     const status = document.getElementById('nfcStatus');
     const btn = document.getElementById('writeNfcBtn');
-    
+    const cancelBtn = document.getElementById('cancelNfcBtn');
+
+    // 容量檢查
+    const tagType = document.getElementById('tagType').value;
+    const capacity = TAG_CAPACITY[tagType] || 504;
+    const overhead = 12;
+    const totalBytes = getByteLength(currentURL) + overhead;
+
+    if (totalBytes > capacity) {
+      status.style.display = 'block';
+      status.className = 'status error';
+      status.innerHTML = '❌ <strong>URL 太長</strong><br><small>約需 ' + totalBytes + ' bytes，超出 ' + TAG_LABELS[tagType] + ' 容量（' + capacity + ' bytes）。請改用更高容量標籤或縮短地盤代碼</small>';
+      return;
+    }
+
+    // 鎖定確認
+    const lock = document.getElementById('lockTag').checked;
+    if (lock) {
+      const ok = confirm('⚠️ 寫入後將鎖定標籤為唯讀（不可逆），確定繼續？');
+      if (!ok) return;
+    }
+
     status.style.display = 'block';
     status.className = 'status writing';
-    status.innerHTML = '📡 <strong>等待 NFC 標籤...</strong><br><small>請將手機背面靠近 NFC 標籤（通常喺相機附近）</small>';
-    
+    status.innerHTML = '📡 <strong>等待 NFC 標籤...</strong><br><small>請將手機背面靠近 NFC 標籤（通常在相機附近）</small>';
+
     btn.classList.add('ready');
     btn.textContent = '📡 等待中...（靠近標籤）';
     btn.disabled = true;
-    
+    cancelBtn.style.display = 'block';
+
     try {
       // 取消上次操作（如果有）
       if (abortController) abortController.abort();
       abortController = new AbortController();
-      
+
       ndef = new NDEFReader();
-      
+
       await ndef.write(
         {
           records: [
@@ -393,46 +544,186 @@
         },
         { signal: abortController.signal }
       );
-      
+
+      // 鎖定為唯讀
+      if (lock && typeof ndef.makeReadOnly === 'function') {
+        await ndef.makeReadOnly({ signal: abortController.signal });
+      }
+
       status.className = 'status success';
-      status.innerHTML = '✅ <strong>寫入成功！</strong><br><small>NFC 標籤已寫入，用任何手機靠近都會自動開啟樹木頁面</small>';
-      
-      btn.classList.remove('ready');
-      btn.textContent = '✅ 完成！撳呢度寫下一張';
-      btn.disabled = false;
-      btn.onclick = function() {
-        status.style.display = 'none';
-        btn.textContent = '📡 撳一下 → 手機靠近 NFC 標籤';
-        btn.onclick = writeNFC;
-      };
-      
+      status.innerHTML = '✅ <strong>寫入成功！</strong>' +
+        (lock
+          ? '<br><small>標籤已鎖定為唯讀</small>'
+          : '<br><small>NFC 標籤已寫入，任何手機靠近都會自動開啟樹木頁面</small>');
+
+      // 記錄寫入歷史
+      addHistory(document.getElementById('treeId').value.trim(), currentURL);
+
       // 播放成功提示音（如果有）
       try { navigator.vibrate && navigator.vibrate(200); } catch(e) {}
-      
-    } catch (err) {
+
       btn.classList.remove('ready');
-      btn.textContent = '📡 撳一下 → 手機靠近 NFC 標籤';
+      btn.textContent = '✅ 完成！按這裡寫下一張';
       btn.disabled = false;
-      
+      cancelBtn.style.display = 'none';
+
+    } catch (err) {
+      cancelBtn.style.display = 'none';
+      btn.classList.remove('ready');
+      btn.textContent = '📡 按一下 → 手機靠近 NFC 標籤';
+      btn.disabled = false;
+
       if (err.name === 'AbortError') {
         status.style.display = 'none';
         return;
       }
-      
+
       status.className = 'status error';
-      status.innerHTML = '❌ <strong>寫入失敗</strong><br><small>' + escapeHtml(err.message || String(err)) + '</small>';
+      status.innerHTML = '❌ <strong>寫入失敗</strong><br><small>' + escapeHtml(classifyNfcError(err)) + '</small>';
       console.error('NFC write error:', err);
     }
   }
 
+  // 取消寫入
+  function cancelNFC() {
+    if (abortController) abortController.abort();
+  }
+
+  // 讀取標籤內容
+  async function readNFC() {
+    if (!('NDEFReader' in window)) return;
+
+    const status = document.getElementById('nfcStatus');
+    const btn = document.getElementById('readNfcBtn');
+
+    status.style.display = 'block';
+    status.className = 'status writing';
+    status.innerHTML = '📡 <strong>等待標籤...</strong><br><small>請將手機靠近要讀取的 NFC 標籤</small>';
+
+    btn.disabled = true;
+
+    try {
+      const reader = new NDEFReader();
+      await reader.scan();
+
+      reader.onreading = ({ message }) => {
+        const found = decodeNdefMessage(message);
+        status.className = 'status success';
+        if (found) {
+          status.innerHTML = '✅ <strong>讀取成功</strong><br><small>' + escapeHtml(found) + '</small>';
+        } else {
+          status.innerHTML = '✅ <strong>標籤為空白</strong><br><small>此標籤尚未寫入任何內容</small>';
+        }
+        btn.disabled = false;
+      };
+
+      reader.onreadingerror = () => {
+        status.className = 'status error';
+        status.innerHTML = '❌ <strong>讀取失敗</strong><br><small>無法讀取標籤</small>';
+        btn.disabled = false;
+      };
+
+    } catch (err) {
+      btn.disabled = false;
+      status.className = 'status error';
+      status.innerHTML = '❌ <strong>讀取失敗</strong><br><small>' + escapeHtml(classifyNfcError(err)) + '</small>';
+      console.error('NFC read error:', err);
+    }
+  }
+
+  // 解碼 NDEF 訊息（優先回傳 URL）
+  function decodeNdefMessage(message) {
+    const decoder = new TextDecoder();
+    const URL_PREFIXES = {
+      0x00: '',
+      0x01: 'http://www.',
+      0x02: 'https://www.',
+      0x03: 'http://',
+      0x04: 'https://',
+      0x05: 'tel:',
+      0x06: 'mailto:'
+    };
+
+    let result = '';
+    for (const record of message.records) {
+      const data = record.data; // DataView
+      if (record.recordType === 'url') {
+        const prefixByte = data.getUint8(0);
+        const prefix = URL_PREFIXES[prefixByte] || '';
+        const rest = decoder.decode(new Uint8Array(data.buffer, data.byteOffset + 1, data.byteLength - 1));
+        return prefix + rest;
+      } else if (record.recordType === 'text') {
+        const statusByte = data.getUint8(0);
+        const langLen = statusByte & 0x3F;
+        const text = decoder.decode(new Uint8Array(data.buffer, data.byteOffset + 1 + langLen, data.byteLength - 1 - langLen));
+        if (text) result = text;
+      } else if (record.recordType === 'mime' || record.recordType === 'empty') {
+        // 略過
+      }
+    }
+    return result;
+  }
+
+  // 寫入歷史
+  function addHistory(treeId, url) {
+    let history = [];
+    try {
+      history = JSON.parse(localStorage.getItem('nfc_history') || '[]');
+    } catch (e) { history = []; }
+
+    history.unshift({
+      id: treeId,
+      url: url,
+      time: new Date().toLocaleString('zh-HK')
+    });
+    history = history.slice(0, 20);
+
+    localStorage.setItem('nfc_history', JSON.stringify(history));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const card = document.getElementById('historyCard');
+    const list = document.getElementById('historyList');
+    if (!card || !list) return;
+
+    let history = [];
+    try {
+      history = JSON.parse(localStorage.getItem('nfc_history') || '[]');
+    } catch (e) { history = []; }
+
+    if (history.length === 0) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = 'block';
+    list.innerHTML = history.map(function(h) {
+      return '<li class="history-item"><span class="h-id">🆔 ' + escapeHtml(h.id) + '</span><span class="h-time">' + escapeHtml(h.time) + '</span></li>';
+    }).join('');
+  }
+
+  function clearHistory() {
+    if (!confirm('確定清除所有寫入歷史？')) return;
+    localStorage.removeItem('nfc_history');
+    renderHistory();
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    var map = {
+      '&': String.fromCharCode(38) + 'amp;',
+      '<': String.fromCharCode(60) + 'lt;',
+      '>': String.fromCharCode(62) + 'gt;',
+      '"': String.fromCharCode(34) + 'quot;',
+      "'": String.fromCharCode(39) + '#39;'
+    };
+    return String(str).replace(/[&<>"']/g, function(c) { return map[c]; });
   }
 
   function copyURL() {
     if (!currentURL) return;
-    
+
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(currentURL).then(function() {
         showCopySuccess();
@@ -465,8 +756,8 @@
     const orig = btn.textContent;
     btn.textContent = '✅ 已複製';
     btn.style.background = '#2e7d32';
-    setTimeout(() => { 
-      btn.textContent = orig; 
+    setTimeout(() => {
+      btn.textContent = orig;
       btn.style.background = '';
     }, 1500);
   }
@@ -477,7 +768,7 @@
     }
   }
 
-  // 頁面離開時取消正在進行嘅 NFC 操作
+  // 頁面離開時取消正在進行的 NFC 操作
   window.addEventListener('beforeunload', function() {
     if (abortController) abortController.abort();
   });
