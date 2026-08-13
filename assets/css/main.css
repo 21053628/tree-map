@@ -581,6 +581,28 @@ button.is-loading::after {
   .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
   .drawer-sep { width: auto; height: 1px; align-self: auto; margin: 4px 2px; }
 
+  /* 🔥 分類掣（測量工具／圖層）：可展開／收起 */
+  .layerbar .drawer-cat {
+    justify-content: space-between;
+    font-weight: 600;
+  }
+  .layerbar .drawer-cat::after {
+    content: '▸';
+    font-size: 12px;
+    color: var(--muted);
+    transition: transform .15s ease;
+  }
+  .layerbar .drawer-cat.open::after { content: '▾'; }
+  .layerbar .drawer-sub {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    margin-left: 12px;
+    padding-left: 10px;
+    border-left: 2px solid rgba(128,128,128,.3);
+  }
+  .layerbar .drawer-sub.open { display: flex; }
+
   #panel {
     position: fixed; top: auto; bottom: 0; left: 0; right: 0;
     width: auto; max-height: 85vh;

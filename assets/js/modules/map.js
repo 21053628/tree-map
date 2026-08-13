@@ -163,22 +163,47 @@ export function initMap() {
     fab.title = '圖層與功能';
 
     const div = L.DomUtil.create('div', 'layerbar', layerWrap);
-    div.innerHTML =
-      '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
-      '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>' +
-      '<div class="drawer-sep sep-tools"></div>' +
-      '<button data-act="measureLine">📏 距離</button>' +
-      '<button data-act="measureArea">📐 面積</button>' +
-      '<button data-act="drawPolygon">🖍 邊界</button>' +
-      '<button data-act="locate">📍 定位</button>' +
-      '<button data-act="clearDrawings">✕ 清除</button>' +
-      '<div class="drawer-sep"></div>' +
-      '<button data-l="hk" class="on">政府</button>' +
-      '<button data-l="sat">官航</button>' +
-      '<button data-l="labels">🔢</button>' +
-      '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +   // 🔥 [v2.52] 狀態過濾掣
-      '<button data-l="lot">🗺️ 地段</button>' +
-      '<button data-l="aerial">🛰 航拍</button>';
+    if (isMobile) {
+      // 🔥 手機版：兩大分類（測量工具／圖層）+ 4 個直接掣
+      div.innerHTML =
+        '<button class="drawer-cat" data-cat="tools">📏 測量工具</button>' +
+        '<div class="drawer-sub" data-sub="tools">' +
+          '<button data-act="measureLine">📏 距離</button>' +
+          '<button data-act="measureArea">📐 面積</button>' +
+          '<button data-act="locate">📍 定位</button>' +
+          '<button data-act="clearDrawings">✕ 清除</button>' +
+          '<button data-act="drawPolygon">🖍 邊界</button>' +
+        '</div>' +
+        '<button class="drawer-cat" data-cat="layers">🗺️ 圖層</button>' +
+        '<div class="drawer-sub" data-sub="layers">' +
+          '<button data-l="hk" class="on">政府</button>' +
+          '<button data-l="sat">官航</button>' +
+          '<button data-l="lot">🗺️ 地段</button>' +
+          '<button data-l="aerial">🛰 航拍</button>' +
+        '</div>' +
+        '<div class="drawer-sep"></div>' +
+        '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +
+        '<button data-l="labels">🔢 樹木數字顯示</button>' +
+        '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
+        '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>';
+    } else {
+      div.innerHTML =
+        '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
+        '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>' +
+        '<div class="drawer-sep sep-tools"></div>' +
+        '<button data-act="measureLine">📏 距離</button>' +
+        '<button data-act="measureArea">📐 面積</button>' +
+        '<button data-act="drawPolygon">🖍 邊界</button>' +
+        '<button data-act="locate">📍 定位</button>' +
+        '<button data-act="clearDrawings">✕ 清除</button>' +
+        '<div class="drawer-sep"></div>' +
+        '<button data-l="hk" class="on">政府</button>' +
+        '<button data-l="sat">官航</button>' +
+        '<button data-l="labels">🔢</button>' +
+        '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +   // 🔥 [v2.52] 狀態過濾掣
+        '<button data-l="lot">🗺️ 地段</button>' +
+        '<button data-l="aerial">🛰 航拍</button>';
+    }
     L.DomEvent.disableClickPropagation(layerWrap);
 
     function closeDrawer() {
@@ -194,6 +219,14 @@ export function initMap() {
 
     div.querySelectorAll('button').forEach((b) => {
       b.onclick = function () {
+        if (b.dataset.cat) {
+          const sub = div.querySelector('.drawer-sub[data-sub="' + b.dataset.cat + '"]');
+          if (sub) {
+            const open = sub.classList.toggle('open');
+            b.classList.toggle('open', open);
+          }
+          return;
+        }
         if (b.dataset.act === 'addProject') {
           closeDrawer();
           const rp = document.getElementById('addProjectBtn');
