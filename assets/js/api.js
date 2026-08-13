@@ -20,7 +20,7 @@ const ApiService = (function() {
   const MAX_CONCURRENT_POST = 3;     // POST 最大並發數
   const MAX_CACHE_SIZE = 100;        // LRU 快取上限
   
-  const WRITE_TYPES = ['checkin', 'inspection', 'update_tree', 'create_project', 'create_tree', 'create_aerial'];
+  const WRITE_TYPES = ['checkin', 'inspection', 'update_tree', 'create_project', 'create_tree', 'create_aerial', 'update_project', 'delete_project', 'delete_tree'];
 
   let apiEndpoint = null;
   let requestCount = 0;

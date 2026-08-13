@@ -5,6 +5,7 @@
 import { state } from './state.js';
 import { $, showPanel, closePanel, updateStatus } from './dom.js';
 import { loadTreeSpecies, fillSpeciesDatalist } from './species.js';
+import { bringTreeToFront } from './trees.js';
 
 let _load = null;
 let _promptAuth = null;
@@ -135,8 +136,8 @@ export async function doCreateTree() {
           setTimeout(function () {
             const m = state.treesCache.get(state.curProject + '_' + newId) || state.treesCache.get(newId);
             if (m) {
-              state.treesCache.forEach((otherM) => otherM.setZIndexOffset(0));
-              m.setZIndexOffset(2000);
+              state.treesCache.forEach((otherM) => { if (otherM && otherM.bringToFront) otherM.bringToFront(); });
+              bringTreeToFront(m);
               m.openPopup();
             }
             updateStatus('✅ 已定位到新樹木：' + newId);

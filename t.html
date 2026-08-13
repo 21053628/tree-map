@@ -93,9 +93,7 @@
 </div>
 
 <!-- 🔥 [Tier1-B] 自托管第三方函式庫（同域、即時執行） -->
-<script src="assets/vendor/leaflet.js"></script>
-<script src="assets/vendor/proj4.js"></script>
-<script src="assets/vendor/purify.min.js"></script>
+<script src="assets/vendor/leaflet.js" defer></script>
 
 <!-- 🔥 [v2.56 修正] 引入 config.js，統一 API URL 管理，解決 404 問題 -->
 <script src="assets/js/config.js"></script>
@@ -115,23 +113,41 @@
   const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
   
   const coordCache = new Map();
-  function toHK(lat,lng){
-    if(!window.proj4 || !lat || !lng) return null;
+
+  // 🔥 [效能優化] proj4 改為按需延遲載入，避免阻塞首屏
+  let proj4Promise = null;
+  function ensureProj4(){
+    if(window.proj4) return Promise.resolve(window.proj4);
+    if(proj4Promise) return proj4Promise;
+    proj4Promise = new Promise(function(resolve, reject){
+      const s = document.createElement('script');
+      s.src = 'assets/vendor/proj4.js';
+      s.onload = function(){ resolve(window.proj4); };
+      s.onerror = function(){ reject(new Error('proj4 載入失敗')); };
+      document.head.appendChild(s);
+    });
+    return proj4Promise;
+  }
+
+  async function toHK(lat,lng){
+    if(!lat || !lng) return null;
     const key = lat+','+lng;
     if(coordCache.has(key)) return coordCache.get(key);
     try{ 
-      const r = proj4(WGS84, HK80, [+lng, +lat]); 
+      const proj = await ensureProj4();
+      const r = proj(WGS84, HK80, [+lng, +lat]); 
       const result = {N:r[1], E:r[0]};
       coordCache.set(key, result);
       return result;
     }catch(e){ return null; }
   }
-  function toWGS(N,E){
-    if(!window.proj4) return null;
+  async function toWGS(N,E){
+    if(!N || !E) return null;
     const key = N+','+E;
     if(coordCache.has(key)) return coordCache.get(key);
     try{ 
-      const r = proj4(HK80, WGS84, [+E, +N]); 
+      const proj = await ensureProj4();
+      const r = proj(HK80, WGS84, [+E, +N]); 
       const result = {lat:r[1], lng:r[0]};
       coordCache.set(key, result);
       return result;
@@ -141,7 +157,7 @@
   function f5(n){ return Number(n).toFixed(5); }
   
   const params = new URLSearchParams(location.search);
-  const id  = params.get('id') || params.get('tree_id') || 'A001';
+  const id  = params.get('id') || params.get('tree_id') || '';
   const prj = params.get('prj') || params.get('project_id') || '';
   let TREE = null;
 
@@ -178,9 +194,13 @@
           body: JSON.stringify({type: 'login', password: p})
         }).then(r => r.json());
         if(res && res.ok && res.token){
-          localStorage.setItem('tree_staff_token', JSON.stringify({
+          const tokenKey = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.STORAGE_KEY)
+            ? Config.AUTH.STORAGE_KEY : 'tree_staff_token';
+          const sessionDuration = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.SESSION_DURATION)
+            ? Config.AUTH.SESSION_DURATION : 6*60*60*1000;
+          localStorage.setItem(tokenKey, JSON.stringify({
             token: res.token,
-            until: Date.now() + 4*60*60*1000
+            until: Date.now() + sessionDuration
           }));
           return true;
         } else {
@@ -202,29 +222,33 @@
     return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
   }
 
-  fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      if(res && res.error === 'OFFLINE') {
-        $('#app').innerHTML = '<div class="card error">📴 離線模式：暫無此樹木的快取資料，請連線後再試。</div>';
-        return; 
-      }
-      const t = res.data;
-      if(!t){ 
-        $('#app').innerHTML = '<div class="card error">❌ 搵唔到樹木：<b>' + id + '</b></div>'; 
-        return; 
-      }
-      TREE = t; render(t); initMiniMap(t); loadLogs();
-    })
-    .catch(function(err){
-      console.error('Fetch error:', err);
-      $('#app').innerHTML = '<div class="card error">❌ 後端連線失敗：<br>' + err.message + '</div>';
-    });
+  if (!id) {
+    $('#app').innerHTML = '<div class="card error">❌ 缺少樹木編號：請由地圖選擇樹木後再開啟此頁。</div>';
+  } else {
+    fetch(API + '?action=tree&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.error === 'OFFLINE') {
+          $('#app').innerHTML = '<div class="card error">📴 離線模式：暫無此樹木的快取資料，請連線後再試。</div>';
+          return; 
+        }
+        const t = res.data;
+        if(!t){ 
+          $('#app').innerHTML = '<div class="card error">❌ 搵唔到樹木：<b>' + id + '</b></div>'; 
+          return; 
+        }
+        TREE = t; render(t); initMiniMap(t); loadLogs();
+      })
+      .catch(function(err){
+        console.error('Fetch error:', err);
+        $('#app').innerHTML = '<div class="card error">❌ 後端連線失敗：<br>' + err.message + '</div>';
+      });
+  }
 
   const COLORS = {'Normal':'#2E7D32','Fair':'#7CB342','Poor':'#FFB300','Very Poor':'#E53935','Dead':'#000000'};
 
-  function render(t){
-    const hk = toHK(t.lat, t.lng);
+  async function render(t){
+    const hkPromise = toHK(t.lat, t.lng);
     var html = '<a class="back" href="index.html?tree_id=' + encodeURIComponent(t.tree_id) + '&project_id=' + encodeURIComponent(t.project_id || '') + '&lat=' + encodeURIComponent(t.lat) + '&lng=' + encodeURIComponent(t.lng) + '" onclick="return goBackToMap(event)">⬅ 地圖</a>' +
     '<div class="card">' +
       '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
@@ -257,7 +281,7 @@
         '<div>Crown Vol.<b>' + (t.crown_volume||'-') + ' m³</b></div>' +
       '</div>' +
       '<div class="sub" style="margin-top:8px">' + escapeHtml(t.description||'') + '</div>' +
-      '<div class="sub" style="margin-top:6px">📍 <b>HK80：</b>N ' + (hk?f1(hk.N):'—') + ' ／ E ' + (hk?f1(hk.E):'—') + ' ｜ <b>Level：</b>' + (t.level||'-') + ' m</div>' +
+      '<div class="sub" style="margin-top:6px">📍 <b>HK80：</b>N <span id="hk80N">—</span> ／ E <span id="hk80E">—</span> ｜ <b>Level：</b>' + (t.level||'-') + ' m</div>' +
       '<div class="sub">WGS84：' + f5(t.lat) + ', ' + f5(t.lng) + '</div>' +
       '<div id="minimap"></div>' +
     '</div>' +
@@ -269,6 +293,14 @@
       '<img id="modalImg" src="" alt="放大圖片" crossorigin="anonymous" referrerpolicy="no-referrer">' +
     '</div>';
     $('#app').innerHTML = html;
+
+    const hk = await hkPromise;
+    if(hk){
+      const elN = document.getElementById('hk80N');
+      const elE = document.getElementById('hk80E');
+      if(elN) elN.textContent = f1(hk.N);
+      if(elE) elE.textContent = f1(hk.E);
+    }
   }
 
   function escapeHtml(str){
@@ -315,7 +347,7 @@
 
   async function staffMode(){
     if(!await staffOk()) return;
-    const hk = toHK(TREE.lat, TREE.lng);
+    const hk = await toHK(TREE.lat, TREE.lng);
     $('#staffBox').innerHTML =
       '<button onclick="checkin()">✅ 簽到</button>' +
       '<hr><div class="section-title">📝 巡查記錄（狀態會自動同步樹木資料）</div>' +
@@ -490,7 +522,7 @@
     let lat = TREE.lat, lng = TREE.lng;
     const N = $('#eN').value, E = $('#eE').value;
     if(N && E){
-      const w = toWGS(N, E);
+      const w = await toWGS(N, E);
       if(!w){ alert('HK80 座標轉換失敗，請檢查 N/E 數值'); return; }
       lat = w.lat.toFixed(6); lng = w.lng.toFixed(6);
     }

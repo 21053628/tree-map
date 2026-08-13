@@ -6,7 +6,7 @@ import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
 import { buildSelect } from './projects.js';
 import { drawProjects } from './projects.js';
-import { drawTrees } from './trees.js';
+import { drawTrees, bringTreeToFront } from './trees.js';
 import { refreshAerial } from './map.js'; // 🔥 [v2.33] 加入航拍圖刷新
 
 export function saveViewState(treeId, lat, lng) {
@@ -29,13 +29,17 @@ export function locateTree(treeId, projectId, lat, lng) {
   }
 
   if (treeId) {
-    tree = state.treeMap.get(targetPid + '_' + String(treeId));
+    const tidStr = String(treeId);
+    tree = state.treeMap.get(targetPid + '_' + tidStr);
     if (!tree) {
-      const tp = targetPid.toLowerCase();
-      tree = state.TREES.find((t) =>
-        String(t.tree_id) === String(treeId) &&
-        (!tp || String(t.project_id || '').toLowerCase() === tp)
-      ) || null;
+      // 🔥 [Phase1] O(1) 大小寫不敏感索引，取代原本 O(N) 的 TREES.find 線性掃描
+      const tpLower = targetPid.toLowerCase();
+      const tidLower = tidStr.toLowerCase();
+      if (tpLower) {
+        tree = state.treeLowerIndex.get(tpLower + '_' + tidLower) || null;
+      } else {
+        tree = state.treeIdIndex.get(tidLower) || null;
+      }
     }
   }
 
@@ -87,8 +91,8 @@ export function locateTree(treeId, projectId, lat, lng) {
           state.treesCache.get(tree.tree_id) ||
           state.treesCache.get(String(treeId));
         if (marker) {
-          state.treesCache.forEach((m) => m.setZIndexOffset(0));
-          marker.setZIndexOffset(2000);
+          state.treesCache.forEach((m) => { if (m && m.bringToFront) m.bringToFront(); });
+          bringTreeToFront(marker);
           marker.openPopup();
           updateStatus('✅ 已定位到樹木：' + treeId);
         }

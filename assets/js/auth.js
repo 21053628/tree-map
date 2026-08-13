@@ -6,9 +6,13 @@
 const AuthService = (function() {
   'use strict';
 
-  const TOKEN_KEY = 'tree_staff_token';
-  // 🔥 [更新] 將前端 Session 改為 4 小時 (14,400,000 毫秒)
-  const SESSION_DURATION = 4 * 60 * 60 * 1000; 
+  const TOKEN_KEY = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.STORAGE_KEY)
+    ? Config.AUTH.STORAGE_KEY
+    : 'tree_staff_token';
+  // 🔥 [更新] 統一由 Config.AUTH.SESSION_DURATION 管理，預設 6 小時
+  const SESSION_DURATION = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.SESSION_DURATION)
+    ? Config.AUTH.SESSION_DURATION
+    : 6 * 60 * 60 * 1000;
 
   function getToken() {
     try {

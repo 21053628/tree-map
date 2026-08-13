@@ -14,8 +14,8 @@ const Config = {
   
   // 認證配置
   AUTH: {
-    SESSION_DURATION: 30 * 60 * 1000, // 30 分鐘
-    STORAGE_KEY: 'tree_staff_until'
+    SESSION_DURATION: 6 * 60 * 60 * 1000, // 6 小時
+    STORAGE_KEY: 'tree_staff_token'
   },
   
   // 座標系統定義

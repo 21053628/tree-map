@@ -7,7 +7,7 @@
 import { state } from './modules/state.js';
 import { DOM, updateStatus, closePanel } from './modules/dom.js';
 import { initMap, setClosePanel, setHideSearch } from './modules/map.js';
-import { buildSearchIndex, handleSearch, hideSearch } from './modules/search.js';
+import { handleSearch, hideSearch } from './modules/search.js';
 import { loadTreeSpecies } from './modules/species.js';
 import { drawTrees } from './modules/trees.js';
 import { drawProjects, selectProject, buildSelect } from './modules/projects.js';
@@ -33,13 +33,40 @@ function applyData(projects, trees) {
 
   state.treeCountMap.clear();
   state.treeMap.clear();
-  state.TREES.forEach((t) => {
-    const pid = String(t.project_id || '');
-    state.treeCountMap.set(pid, (state.treeCountMap.get(pid) || 0) + 1);
-    state.treeMap.set(pid + '_' + String(t.tree_id), t);
-  });
+  state.treeSearchIndex.clear();
+  state.treeLowerIndex.clear();
+  state.treeIdIndex.clear();
 
-  buildSearchIndex();
+  // 🔥 [Phase1] 單次遍歷：正規化座標 + 建構所有索引（取代原先多次 pass）
+  const searchIndex = state.treeSearchIndex;
+  for (let i = 0; i < trees.length; i++) {
+    const t = trees[i];
+    const pid = String(t.project_id || '');
+    const tid = String(t.tree_id);
+
+    // 正規化：字串座標轉 number（避免渲染迴圈每幀重複 +t.lat/+t.lng）
+    if (typeof t.lat === 'string') t.lat = +t.lat;
+    if (typeof t.lng === 'string') t.lng = +t.lng;
+    // 預存狀態色（避免渲染與 popup 每次重新查色表）
+    t._color = Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
+
+    // 地盤樹木計數
+    state.treeCountMap.set(pid, (state.treeCountMap.get(pid) || 0) + 1);
+
+    // 精確索引 (pid + '_' + tree_id)
+    state.treeMap.set(pid + '_' + tid, t);
+
+    // 🔥 [Phase1] 大小寫不敏感定位索引（O(1)）
+    const pidLower = pid.toLowerCase();
+    const tidLower = tid.toLowerCase();
+    state.treeLowerIndex.set(pidLower + '_' + tidLower, t);
+    if (!state.treeIdIndex.has(tidLower)) state.treeIdIndex.set(tidLower, t);
+
+    // 地盤搜尋索引 (pid -> trees)
+    let arr = searchIndex.get(pid);
+    if (!arr) { arr = []; searchIndex.set(pid, arr); }
+    arr.push(t);
+  }
 
   state.projectMarkersCache = null;
   state.treesCache.clear();
@@ -134,6 +161,8 @@ function clearCache() {
   state.treeCountMap.clear();
   state.treeMap.clear();
   state.treeSearchIndex.clear();
+  state.treeLowerIndex.clear();
+  state.treeIdIndex.clear();
   state.spatialIndexCache = null;
   state.coordGroupsCache = null;
   clearLotCache();

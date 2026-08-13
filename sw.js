@@ -1,9 +1,12 @@
-/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.2.4
- * 🔥 配合 app.js v2.54：移除 data/bootstrap.json 預快取
- * 🔥 繼承 v1.2.3 修正：catch 冇快取時改為「直接拋錯」，
- *      徹底消滅 respondWith(undefined) 導致的錯誤
+/* 樹木管理系統 - Service Worker (PWA 離線模式) v1.3.0
+ * 🔥 穩定性強化：
+ *   1. 補齊完整預快取（vendor 地圖函式庫 + 全部 ES modules + icons）
+ *   2. 導航離線 fallback：網路失敗絕不拋錯，改回退 cached index.html
+ *   3. 快取清理精準化（用「前綴 + 完整版本」比對，不再用 indexOf）
+ *   4. install 記錄預快取結果，方便排查漏檔
+ *   5. 升版號強制清走舊快取
  */
-const VERSION = 'v1.2.4'; // 🔥 升級版本，強制清理舊快取
+const VERSION = 'v1.3.0'; // 🔥 升級版本，強制清理舊快取
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -22,15 +25,41 @@ const PRECACHE = [
   './nfc.html',
   './manifest.webmanifest',
   './offline.js',
+  // 樣式
   './assets/css/main.css',
+  // 自家全域腳本
   './assets/js/config.js',
   './assets/js/utils.js',
   './assets/js/api.js',
   './assets/js/auth.js',
   './assets/js/app.js',
+  // ES Modules（app.js 靜態 import）
+  './assets/js/modules/state.js',
+  './assets/js/modules/dom.js',
+  './assets/js/modules/map.js',
+  './assets/js/modules/search.js',
+  './assets/js/modules/species.js',
+  './assets/js/modules/trees.js',
+  './assets/js/modules/filters.js',
+  './assets/js/modules/projects.js',
+  './assets/js/modules/locate.js',
+  './assets/js/modules/lots.js',
+  './assets/js/modules/forms.js',
+  // 自托管第三方函式庫（地圖核心，離線必需）
+  './assets/vendor/leaflet.css',
+  './assets/vendor/leaflet.js',
+  './assets/vendor/leaflet.markercluster.js',
+  './assets/vendor/MarkerCluster.css',
+  './assets/vendor/MarkerCluster.Default.css',
+  './assets/vendor/proj4.js',
+  './assets/vendor/purify.min.js',
+  // 資料
   './data/trees_data.json',
-  // 🔥 已移除 './data/bootstrap.json'
-  './icons/icon.svg'
+  // Icons
+  './icons/icon.svg',
+  './icons/icon-180.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', function(e) {
@@ -40,22 +69,34 @@ self.addEventListener('install', function(e) {
         return Promise.all(PRECACHE.map(function(url) {
           return cache.add(url).catch(function(err) {
             console.warn('⚠️ 預快取跳過:', url, err.message);
+            return { url: url, failed: true };
           });
         }));
       })
-      .then(function() { return self.skipWaiting(); })
+      .then(function(results) {
+        var failed = results.filter(function(r) { return r && r.failed; });
+        if (failed.length) {
+          console.warn('🔴 預快取完成，但有 ' + failed.length + ' 個失敗:', failed.map(function(r) { return r.url; }));
+        } else {
+          console.log('✅ 預快取完成，共 ' + PRECACHE.length + ' 個檔案');
+        }
+        return self.skipWaiting();
+      })
   );
 });
 
 self.addEventListener('activate', function(e) {
+  var CACHE_PREFIXES = ['static-', 'runtime-', 'tiles-', 'data-', 'img-'];
   e.waitUntil(
     caches.keys().then(function(keys) {
       return Promise.all(
-        keys.filter(function(k) { return k.indexOf(VERSION) === -1; })
-            .map(function(k) { return caches.delete(k); })
+        keys.map(function(k) {
+          var keep = CACHE_PREFIXES.some(function(p) { return k.indexOf(p + VERSION) === 0; });
+          if (!keep) return caches.delete(k);
+        })
       );
-    }).then(function() { 
-      return self.clients.claim(); 
+    }).then(function() {
+      return self.clients.claim();
     })
   );
 });
@@ -64,8 +105,8 @@ function trimCache(cacheName, maxItems) {
   return caches.open(cacheName).then(function(cache) {
     return cache.keys().then(function(keys) {
       if (keys.length > maxItems) {
-        return cache.delete(keys[0]).then(function() { 
-          return trimCache(cacheName, maxItems); 
+        return cache.delete(keys[0]).then(function() {
+          return trimCache(cacheName, maxItems);
         });
       }
     });
@@ -127,7 +168,7 @@ self.addEventListener('fetch', function(e) {
   var url;
   try { url = new URL(req.url); } catch (err) { return; }
 
-  // 1. 導航請求 (HTML)
+  // 1. 導航請求 (HTML) - App Shell + 離線 fallback
   if (req.mode === 'navigate') {
     e.respondWith(
       caches.match(req).then(function(cached) {
@@ -139,11 +180,14 @@ self.addEventListener('fetch', function(e) {
             }).catch(function(){});
           }
           return res;
-        }).catch(function(err) {
-          if (cached) return cached;
-          throw err;
+        }).catch(function() {
+          // 🔥 關鍵修正：網路失敗 → 先回退 exact cached，再回退 index.html，絕不拋錯
+          return cached || caches.match('./index.html').then(function(shell) {
+            return shell || Response.error();
+          });
         });
-        return cached || fetchPromise;
+        // 🔥 修正：改為 Network-First，優先回傳最新頁面，避免快取舊版本造成 PWA 內容不更新
+        return fetchPromise;
       })
     );
     return;
@@ -196,9 +240,6 @@ self.addEventListener('fetch', function(e) {
             }).catch(function(){});
           }
           return res;
-        }).catch(function(err) {
-          if (cached) return cached;
-          throw err;
         });
       })
     );
@@ -209,9 +250,9 @@ self.addEventListener('fetch', function(e) {
   if (url.hostname.indexOf('googleusercontent.com') !== -1 ||
       url.hostname.indexOf('drive.google.com') !== -1 ||
       url.hostname.indexOf('drive.usercontent.google.com') !== -1) {
-    
+
     var normalizedUrl = normalizeImgUrl(req.url);
-    
+
     e.respondWith(
       caches.match(normalizedUrl).then(function(cached) {
         if (cached) return cached;
@@ -250,9 +291,6 @@ self.addEventListener('fetch', function(e) {
           }).catch(function(){});
         }
         return res;
-      }).catch(function(err) {
-        if (cached) return cached;
-        throw err;
       });
     })
   );

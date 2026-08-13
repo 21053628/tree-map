@@ -139,8 +139,11 @@
   }
 
   function getCurrentToken() {
+    var TOKEN_KEY = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.STORAGE_KEY)
+      ? Config.AUTH.STORAGE_KEY
+      : 'tree_staff_token';
     try {
-      var raw = localStorage.getItem('tree_staff_token');
+      var raw = localStorage.getItem(TOKEN_KEY);
       if (!raw) return null;
       var data = JSON.parse(raw);
       if (data && data.token && data.until > Date.now()) return data.token;
@@ -253,8 +256,10 @@
           } else { failed++; break; }
         }
         else {
-          console.warn('🔄 [Sync] 業務錯誤:', json && json.error);
-          await remove(item.id); failed++; i++;
+          // 🔥 修正：業務錯誤不直接刪除記錄，保留重試，避免離線寫入資料永久丟失
+          console.warn('🔄 [Sync] 業務錯誤（保留重試）:', json && json.error);
+          await incrementRetry(item.id);
+          break;
         }
       } catch (e) {
         // 🔥 [v1.8] 網絡錯誤：靜默重試，唔再刷紅字
@@ -309,9 +314,9 @@
     };
 
     var origGet = ApiService.get;
-    ApiService.get = async function(action) {
+    ApiService.get = async function(action, params) {
       try {
-        var result = await origGet(action);
+        var result = await origGet(action, params);
         if (result && result.data) setCache(action, result.data);
         return result;
       } catch (err) {

@@ -7,7 +7,7 @@
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
 import { toggleLotLayer } from './lots.js';
-import { toggleTreeLabels, scheduleRefreshLabels } from './trees.js';
+import { toggleTreeLabels, scheduleRedraw } from './trees.js';
 import { toggleFilterPanel, closeFilterPanel } from './filters.js'; // 🔥 [v2.52]
 
 let _closePanel = null;
@@ -156,7 +156,9 @@ export function initMap() {
   };
   layerBar.addTo(state.map);
 
-  state.map.on('moveend', scheduleRefreshLabels);
+  state.map.on('moveend', function () {
+    scheduleRedraw();
+  });
 
   state.markerCluster = L.markerClusterGroup({
     showCoverageOnHover: false,
