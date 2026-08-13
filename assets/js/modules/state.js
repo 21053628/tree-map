@@ -35,6 +35,10 @@ export const state = {
   aerialLayer: null,
   aerialEnabled: false,
   
+  // 🔥 [Phase1] GPS 定位與繪圖邊界
+  geolocation: { marker: null, circle: null },
+  drawBoundary: null,
+  
   isLocating: false,
   
   speciesCache: null,

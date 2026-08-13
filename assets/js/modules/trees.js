@@ -224,9 +224,25 @@ export function drawTrees(silent) {
         '<b>Crown Area:</b> ' + (t.crown_area || '-') + ' ㎡ | <b>Crown Vol.:</b> ' + (t.crown_volume || '-') + ' m³<br>' +
         (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
         ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:200px;object-fit:cover;display:block;margin:6px auto 0;border-radius:6px;"><br>' : '') +
-        '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
+        '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>' +
+        '<button class="popup-move-btn">📍 移動位置</button>';
 
       e.popup.setContent(DOMPurify.sanitize(popupHtml));
+
+      // 🔥 [Phase1] 「移動位置」掣（DOMPurify 會剷走 onclick，改用事件綁定）
+      setTimeout(() => {
+        try {
+          const el = e.popup.getElement();
+          const btn = el && el.querySelector('.popup-move-btn');
+          if (btn) {
+            btn.addEventListener('click', function () {
+              if (window.App && window.App.moveTree) {
+                window.App.moveTree(String(t.tree_id), String(t.project_id || ''));
+              }
+            });
+          }
+        } catch (err) {}
+      }, 0);
 
       setTimeout(() => {
         try {
@@ -275,5 +291,5 @@ export function drawTrees(silent) {
   const pname = (state.PROJECTS.find((x) => String(x.project_id) === String(state.curProject)) || {}).name;
   // 🔥 [v4.4] 狀態列顯示過濾對比（例如：顯示 12/50 棵樹（已過濾））
   const filterText = statusFilter ? '（已過濾）' : '';
-  updateStatus('✅ 地盤：' + pname + '｜顯示 ' + markers.length + '/' + allTrees.length + ' 棵樹' + filterText + '（耗時 ' + state.perfMetrics.renderTime.toFixed(1) + 'ms）');
+  updateStatus('✅ 地盤：' + pname + '｜顯示 ' + markers.length + '/' + allTrees.length + ' 棵樹' + filterText);
 }

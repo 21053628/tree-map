@@ -45,6 +45,8 @@ const PRECACHE = [
   './assets/js/modules/locate.js',
   './assets/js/modules/lots.js',
   './assets/js/modules/forms.js',
+  './assets/js/modules/draw.js',
+  './assets/js/modules/geolocate.js',
   // 自托管第三方函式庫（地圖核心，離線必需）
   './assets/vendor/leaflet.css',
   './assets/vendor/leaflet.js',

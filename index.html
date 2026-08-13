@@ -40,6 +40,8 @@
 <link rel="modulepreload" href="assets/js/modules/locate.js">
 <link rel="modulepreload" href="assets/js/modules/lots.js">
 <link rel="modulepreload" href="assets/js/modules/forms.js">
+<link rel="modulepreload" href="assets/js/modules/draw.js">
+<link rel="modulepreload" href="assets/js/modules/geolocate.js">
 </head>
 <body>
 <div id="bar">
@@ -52,6 +54,12 @@
     <input type="text" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off">
     <div id="searchResults" class="search-results"></div>
   </div>
+
+  <!-- 🔥 桌面過濾（圖層）掣：放喺搜尋框下面 -->
+  <button id="filterBtn" class="filter-btn" type="button" title="過濾樹木狀態">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>
+    <span>篩選</span>
+  </button>
 </div>
 
 <div id="panel"><div id="panelContent"></div></div>

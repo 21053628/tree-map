@@ -3,9 +3,10 @@
  * v5.0 - Step 5：doCreateTree 改用新欄位名 + 補齊新增欄位
  */
 import { state } from './state.js';
-import { $, showPanel, closePanel, updateStatus } from './dom.js';
+import { $, showPanel, closePanel, updateStatus, escapeHtml } from './dom.js';
 import { loadTreeSpecies, fillSpeciesDatalist } from './species.js';
 import { bringTreeToFront } from './trees.js';
+import { startPick } from './draw.js'; // 🔥 [Phase1]
 
 let _load = null;
 let _promptAuth = null;
@@ -65,15 +66,19 @@ export async function doCreateProject() {
   }
 }
 
-export async function openTreeForm() {
+export async function openTreeForm(preset) {
   if (!state.curProject) { alert('請先選擇地盤'); return; }
 
   const authResult = _promptAuth();
   if (authResult instanceof Promise) { if (!await authResult) return; }
   else { if (!authResult) return; }
 
+  const presetN = (preset && preset.N != null) ? escapeHtml(String(preset.N)) : '';
+  const presetE = (preset && preset.E != null) ? escapeHtml(String(preset.E)) : '';
+
   showPanel(
     '<b>🌳 新增樹木</b>' +
+    '<button class="pick-loc-btn" onclick="App.pickTreeLocation()">📍 喺地圖撳位置（自動填 N/E）</button>' +
     '<input id="tId" placeholder="樹木編號（留空自動）">' +
     '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）...">' +
     '<datalist id="tree_datalist"></datalist>' +
@@ -82,13 +87,48 @@ export async function openTreeForm() {
     '<div class="row2"><input id="tDbh" placeholder="DBH (m)" inputmode="decimal"><input id="tGroundDia" placeholder="Ground Dia. (m)" inputmode="decimal"></div>' +
     '<div class="row2"><input id="tStemLen" placeholder="Stem Length (m)" inputmode="decimal"><input id="tCrownArea" placeholder="Crown Area (㎡)" inputmode="decimal"></div>' +
     '<input id="tCrownVol" placeholder="Crown Volume (m³)" inputmode="decimal">' +
-    '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal"><input id="tE" placeholder="HK80 E" inputmode="decimal"></div>' +
+    '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal" value="' + presetN + '"><input id="tE" placeholder="HK80 E" inputmode="decimal" value="' + presetE + '"></div>' +
     '<input id="tLevel" placeholder="Level (m)" inputmode="decimal">' +
     '<button onclick="App.doCreateTree()">💾 建立樹木</button>' +
     '<button class="x" onclick="App.closePanel()">✖ 關閉</button>'
   );
 
   loadTreeSpecies().then(fillSpeciesDatalist);
+}
+
+export function pickTreeLocation() {
+  closePanel();
+  if (!state.curProject) { alert('請先選擇地盤'); return; }
+  startPick(function (latlng) {
+    const hk = CoordUtils.toHK80(latlng.lat, latlng.lng);
+    if (!hk) { alert('HK80 座標轉換失敗'); return; }
+    openTreeForm({ N: CoordUtils.format1(hk.N), E: CoordUtils.format1(hk.E) });
+  }, '📍 撳一下選擇樹木位置');
+}
+
+export function moveTree(treeId, projectId) {
+  closePanel();
+  if (state.map) state.map.closePopup();
+  startPick(function (latlng) {
+    const hk = CoordUtils.toHK80(latlng.lat, latlng.lng);
+    if (!hk) { alert('HK80 座標轉換失敗'); return; }
+    ApiService.post({
+      type: 'update_tree',
+      tree_id: String(treeId),
+      project_id: String(projectId),
+      lat: latlng.lat.toFixed(6),
+      lng: latlng.lng.toFixed(6)
+    }).then(function (r) {
+      if (r.ok) {
+        updateStatus('✅ 已移動樹木 ' + treeId + ' 至新位置');
+        if (_load) _load();
+      } else {
+        alert('❌ ' + r.error);
+      }
+    }).catch(function (err) {
+      alert('❌ 請求失敗：' + err.message);
+    });
+  }, '📍 撳一下選擇樹木新位置');
 }
 
 export async function doCreateTree() {

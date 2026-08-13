@@ -34,6 +34,22 @@ export function closeFilterPanel() {
   if (panelEl) { panelEl.remove(); panelEl = null; }
 }
 
+function positionPanel() {
+  if (!panelEl || !btnEl) return;
+  const r = btnEl.getBoundingClientRect();
+  if (window.innerWidth <= 600) {
+    panelEl.style.left = '8px';
+    panelEl.style.bottom = '70px';
+    panelEl.style.top = 'auto';
+    panelEl.style.right = 'auto';
+  } else {
+    panelEl.style.left = 'auto';
+    panelEl.style.bottom = 'auto';
+    panelEl.style.top = (r.bottom + 8) + 'px';
+    panelEl.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  }
+}
+
 export function toggleFilterPanel(btn) {
   btnEl = btn || btnEl;
   if (panelEl) { closeFilterPanel(); return; }
@@ -42,7 +58,7 @@ export function toggleFilterPanel(btn) {
   panelEl.className = 'filter-panel';
   const C = Config.TREE_STATUS_COLORS;
 
-  let html = '<div class="filter-title">🎚 過濾樹木狀態</div>';
+  let html = '<div class="filter-title">過濾樹木狀態</div>';
   html += '<button class="filter-chip all" data-s="__all" style="--c:#1565c0">全部</button>';
   STATUSES.forEach((s) => {
     html += '<button class="filter-chip" data-s="' + s + '" style="--c:' + C[s] + '"><span class="fc-dot"></span>' + s + '</button>';
@@ -50,6 +66,7 @@ export function toggleFilterPanel(btn) {
   panelEl.innerHTML = html;
   document.body.appendChild(panelEl);
   renderChips();
+  positionPanel();
 
   panelEl.addEventListener('click', (e) => e.stopPropagation());
 

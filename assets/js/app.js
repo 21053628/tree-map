@@ -16,6 +16,7 @@ import { clearLotCache } from './modules/lots.js';
 import {
   openProjectForm, doCreateProject,
   openTreeForm, doCreateTree,
+  pickTreeLocation, moveTree,
   setLoad, setPromptAuth
 } from './modules/forms.js';
 
@@ -249,6 +250,8 @@ window.App = {
   doCreateProject,
   openTreeForm,
   doCreateTree,
+  pickTreeLocation,
+  moveTree,
   closePanel,
   clearCache,
   getPerfMetrics,

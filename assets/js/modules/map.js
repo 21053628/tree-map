@@ -9,12 +9,22 @@ import { updateStatus } from './dom.js';
 import { toggleLotLayer } from './lots.js';
 import { toggleTreeLabels, scheduleRedraw } from './trees.js';
 import { toggleFilterPanel, closeFilterPanel } from './filters.js'; // 🔥 [v2.52]
+import { startMeasure, startDrawPolygon, cancelInteraction, clearAllDrawings, getMode as getDrawMode } from './draw.js'; // 🔥 [Phase1]
+import { toggleGeolocation } from './geolocate.js'; // 🔥 [Phase1]
+
+// 🔥 layers 圖示（filter 掣用，清楚表示「分層」）
+const LAYERS_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
 
 let _closePanel = null;
 let _hideSearch = null;
 
 export function setClosePanel(fn) { _closePanel = fn; }
 export function setHideSearch(fn) { _hideSearch = fn; }
+
+// 🔥 [Phase1] 邊界繪製完成後暫存（Phase2 接後端儲存）
+function onDrawBoundary(latlngs) {
+  state.drawBoundary = latlngs.map(function (ll) { return [ll.lat, ll.lng]; });
+}
 
 export function initMap() {
   if (!window.L) {
@@ -70,6 +80,56 @@ export function initMap() {
   state.baseLayers.hk.addTo(state.map);
   state.currentBaseLayer = state.baseLayers.hk;
 
+  // 🔥 [Phase1] 比例尺
+  L.control.scale({ imperial: false, metric: true, position: 'bottomleft', maxWidth: 130 }).addTo(state.map);
+
+  function toggleMeasureLine() {
+    if (getDrawMode() === 'line') { cancelInteraction(); return; }
+    startMeasure('line');
+  }
+  function toggleMeasureArea() {
+    if (getDrawMode() === 'area') { cancelInteraction(); return; }
+    startMeasure('area');
+  }
+  function toggleDrawBoundary() {
+    if (getDrawMode() === 'polygon') { cancelInteraction(); return; }
+    startDrawPolygon(onDrawBoundary);
+  }
+
+  // 🔥 全螢幕＋三個 GIS 工具（電腦版 icon bar，垂直排列喺縮放掣下面）
+  const gisCtrl = L.control({ position: 'topleft' });
+  gisCtrl.onAdd = function () {
+    const div = L.DomUtil.create('div', 'leaflet-bar gis-tools');
+    L.DomEvent.disableClickPropagation(div);
+
+    function addBtn(html, title, aria, onClick) {
+      const b = L.DomUtil.create('a', 'gis-btn', div);
+      b.href = '#';
+      b.title = title;
+      b.setAttribute('role', 'button');
+      b.setAttribute('aria-label', aria);
+      b.innerHTML = html;
+      L.DomEvent.on(b, 'click', function (e) {
+        L.DomEvent.preventDefault(e);
+        onClick();
+      });
+      return b;
+    }
+
+    addBtn('⛶', '全螢幕', '切換全螢幕', function () {
+      const c = state.map.getContainer();
+      if (document.fullscreenElement) { document.exitFullscreen(); }
+      else if (c.requestFullscreen) { c.requestFullscreen(); }
+    });
+    addBtn('📏', '量度距離', '量度距離', toggleMeasureLine);
+    addBtn('📐', '量度面積', '量度面積', toggleMeasureArea);
+    addBtn('🖍', '繪畫邊界', '繪畫邊界', toggleDrawBoundary);
+    addBtn('✕', '清除所有量測／繪圖', '清除所有量測／繪圖', clearAllDrawings);
+
+    return div;
+  };
+  gisCtrl.addTo(state.map);
+
   state.lotLayer = L.layerGroup();
 
   let layerWrap = null;
@@ -87,11 +147,17 @@ export function initMap() {
     div.innerHTML =
       '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
       '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>' +
+      '<div class="drawer-sep sep-tools"></div>' +
+      '<button data-act="measureLine">📏 距離</button>' +
+      '<button data-act="measureArea">📐 面積</button>' +
+      '<button data-act="drawPolygon">🖍 邊界</button>' +
+      '<button data-act="locate">📍 定位</button>' +
+      '<button data-act="clearDrawings">✕ 清除</button>' +
       '<div class="drawer-sep"></div>' +
       '<button data-l="hk" class="on">政府</button>' +
       '<button data-l="sat">官航</button>' +
       '<button data-l="labels">🔢</button>' +
-      '<button data-l="filter">🎚</button>' +   // 🔥 [v2.52] 狀態過濾掣
+      '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +   // 🔥 [v2.52] 狀態過濾掣
       '<button data-l="lot">🗺️ 地段</button>' +
       '<button data-l="aerial">🛰 航拍</button>';
     L.DomEvent.disableClickPropagation(layerWrap);
@@ -123,6 +189,35 @@ export function initMap() {
           } else if (rt) {
             rt.click();
           }
+          return;
+        }
+
+        if (b.dataset.act === 'measureLine') {
+          closeDrawer();
+          if (getDrawMode() === 'line') { cancelInteraction(); return; }
+          startMeasure('line');
+          return;
+        }
+        if (b.dataset.act === 'measureArea') {
+          closeDrawer();
+          if (getDrawMode() === 'area') { cancelInteraction(); return; }
+          startMeasure('area');
+          return;
+        }
+        if (b.dataset.act === 'drawPolygon') {
+          closeDrawer();
+          if (getDrawMode() === 'polygon') { cancelInteraction(); return; }
+          startDrawPolygon(onDrawBoundary);
+          return;
+        }
+        if (b.dataset.act === 'locate') {
+          closeDrawer();
+          toggleGeolocation(b);
+          return;
+        }
+        if (b.dataset.act === 'clearDrawings') {
+          closeDrawer();
+          clearAllDrawings();
           return;
         }
 
@@ -203,6 +298,14 @@ export function initMap() {
     }
     if (_hideSearch) _hideSearch();
   });
+
+  // 🔥 [v2.61] 桌面 filter 掣（#bar 搜尋框下面）
+  const filterBtn = document.getElementById('filterBtn');
+  if (filterBtn) {
+    filterBtn.addEventListener('click', function () {
+      toggleFilterPanel(filterBtn);
+    });
+  }
 
   return true;
 }
