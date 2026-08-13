@@ -153,6 +153,13 @@ export function scheduleRefreshLabels(){
  * ========================================================= */
 export function drawTrees(silent) {
   const startTime = performance.now();
+
+  // 🔥 拖動地圖重繪前，記低目前開緊嘅樹木 popup 編號，等重繪完可以重新開返
+  let openTreeId = null;
+  if (state.map && state.map._popup && state.map._popup.isOpen() && state.map._popup._source && state.map._popup._source._treeId != null) {
+    openTreeId = String(state.map._popup._source._treeId);
+  }
+
   state.treeLayer.clearLayers();
   // 🔥 修正：每次重繪前清空 marker 快取，避免舊 marker 殘留造成記憶體累積與誤定位
   state.treesCache.clear();
@@ -197,6 +204,7 @@ export function drawTrees(silent) {
     });
 
     marker._originalPos = [lat, lng];
+    marker._treeId = String(t.tree_id);
 
     marker.on('click', function () {
       marker.bringToFront();
@@ -244,6 +252,13 @@ export function drawTrees(silent) {
 
   if (markers.length > 0) {
     state.treeLayer.addLayers(markers);
+  }
+
+  // 🔥 拖動重繪後重新開返先前開緊嘅樹木 popup（保留「移動唔關視窗」行為）
+  if (silent && openTreeId) {
+    const key = state.curProject + '_' + openTreeId;
+    const m = state.treesCache.get(key) || state.treesCache.get(openTreeId);
+    if (m) m.openPopup();
   }
 
   state.perfMetrics.totalRenders++;
