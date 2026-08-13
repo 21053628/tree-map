@@ -224,25 +224,9 @@ export function drawTrees(silent) {
         '<b>Crown Area:</b> ' + (t.crown_area || '-') + ' ㎡ | <b>Crown Vol.:</b> ' + (t.crown_volume || '-') + ' m³<br>' +
         (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
         ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:200px;object-fit:cover;display:block;margin:6px auto 0;border-radius:6px;"><br>' : '') +
-        '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>' +
-        '<button class="popup-move-btn">📍 移動位置</button>';
+        '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
 
       e.popup.setContent(DOMPurify.sanitize(popupHtml));
-
-      // 🔥 [Phase1] 「移動位置」掣（DOMPurify 會剷走 onclick，改用事件綁定）
-      setTimeout(() => {
-        try {
-          const el = e.popup.getElement();
-          const btn = el && el.querySelector('.popup-move-btn');
-          if (btn) {
-            btn.addEventListener('click', function () {
-              if (window.App && window.App.moveTree) {
-                window.App.moveTree(String(t.tree_id), String(t.project_id || ''));
-              }
-            });
-          }
-        } catch (err) {}
-      }, 0);
 
       setTimeout(() => {
         try {

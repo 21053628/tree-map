@@ -106,31 +106,6 @@ export function pickTreeLocation() {
   }, '📍 撳一下選擇樹木位置');
 }
 
-export function moveTree(treeId, projectId) {
-  closePanel();
-  if (state.map) state.map.closePopup();
-  startPick(function (latlng) {
-    const hk = CoordUtils.toHK80(latlng.lat, latlng.lng);
-    if (!hk) { alert('HK80 座標轉換失敗'); return; }
-    ApiService.post({
-      type: 'update_tree',
-      tree_id: String(treeId),
-      project_id: String(projectId),
-      lat: latlng.lat.toFixed(6),
-      lng: latlng.lng.toFixed(6)
-    }).then(function (r) {
-      if (r.ok) {
-        updateStatus('✅ 已移動樹木 ' + treeId + ' 至新位置');
-        if (_load) _load();
-      } else {
-        alert('❌ ' + r.error);
-      }
-    }).catch(function (err) {
-      alert('❌ 請求失敗：' + err.message);
-    });
-  }, '📍 撳一下選擇樹木新位置');
-}
-
 export async function doCreateTree() {
   const N = $('#tN').value;
   const E = $('#tE').value;

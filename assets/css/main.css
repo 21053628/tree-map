@@ -519,6 +519,13 @@ button.is-loading::after {
   }
   .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
 
+  .leaflet-top.leaflet-left .geo-locate-bar { margin-bottom: 4px; }
+  .geo-locate-bar a {
+    display: flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; line-height: 40px;
+    color: #333; background: #fff; font-size: 20px;
+  }
+
   .leaflet-bottom.leaflet-right {
     bottom: calc(10px + var(--safe-bottom));
     right: 6px;
@@ -550,6 +557,9 @@ button.is-loading::after {
   .layerbar-fab:active { transform: scale(.92); }
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 
+  .layerbar-wrap {
+    flex-direction: column-reverse;   /* FAB 固定喺底，抽屜向上彈 */
+  }
   .layerbar {
     display: none;
     flex-direction: column;
@@ -558,6 +568,11 @@ button.is-loading::after {
     padding: 6px;
     min-width: 160px;
     box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    max-height: calc(100vh - 150px);
+    max-height: calc(100dvh - 150px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .layerbar-wrap.open .layerbar {
     display: flex;
@@ -810,9 +825,6 @@ button.is-loading::after {
   border: none; border-radius: 8px; font-size: 14px; font-weight: 600; margin-top: 8px;
 }
 #panel .pick-loc-btn:hover { background: var(--accent-dark); }
-
-/* 樹木 popup「移動位置」掣 */
-.leaflet-popup-content .popup-move-btn { background: var(--accent); color: #fff; }
 
 /* 深色模式 */
 @media (prefers-color-scheme: dark) {

@@ -10,7 +10,7 @@ import { toggleLotLayer } from './lots.js';
 import { toggleTreeLabels, scheduleRedraw } from './trees.js';
 import { toggleFilterPanel, closeFilterPanel } from './filters.js'; // 🔥 [v2.52]
 import { startMeasure, startDrawPolygon, cancelInteraction, clearAllDrawings, getMode as getDrawMode } from './draw.js'; // 🔥 [Phase1]
-import { toggleGeolocation } from './geolocate.js'; // 🔥 [Phase1]
+import { toggleGeolocation, locateOnce } from './geolocate.js'; // 🔥 [Phase1]
 
 // 🔥 layers 圖示（filter 掣用，清楚表示「分層」）
 const LAYERS_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
@@ -49,6 +49,25 @@ export function initMap() {
   state.map = L.map('map', mapOptions).setView(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM);
 
   if (isMobile) {
+    // 🔥 GPS 定位掣（放喺縮放 +/− 掣上面，一撳定位自己）
+    const geoCtrl = L.control({ position: 'topleft' });
+    geoCtrl.onAdd = function () {
+      const bar = L.DomUtil.create('div', 'leaflet-bar geo-locate-bar');
+      const a = L.DomUtil.create('a', '', bar);
+      a.href = '#';
+      a.title = '定位到我嘅位置';
+      a.setAttribute('role', 'button');
+      a.setAttribute('aria-label', '定位到我嘅位置');
+      a.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>';
+      L.DomEvent.on(a, 'click', function (e) {
+        L.DomEvent.preventDefault(e);
+        locateOnce();
+      });
+      L.DomEvent.disableClickPropagation(a);
+      return bar;
+    };
+    geoCtrl.addTo(state.map);
+
     L.control.zoom({
       position: 'topleft',
       zoomInText: '+',
