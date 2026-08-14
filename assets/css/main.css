@@ -1,7 +1,9 @@
 /* =========================================================
-   樹木管理系統 main.css v2.60
+   樹木管理系統 main.css v2.61
+   - 改進：動畫曲線優化、焦點可見性、觸控回饋、效能提升
    - 修正：平板/細視窗桌面 bar 被推去左邊（left: auto）
    - 修正：filter 面板開住時隱藏狀態雲（body:has）
+   - 新增：focus-visible、高對比模式、滾動條優化
    ========================================================= */
 
 /* ================= 1. 全域變數 ================= */
@@ -21,6 +23,9 @@
   --overlay-bg: rgba(0,0,0,0.3);
   --glass-border: rgba(255, 255, 255, 0.4);
   --glass-blur: blur(12px) saturate(180%);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -57,13 +62,27 @@ input, textarea, select, .leaflet-popup-content, #panel, .sr-item, .log, .legend
   user-select: text;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
 
 #map { height: 100%; width: 100%; }
 button { touch-action: manipulation; cursor: pointer; }
+
+/* 文字選取樣式 */
+::selection { background: rgba(46, 125, 50, 0.2); }
+::-moz-selection { background: rgba(46, 125, 50, 0.2); }
+
+/* 焦點可見性（無障礙） */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* ================= 3. 頂部控制列 ================= */
 #bar {
@@ -72,6 +91,7 @@ button { touch-action: manipulation; cursor: pointer; }
   width: 300px;
   padding-top: var(--safe-top);
   pointer-events: none;
+  transition: transform 0.3s var(--ease-out);
 }
 
 #bar select,
@@ -90,7 +110,7 @@ button { touch-action: manipulation; cursor: pointer; }
   width: 100%; max-width: none; flex: none;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease, background 0.3s;
 }
 #bar select:focus {
   border-color: var(--accent);
@@ -103,7 +123,7 @@ button { touch-action: manipulation; cursor: pointer; }
   box-shadow: 0 2px 6px rgba(46, 125, 50, 0.3);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  transition: transform 0.08s ease, background 0.2s, box-shadow 0.2s;
+  transition: transform 0.08s var(--ease-spring), background 0.2s, box-shadow 0.2s;
 }
 #bar button.blue { background: var(--accent); box-shadow: 0 2px 6px rgba(21, 101, 192, 0.3); }
 #bar button:active { transform: scale(0.96); }
@@ -131,6 +151,7 @@ button { touch-action: manipulation; cursor: pointer; }
   -webkit-backdrop-filter: var(--glass-blur);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.2s;
   box-sizing: border-box;
+  caret-color: var(--accent);
 }
 .search-wrap input:focus {
   border-color: var(--primary);
@@ -153,9 +174,10 @@ button { touch-action: manipulation; cursor: pointer; }
   border: 1px solid rgba(0,0,0,.1);
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 .search-results[style*="display: block"] {
-  animation: fadeSlideDown 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: fadeSlideDown 0.25s var(--ease-out) forwards;
 }
 @keyframes fadeSlideDown {
   from { opacity: 0; transform: translateY(-8px); }
@@ -173,13 +195,14 @@ button { touch-action: manipulation; cursor: pointer; }
   align-items: center;
   gap: 10px;
   border-bottom: 1px solid rgba(0,0,0,.06);
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, transform 0.1s ease;
   font-size: 14px;
   content-visibility: auto;
   contain-intrinsic-size: 44px;
 }
 .sr-item:last-child { border-bottom: none; }
 .sr-item:hover { background: rgba(46, 125, 50, 0.08); }
+.sr-item:active { transform: scale(0.98); }
 .sr-item.sr-hint {
   color: var(--muted);
   cursor: default;
@@ -216,7 +239,7 @@ button { touch-action: manipulation; cursor: pointer; }
   max-height: 85vh; overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity 0.25s var(--ease-out), transform 0.25s var(--ease-out);
   transform: translate(-50%, -50%) translateY(14px) scale(.97);
   opacity: 0; pointer-events: none;
   will-change: transform, opacity;
@@ -234,7 +257,7 @@ body.panel-open::before {
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   z-index: 1199;
-  animation: fadeIn 0.25s ease-out;
+  animation: fadeIn 0.25s var(--ease-out);
   pointer-events: auto;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -243,7 +266,8 @@ body.panel-open::before {
   width: 100%; padding: 11px; margin-top: 6px;
   border: 1px solid #ccc; border-radius: 8px; font-size: 15px; box-sizing: border-box;
   background: var(--card-bg); color: var(--text);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s var(--ease-out);
+  caret-color: var(--accent);
 }
 #panel input:focus, #panel select:focus, #panel textarea:focus {
   border-color: var(--primary);
@@ -255,7 +279,7 @@ body.panel-open::before {
   width: 100%; padding: 12px; margin-top: 10px; border: none;
   border-radius: 8px; background: var(--primary); color: #fff; font-size: 16px; font-weight: 500;
   box-shadow: 0 2px 6px rgba(46, 125, 50, 0.2);
-  transition: transform 0.08s ease, background 0.2s;
+  transition: transform 0.08s var(--ease-spring), background 0.2s, box-shadow 0.2s;
 }
 #panel button:active { transform: scale(0.97); }
 #panel .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -275,7 +299,7 @@ body.panel-open::before {
   pointer-events: none;
   border: 1px solid var(--glass-border);
   transition: opacity .3s, background .3s, border-color .3s, color .3s,
-              transform .35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow .35s ease,
+              transform .35s var(--ease-out), box-shadow .35s ease,
               visibility 0s linear 0s;
 }
 #status.status-front {
@@ -297,6 +321,7 @@ body:has(.filter-panel) #status {
   padding: 8px 12px; border-radius: 8px; font-size: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,.1); line-height: 1.7;
   border: 1px solid var(--glass-border);
+  transition: background 0.3s, color 0.3s, border-color 0.3s;
 }
 
 /* ================= 7. 地圖標記動畫 ================= */
@@ -304,13 +329,13 @@ body:has(.filter-panel) #status {
   background: var(--accent); color: #fff; border-radius: 6px;
   padding: 3px 8px; font-size: 13px; font-weight: 600; border: 2px solid #fff;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,.3));
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s var(--ease-spring);
   will-change: transform;
 }
 .prjIcon:hover { transform: scale(1.15) rotate(3deg); }
 
-.leaflet-marker-icon { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.leaflet-marker-dragging { transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.leaflet-marker-icon { transition: transform 0.15s var(--ease-spring); }
+.leaflet-marker-dragging { transition: transform 0.12s var(--ease-spring); }
 
 .leaflet-interactive {
   transition: fill-opacity 0.2s ease, stroke-width 0.2s ease, stroke 0.2s ease;
@@ -334,11 +359,12 @@ body:has(.filter-panel) #status {
   border-radius: 10px; padding: 4px; display: flex; gap: 4px;
   box-shadow: 0 4px 12px rgba(0,0,0,.1);
   border: 1px solid var(--glass-border);
+  transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
 .layerbar button {
   border: none; background: transparent; border-radius: 8px;
   padding: 8px 12px; font-size: 13px; color: #555; font-weight: 500;
-  transition: all 0.15s ease;
+  transition: all 0.15s var(--ease-in-out);
 }
 .layerbar button.on { background: var(--accent); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
 .layerbar button:active { transform: scale(0.95); }
@@ -346,7 +372,7 @@ body:has(.filter-panel) #status {
 button.drawer-action {
   border: none; border-radius: 8px;
   padding: 8px 12px; font-size: 13px; font-weight: 600;
-  transition: all 0.15s ease;
+  transition: all 0.15s var(--ease-in-out);
 }
 button.drawer-action.act-project {
   background: rgba(21, 101, 192, 0.12);
@@ -377,6 +403,7 @@ button.drawer-action:active { transform: scale(0.95); }
   box-shadow: 0 10px 30px rgba(0,0,0,.15) !important;
   background: var(--card-bg) !important;
   color: var(--text) !important;
+  transition: background 0.3s, color 0.3s;
 }
 .leaflet-popup-content {
   margin: 14px 16px 16px 16px !important;
@@ -397,7 +424,7 @@ button.drawer-action:active { transform: scale(0.95); }
   padding: 10px 14px; font-size: 14px; border: none; border-radius: 8px;
   background: var(--accent); color: #fff; cursor: pointer; margin-top: 8px;
   width: 100%; font-weight: 500;
-  transition: background 0.2s, transform 0.08s;
+  transition: background 0.2s, transform 0.08s var(--ease-spring);
 }
 .leaflet-popup-content button:hover { background: var(--accent-dark); }
 .leaflet-popup-content button:active { transform: scale(0.98); }
@@ -406,7 +433,7 @@ button.drawer-action:active { transform: scale(0.95); }
   display: block; margin-top: 12px; padding: 12px 16px;
   background: var(--primary); color: #fff !important; text-decoration: none;
   border-radius: 8px; font-weight: 600; text-align: center; width: 100%;
-  box-sizing: border-box; transition: background 0.2s, transform 0.1s;
+  box-sizing: border-box; transition: background 0.2s, transform 0.1s var(--ease-spring);
   box-shadow: 0 2px 6px rgba(46, 125, 50, 0.3);
 }
 .leaflet-popup-content a:hover { background: var(--primary-dark); }
@@ -429,7 +456,7 @@ button.drawer-action:active { transform: scale(0.95); }
   position: absolute; inset: 6px; border-radius: 50%;
   background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s var(--ease-spring);
 }
 .leaflet-popup-close-button::after {
   content: '×';
@@ -479,6 +506,8 @@ button.is-loading::after {
     align-items: center;
     justify-content: center;
   }
+  /* 觸控裝置增加點擊面積 */
+  .leaflet-popup-close-button { width: 48px !important; height: 48px !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -487,6 +516,23 @@ button.is-loading::after {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* 高對比模式 */
+@media (prefers-contrast: more) {
+  :root {
+    --text: #000;
+    --muted: #333;
+    --glass-border: rgba(0, 0, 0, 0.4);
+  }
+  #bar select, .search-wrap input, #bar button {
+    background: #fff;
+    border: 2px solid #000;
+  }
+  #panel input, #panel select, #panel textarea {
+    background: #fff;
+    border: 2px solid #000;
   }
 }
 
@@ -552,7 +598,7 @@ button.is-loading::after {
     color: #fff;
     font-size: 18px;
     box-shadow: 0 4px 16px rgba(0,0,0,.35);
-    transition: transform .2s cubic-bezier(0.34,1.56,0.64,1), background .2s;
+    transition: transform .2s var(--ease-spring), background .2s;
   }
   .layerbar-fab:active { transform: scale(.92); }
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
@@ -576,7 +622,7 @@ button.is-loading::after {
   }
   .layerbar-wrap.open .layerbar {
     display: flex;
-    animation: sheetUp .22s cubic-bezier(0.2, 0.8, 0.2, 1);
+    animation: sheetUp .22s var(--ease-out);
   }
   .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
   .drawer-sep { width: auto; height: 1px; align-self: auto; margin: 4px 2px; }
@@ -590,7 +636,7 @@ button.is-loading::after {
     content: '▸';
     font-size: 12px;
     color: var(--muted);
-    transition: transform .15s ease;
+    transition: transform .15s var(--ease-in-out);
   }
   .layerbar .drawer-cat.open::after { content: '▾'; }
   .layerbar .drawer-sub {
@@ -624,7 +670,7 @@ button.is-loading::after {
     border-radius: 18px !important;
     padding: 0 !important;
     box-shadow: 0 12px 40px rgba(0,0,0,.3) !important;
-    animation: sheetUp .25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    animation: sheetUp .25s var(--ease-out);
   }
   .leaflet-popup-content {
     margin: 12px 16px 14px !important;
@@ -740,17 +786,20 @@ button.is-loading::after {
   padding: 10px; display: flex; flex-wrap: wrap; gap: 6px;
   max-width: 320px;
   border: 1px solid var(--glass-border);
-  animation: sheetUp .2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: sheetUp .2s var(--ease-out);
+  transition: background 0.3s, border-color 0.3s;
 }
 .filter-title { width: 100%; font-size: 13px; font-weight: 600; color: var(--muted); }
 .filter-chip {
   border: 1px solid rgba(128,128,128,.35); background: transparent;
   color: var(--text); border-radius: 999px; padding: 6px 12px;
   font-size: 13px; display: flex; align-items: center; gap: 6px;
-  opacity: .4; transition: all .15s ease;
+  opacity: .4; transition: all .15s var(--ease-in-out);
+  cursor: pointer;
 }
 .filter-chip .fc-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
 .filter-chip.on { opacity: 1; border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c); }
+.filter-chip:active { transform: scale(0.96); }
 
 /* ================= 🖥 電腦版：工具／定位／filter 從 layerbar 移到專屬位置 ================= */
 @media (min-width: 601px) {
@@ -773,7 +822,7 @@ button.is-loading::after {
   font-size: 15px; background: rgba(255,255,255,0.85); color: var(--text);
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
   backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-  transition: background 0.2s, color 0.2s, border-color 0.15s;
+  transition: background 0.2s, color 0.2s, border-color 0.15s, box-shadow 0.2s;
 }
 #filterBtn.filter-btn svg { flex-shrink: 0; }
 #filterBtn.filter-btn.on {
@@ -795,9 +844,11 @@ button.is-loading::after {
   font-size: 16px; text-align: center; color: #333;
   text-decoration: none; display: block; background: #fff;
   border-bottom: 1px solid #ccc !important;
+  transition: background 0.2s, transform 0.1s var(--ease-spring);
 }
 .leaflet-control .gis-btn:last-child { border-bottom: none !important; }
 .leaflet-control .gis-btn:hover { background: #f4f4f4; }
+.leaflet-control .gis-btn:active { transform: scale(0.95); }
 .leaflet-touch .leaflet-control .gis-btn { width: 40px; height: 40px; line-height: 40px; font-size: 18px; }
 /* 手機版：隱藏全螢幕＋工具 icon bar（工具已喺箭咀抽屜入面） */
 @media (max-width: 600px) {
@@ -828,11 +879,13 @@ button.is-loading::after {
   background: rgba(255,255,255,.95); border-radius: 999px; padding: 6px 10px;
   box-shadow: 0 4px 16px rgba(0,0,0,.2); border: 1px solid var(--glass-border);
   backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  transition: background 0.3s, border-color 0.3s;
 }
 .interact-bar .ib-readout { font-size: 13px; font-weight: 600; color: var(--accent); min-width: 130px; text-align: center; white-space: nowrap; }
-.interact-bar button { border: none; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; }
+.interact-bar button { border: none; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; transition: transform 0.1s var(--ease-spring); }
 .interact-bar .ib-done { background: var(--primary); color: #fff; }
 .interact-bar .ib-cancel { background: rgba(0,0,0,.08); color: var(--text); }
+.interact-bar button:active { transform: scale(0.95); }
 
 /* 量測結果 tooltip */
 .measure-tip {
@@ -845,8 +898,10 @@ button.is-loading::after {
 #panel .pick-loc-btn {
   background: var(--accent); color: #fff; width: 100%; padding: 12px;
   border: none; border-radius: 8px; font-size: 14px; font-weight: 600; margin-top: 8px;
+  transition: background 0.2s, transform 0.08s var(--ease-spring);
 }
 #panel .pick-loc-btn:hover { background: var(--accent-dark); }
+#panel .pick-loc-btn:active { transform: scale(0.98); }
 
 /* 深色模式 */
 @media (prefers-color-scheme: dark) {
@@ -854,4 +909,21 @@ button.is-loading::after {
   .leaflet-control .gis-btn:hover { background: #37403a; }
   .interact-bar { background: rgba(30, 36, 30, .95); }
   .interact-bar .ib-cancel { background: rgba(255,255,255,.1); color: #e0e0e0; }
+}
+
+/* ================= 🚀 效能與微互動 ================= */
+/* 減少佈局抖動，僅對需要動畫的元素使用 will-change */
+#panel, .leaflet-popup-content-wrapper, .layerbar-wrap, .filter-panel {
+  will-change: transform, opacity;
+}
+/* 針對 hover 裝置優化，觸控裝置避免 hover 影響 */
+@media (hover: hover) {
+  .leaflet-popup-close-button:hover::before { background: rgba(0,0,0,0.5); }
+  #bar button:hover { box-shadow: 0 4px 10px rgba(46,125,50,0.4); }
+  #bar button.blue:hover { box-shadow: 0 4px 10px rgba(21,101,192,0.4); }
+}
+/* 觸控裝置移除 hover 效果 */
+@media (hover: none) {
+  .sr-item:hover { background: transparent; }
+  .leaflet-interactive:hover { fill-opacity: 0.2 !important; stroke-width: 2 !important; }
 }

@@ -20,6 +20,14 @@ let barEl = null;
 const LINE_STYLE = { color: '#1565c0', weight: 3 };
 const AREA_STYLE = { color: '#1565c0', weight: 2, fillColor: '#1565c0', fillOpacity: 0.15 };
 
+// 🔥 修復：量測圖形改用 SVG renderer（否則用 map 預設 Canvas renderer，
+// 會生成覆蓋全視窗嘅 canvas 並食晒點擊，令下方樹木撳唔到）
+let svgRenderer = null;
+function getSvgRenderer() {
+  if (!svgRenderer) svgRenderer = L.svg({ padding: 0.5 });
+  return svgRenderer;
+}
+
 export function getMode() { return mode; }
 
 function setCrosshair(on) {
@@ -60,11 +68,12 @@ function render() {
   vertexLayer = L.layerGroup().addTo(state.map);
   pts.forEach(function (p) {
     vertexLayer.addLayer(L.circleMarker(p, {
-      radius: 5, color: '#fff', weight: 1.5, fillColor: '#1565c0', fillOpacity: 1
+      radius: 5, color: '#fff', weight: 1.5, fillColor: '#1565c0', fillOpacity: 1,
+      renderer: getSvgRenderer()
     }));
   });
   if (pts.length >= 2) {
-    shape = (mode === 'line' ? L.polyline : L.polygon)(pts, (mode === 'line' ? LINE_STYLE : AREA_STYLE)).addTo(state.map);
+    shape = (mode === 'line' ? L.polyline : L.polygon)(pts, Object.assign({}, (mode === 'line' ? LINE_STYLE : AREA_STYLE), { renderer: getSvgRenderer() })).addTo(state.map);
   }
 }
 
@@ -123,7 +132,7 @@ function onMouseMove(e) {
   if (barEl) barEl.querySelector('.ib-readout').textContent = text;
 
   if (rubber) state.map.removeLayer(rubber);
-  rubber = L.polyline([pts[pts.length - 1], e.latlng], { color: '#1565c0', weight: 2, dashArray: '4 6', opacity: 0.6 }).addTo(state.map);
+  rubber = L.polyline([pts[pts.length - 1], e.latlng], { color: '#1565c0', weight: 2, dashArray: '4 6', opacity: 0.6, renderer: getSvgRenderer() }).addTo(state.map);
 }
 
 function finishShape() {
@@ -133,7 +142,7 @@ function finishShape() {
     const donePts = pts.slice();
     const len = computeLength(donePts);
     removeFinal();
-    finalLayer = L.polyline(donePts, LINE_STYLE).addTo(state.map);
+    finalLayer = L.polyline(donePts, Object.assign({}, LINE_STYLE, { renderer: getSvgRenderer() })).addTo(state.map);
     bindTooltip(finalLayer, '📏 ' + fmtLen(len));
     updateStatus('✅ 量距完成：' + fmtLen(len));
     resetInteraction();
@@ -145,7 +154,7 @@ function finishShape() {
     const area = computeArea(donePts);
     const len = computeLength(donePts);
     removeFinal();
-    finalLayer = L.polygon(donePts, AREA_STYLE).addTo(state.map);
+    finalLayer = L.polygon(donePts, Object.assign({}, AREA_STYLE, { renderer: getSvgRenderer() })).addTo(state.map);
     bindTooltip(finalLayer, '📐 ' + fmtArea(area) + '｜周 ' + fmtLen(len));
     const cb = polygonCb;
     resetInteraction();
