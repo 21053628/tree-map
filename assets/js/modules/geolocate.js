@@ -8,6 +8,16 @@ import { updateStatus } from './dom.js';
 
 let watchId = null;
 
+// 🔥 修復：精準度圓圈專用 SVG renderer（否則用 map 預設 Canvas renderer，
+// 會生成覆蓋全視窗嘅 canvas 並食晒點擊，令下方樹木撳唔到）
+let circleRenderer = null;
+function getCircleRenderer() {
+  if (!circleRenderer) {
+    circleRenderer = L.svg();
+  }
+  return circleRenderer;
+}
+
 function dotIcon() {
   return L.divIcon({
     className: '',
@@ -38,7 +48,8 @@ function drawPosition(lat, lng, accuracy, fly) {
   if (accuracy) {
     state.geolocation.circle = L.circle([lat, lng], {
       radius: accuracy, color: '#1e88e5', weight: 1,
-      fillColor: '#1e88e5', fillOpacity: 0.08, interactive: false
+      fillColor: '#1e88e5', fillOpacity: 0.08, interactive: false,
+      renderer: getCircleRenderer()
     }).addTo(state.map);
   }
   if (fly) {
