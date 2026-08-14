@@ -170,9 +170,8 @@ export function initMap() {
         '<div class="drawer-sub" data-sub="tools">' +
           '<button data-act="measureLine">📏 距離</button>' +
           '<button data-act="measureArea">📐 面積</button>' +
-          '<button data-act="locate">📍 定位</button>' +
-          '<button data-act="clearDrawings">✕ 清除</button>' +
           '<button data-act="drawPolygon">🖍 邊界</button>' +
+          '<button data-act="clearDrawings">✕ 清除</button>' +
         '</div>' +
         '<button class="drawer-cat" data-cat="layers">🗺️ 圖層</button>' +
         '<div class="drawer-sub" data-sub="layers">' +
