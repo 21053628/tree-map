@@ -16,6 +16,17 @@ export function escapeHtml(str) {
     .replace(/'/g, A + '#39;');
 }
 
+// ID 白名單驗證（防 NFC／URL 注入）：只容許字母（含中文）、數字、點、底線、連字號
+// 拒絕空白與所有 HTML/JS 特殊字元，並限制長度，回傳空字串代表不合法
+export function sanitizeId(value) {
+  if (value === null || value === undefined) return '';
+  const s = String(value).trim();
+  if (!s) return '';
+  if (s.length > 64) return '';
+  const ok = /^[\p{L}\p{N}._-]+$/u.test(s);
+  return ok ? s : '';
+}
+
 // 防抖
 export function debounce(fn, delay) {
   let timer = null;

@@ -8,6 +8,7 @@ import { buildSelect } from './projects.js';
 import { drawProjects } from './projects.js';
 import { drawTrees, bringTreeToFront } from './trees.js';
 import { emit } from '../core/event-bus.js'; // 🔥 [Phase4] 事件解耦，移除對 map.js 的直接依賴
+import { sanitizeId } from '../core/utils.js';
 
 export function saveViewState(treeId, lat, lng) {
   // 🔥 [v2.44] 移除 localStorage 儲存，F5 刷新時不再跳回上次位置
@@ -119,8 +120,8 @@ export function locateTree(treeId, projectId, lat, lng) {
 
 export function checkURLParams() {
   const params = new URLSearchParams(location.search);
-  let treeId = params.get('tree_id');
-  let projectId = params.get('project_id');
+  let treeId = sanitizeId(params.get('tree_id'));
+  let projectId = sanitizeId(params.get('project_id'));
   let lat = params.get('lat');
   let lng = params.get('lng');
 

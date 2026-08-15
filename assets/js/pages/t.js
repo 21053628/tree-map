@@ -15,6 +15,14 @@
 
   const escapeHtml = window.TreeUtils.escapeHtml;
 
+  // DOMPurify 兜底（保留本頁 rely 嘅 inline onclick/onerror，其餘一律淨化）
+  function sanitizeHTML(html) {
+    if (typeof DOMPurify !== 'undefined') {
+      return DOMPurify.sanitize(html, { ADD_ATTR: ['onclick', 'onerror'] });
+    }
+    return html;
+  }
+
   const $ = function(s){ return document.querySelector(s); };
 
   // 🔥 [Phase6] 座標轉換收斂到共用 CoordLazy service（保留 lazy proj4 效能）
@@ -25,8 +33,9 @@
   const f5 = window.TreeUtils.format5;
 
   const params = new URLSearchParams(location.search);
-  const id  = params.get('id') || params.get('tree_id') || '';
-  const prj = params.get('prj') || params.get('project_id') || '';
+  const sanitizeId = (window.TreeUtils && window.TreeUtils.sanitizeId) || function () { return ''; };
+  const id  = sanitizeId(params.get('id') || params.get('tree_id') || '');
+  const prj = sanitizeId(params.get('prj') || params.get('project_id') || '');
   let TREE = null;
 
   window.goBackToMap = function(e){
@@ -77,14 +86,14 @@
         }
         const t = res.data;
         if(!t){
-          $('#app').innerHTML = '<div class="card error">❌ 搵唔到樹木：<b>' + id + '</b></div>';
+          $('#app').innerHTML = '<div class="card error">❌ 搵唔到樹木：<b>' + escapeHtml(id) + '</b></div>';
           return;
         }
         TREE = t; render(t); initMiniMap(t); loadLogs();
       })
       .catch(function(err){
         console.error('Fetch error:', err);
-        $('#app').innerHTML = '<div class="card error">❌ 後端連線失敗：<br>' + err.message + '</div>';
+        $('#app').innerHTML = '<div class="card error">❌ 後端連線失敗：<br>' + escapeHtml(err.message) + '</div>';
       });
   }
 
@@ -135,7 +144,7 @@
       '<span class="modal-close">&times;</span>' +
       '<img id="modalImg" src="" alt="放大圖片" crossorigin="anonymous" referrerpolicy="no-referrer">' +
     '</div>';
-    $('#app').innerHTML = html;
+    $('#app').innerHTML = sanitizeHTML(html);
 
     const hk = await hkPromise;
     if(hk){
@@ -479,7 +488,7 @@
           html += '<div class="log"><span class="ok">' + escapeHtml(r.health) + '</span>｜' +
                  escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>';
         });
-        $('#logs').innerHTML = html;
+        $('#logs').innerHTML = sanitizeHTML(html);
       })
       .catch(function(err){
         console.error('Load logs error:', err);

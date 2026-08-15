@@ -14,7 +14,7 @@ const Config = {
   
   // 認證配置
   AUTH: {
-    SESSION_DURATION: 6 * 60 * 60 * 1000, // 6 小時
+    SESSION_DURATION: 4 * 60 * 60 * 1000, // 4 小時（縮短以降低 token 洩漏風險）
     STORAGE_KEY: 'tree_staff_token'
   },
   

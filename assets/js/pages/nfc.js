@@ -11,6 +11,9 @@ const escapeHtml = (window.TreeUtils && window.TreeUtils.escapeHtml)
     return String(s).replace(/&/g, A + 'amp;').replace(/</g, A + 'lt;').replace(/>/g, A + 'gt;');
   };
 
+const sanitizeId = (window.TreeUtils && window.TreeUtils.sanitizeId)
+  || function (s) { return String(s || '').replace(/[^A-Za-z0-9._-]/g, ''); };
+
 const TAG_CAPACITY = { '213': 144, '215': 504, '216': 888 };
 const TAG_LABELS = { '213': 'NTAG213', '215': 'NTAG215', '216': 'NTAG216' };
 
@@ -52,8 +55,8 @@ function autoImportFromURL(url) {
     const p = u.searchParams;
 
     // 支援兩種參數名（舊版 tree_id / 新版 id）
-    const tid = p.get('tree_id') || p.get('id') || '';
-    const pid = p.get('project_id') || p.get('prj') || '';
+    const tid = sanitizeId(p.get('tree_id') || p.get('id') || '');
+    const pid = sanitizeId(p.get('project_id') || p.get('prj') || '');
 
     if (tid) {
       document.getElementById('treeId').value = tid;
@@ -88,11 +91,11 @@ function goBack(e) {
 }
 
 function generateURL(silent) {
-  const treeId = document.getElementById('treeId').value.trim();
-  const projectId = document.getElementById('projectId').value.trim();
+  const treeId = sanitizeId(document.getElementById('treeId').value.trim());
+  const projectId = sanitizeId(document.getElementById('projectId').value.trim());
 
   if (!treeId) {
-    alert('⚠️ 請輸入樹木編號');
+    alert('⚠️ 樹木編號格式不正確（只可用英數、點、底線、連字號）');
     return;
   }
 

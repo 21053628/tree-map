@@ -20,9 +20,20 @@
   function format1(n) { return Number(n).toFixed(1); }
   function format5(n) { return Number(n).toFixed(5); }
 
+  // ID 白名單驗證（防 NFC／URL 注入）：只容許字母（含中文）、數字、點、底線、連字號
+  function sanitizeId(value) {
+    if (value === null || value === undefined) return '';
+    const s = String(value).trim();
+    if (!s) return '';
+    if (s.length > 64) return '';
+    const ok = /^[\p{L}\p{N}._-]+$/u.test(s);
+    return ok ? s : '';
+  }
+
   window.TreeUtils = {
     escapeHtml: escapeHtml,
     format1: format1,
-    format5: format5
+    format5: format5,
+    sanitizeId: sanitizeId
   };
 })();

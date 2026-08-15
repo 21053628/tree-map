@@ -62,19 +62,13 @@
       ? Config.AUTH.STORAGE_KEY
       : 'tree_staff_token';
     try {
-      var raw = localStorage.getItem(TOKEN_KEY);
+      // token 改放 sessionStorage（與 AuthService 一致，XSS 洩漏面較小）
+      var raw = window.sessionStorage.getItem(TOKEN_KEY);
       if (!raw) return null;
       var data = JSON.parse(raw);
       if (data && data.token && data.until > Date.now()) return data.token;
     } catch (e) {}
     return null;
-  }
-
-  function attachToken(payload) {
-    if (!payload) payload = {};
-    var tk = getCurrentToken();
-    if (tk && !payload.token) payload.token = tk; // 避免覆蓋已存在的 token
-    return payload;
   }
 
   // ========== IndexedDB 操作（Promise 化） ==========
@@ -366,12 +360,21 @@
     return count;
   }
 
+  // 寫入 outbox 前移除 token，確保敏感憑證唔會明文殘留喺 IndexedDB
+  function stripToken(payload) {
+    if (payload && typeof payload === 'object' && 'token' in payload) {
+      delete payload.token;
+    }
+    return payload;
+  }
+
   // ========== 攔截 ApiService ==========
   if (typeof ApiService !== 'undefined') {
     var origPost = ApiService.post;
     ApiService.post = async function(payload) {
       if (!navigator.onLine) {
-        await push(attachToken(payload));
+        // 🔐 唔將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）
+        await push(stripToken(payload));
         pwaToast('📥 離線暫存：有網路時自動上傳');
         return { ok: true, queued: true };
       }
@@ -384,7 +387,8 @@
         var isNetworkError = (err instanceof TypeError) || !navigator.onLine || err.message === 'TIMEOUT';
         var isServerError = (err && err.status && err.status >= 500);
         if (isNetworkError || isServerError) {
-          await push(attachToken(payload));
+          // 🔐 唔將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）
+          await push(stripToken(payload));
           pwaToast('📥 網路不穩，已離線暫存');
           return { ok: true, queued: true };
         }

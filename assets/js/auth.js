@@ -9,14 +9,20 @@ const AuthService = (function() {
   const TOKEN_KEY = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.STORAGE_KEY)
     ? Config.AUTH.STORAGE_KEY
     : 'tree_staff_token';
-  // 🔥 [更新] 統一由 Config.AUTH.SESSION_DURATION 管理，預設 6 小時
+  // 🔥 [更新] 統一由 Config.AUTH.SESSION_DURATION 管理，預設縮短至 4 小時
   const SESSION_DURATION = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.SESSION_DURATION)
     ? Config.AUTH.SESSION_DURATION
-    : 6 * 60 * 60 * 1000;
+    : 4 * 60 * 60 * 1000;
+
+  // token 改放 sessionStorage（XSS 洩漏面較小，關閉分頁即失效）
+  function getStore() {
+    try { return window.sessionStorage; } catch (e) { return null; }
+  }
 
   function getToken() {
     try {
-      const raw = localStorage.getItem(TOKEN_KEY);
+      const store = getStore();
+      const raw = store ? store.getItem(TOKEN_KEY) : null;
       if (!raw) return null;
       const obj = JSON.parse(raw);
       if (obj && obj.token && obj.until > Date.now()) return obj.token;
@@ -38,10 +44,13 @@ const AuthService = (function() {
       });
       const res = await response.json();
       if (res && res.ok && res.token) {
-        localStorage.setItem(TOKEN_KEY, JSON.stringify({
-          token: res.token,
-          until: Date.now() + SESSION_DURATION
-        }));
+        const store = getStore();
+        if (store) {
+          store.setItem(TOKEN_KEY, JSON.stringify({
+            token: res.token,
+            until: Date.now() + SESSION_DURATION
+          }));
+        }
         return true;
       }
       return false;
@@ -52,7 +61,8 @@ const AuthService = (function() {
   }
 
   function logout() {
-    localStorage.removeItem(TOKEN_KEY);
+    const store = getStore();
+    if (store) store.removeItem(TOKEN_KEY);
   }
 
   /* 工作人員閘：已登入直接放行；未登入彈密碼框驗證 */
