@@ -11,7 +11,7 @@ const ApiService = (function() {
 
   // 🔥 [v2.3] 極限超時設定
   const DEFAULT_TIMEOUT = 8000;      // 8秒：用戶交互請求 (如 get tree details)
-  const BACKGROUND_TIMEOUT = 30000;  // 🔥 [v2.4] 30秒：UI 唔會被阻塞（三段式已秒開），俾足時間等 GAS 冷啟動
+  const BACKGROUND_TIMEOUT = 30000;  // 🔥 30秒：俾足時間等 GAS 冷啟動（bootstrap 背景刷新，唔阻塞 UI）
   const POST_TIMEOUT = 20000;        // 20秒：寫入請求 (需要確保成功)
   
   const MAX_RETRIES = 1;             // 只重試 1 次 (針對偶發網路波動)
@@ -127,7 +127,7 @@ const ApiService = (function() {
     requestCount++;
     const url = apiEndpoint + '?action=' + action + (queryString ? '&' + queryString : '');
     
-    // 🔥 [v2.3] 3秒極速放棄：bootstrap 只等 3 秒，超時即刻交俾 offline.js 用本地快取
+    // 🔥 bootstrap 背景刷新用較長超時；超時後由 offline.js 回退本地快取
     const isBackground = (action === 'bootstrap');
     const timeout = isBackground ? BACKGROUND_TIMEOUT : DEFAULT_TIMEOUT;
     

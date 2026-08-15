@@ -63,6 +63,7 @@ const LABEL_MAX_COUNT = 400;
 let labelMode = 'auto';
 let labelLayer = null;
 let _labelTimer = null;
+let _lastLabelZoom = null; // 🔥 記錄上次 label 刷新時嘅 zoom，平移時唔重建 label
 
 function labelsShouldShow(){
   if (labelMode === 'on') return true;
@@ -106,6 +107,7 @@ export function toggleTreeLabels(){
 // 🔥 重建標籤層（只渲染可見範圍，性能保護）
 export function refreshLabels(){
   if (!state.map) return;
+  _lastLabelZoom = state.map.getZoom(); // 🔥 記錄當前 zoom
   if (labelLayer) { state.map.removeLayer(labelLayer); labelLayer = null; }
   if (!labelsShouldShow() || !state.curProject) return;
 
@@ -260,7 +262,14 @@ export function drawTrees(silent) {
   state.perfMetrics.totalRenders++;
   state.perfMetrics.renderTime = performance.now() - startTime;
 
-  refreshLabels();
+  // 🔥 [優化] 平移重繪（silent）唔重建 label（Leaflet 會自動跟住移動），
+  // 只有 zoom 變化（或非 silent 的全量重繪）先至重建，避免重複 DOM 操作
+  if (silent) {
+    const z = state.map ? state.map.getZoom() : null;
+    if (z !== _lastLabelZoom) refreshLabels();
+  } else {
+    refreshLabels();
+  }
   updateLabelBtn(); 
 
   // 🔥 [Phase1] 平移地圖觸發的 silent 重繪不再刷狀態列（避免 MutationObserver 動畫與樣式切換）

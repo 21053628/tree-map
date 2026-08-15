@@ -170,6 +170,22 @@ function buildLotPopup_(a) {
   return html || '<b>🗺️ 私人地段</b>';
 }
 
+// 🔥 [優化] 可中止 fetch：避開弱網長期掛住，失敗靜默降級（唔會噴 error 阻住 UI）
+function fetchTimeout(url, timeout) {
+  return new Promise((resolve, reject) => {
+    const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const signal = controller ? controller.signal : null;
+    const timer = setTimeout(() => {
+      if (controller) controller.abort();
+      reject(new Error('TIMEOUT'));
+    }, timeout);
+    const opts = {};
+    if (signal) opts.signal = signal;
+    fetch(url, opts).then((r) => { clearTimeout(timer); resolve(r); })
+      .catch((err) => { clearTimeout(timer); reject(err); });
+  });
+}
+
 function renderLots(polygons) {
   state.lotLayer.clearLayers();
   const fragment = L.layerGroup();
@@ -214,7 +230,7 @@ function loadLots() {
 
   const url = `https://mapapi.geodata.gov.hk/gs/api/v1.0.0/iC1000/lot?bbox=${minX},${minY},${maxX},${maxY},EPSG:2326`;
 
-  fetch(url)
+  fetchTimeout(url, 8000)
     .then((r) => {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.text();
@@ -225,7 +241,7 @@ function loadLots() {
       renderLots(polygons);
     })
     .catch((err) => {
-      console.error('❌ 載入地段索引失敗:', err);
+      if (err && err.message !== 'TIMEOUT') console.warn('⚠️ 載入地段索引失敗:', err && err.message);
     });
 }
 

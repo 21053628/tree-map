@@ -76,7 +76,6 @@ export function drawProjects() {
 
   state.perfMetrics.totalRenders++;
   state.perfMetrics.renderTime = performance.now() - startTime;
-  console.log('📊 地盤渲染耗時:', state.perfMetrics.renderTime.toFixed(2), 'ms');
 }
 
 function performFlyTo(pid) {

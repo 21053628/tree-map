@@ -119,17 +119,6 @@
   }
 
   function all() {
-    return txPromise(STORE, 'readonly', function(store) {
-      var req = store.getAll();
-      return new Promise(function(resolve, reject) {
-        req.onsuccess = function() { resolve(req.result || []); };
-        req.onerror = function() { reject(req.error); };
-      });
-    }).then(function(promise) { return promise; }); // 注意：txPromise 的 callback 回傳 Promise 需要特殊處理，我們改為直接寫
-  }
-
-  // 由於上述 txPromise 的設計無法直接回傳異步結果，我們改用直接寫法
-  function all() {
     return openDB().then(function(db) {
       return new Promise(function(resolve, reject) {
         var tx = db.transaction(STORE, 'readonly');

@@ -50,7 +50,7 @@
   <select id="projSel"></select>
   <button class="blue" id="addProjectBtn">＋ 建立地盤</button>
   <button id="addTreeBtn" class="ghost-hidden">🌳 新增樹木</button>
-  
+
   <!-- 🔥 樹木搜尋框 -->
   <div class="search-wrap">
     <input type="text" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off">
@@ -68,20 +68,20 @@
 <div id="status">🗺️ 載入中…</div>
 <div id="map"></div>
 
-<!-- 1️⃣ 自家全域腳本 -->
-<script src="assets/js/config.js"></script>
-<script src="assets/js/utils.js"></script>
-<script src="assets/js/api.js"></script>
-<script src="assets/js/auth.js"></script>
-<script src="offline.js"></script>
+<!-- 1️⃣ 自家全域腳本（defer：唔阻塞 HTML 首屏解析，仍按順序執行） -->
+<script defer src="assets/js/config.js"></script>
+<script defer src="assets/js/utils.js"></script>
+<script defer src="assets/js/api.js"></script>
+<script defer src="assets/js/auth.js"></script>
+<script defer src="offline.js"></script>
 
-<!-- 2️⃣ 自托管第三方函式庫 -->
-<script src="assets/vendor/leaflet.js"></script>
-<script src="assets/vendor/leaflet.markercluster.js"></script>
-<script src="assets/vendor/proj4.js"></script>
-<script src="assets/vendor/purify.min.js"></script>
+<!-- 2️⃣ 自托管第三方函式庫（defer） -->
+<script defer src="assets/vendor/leaflet.js"></script>
+<script defer src="assets/vendor/leaflet.markercluster.js"></script>
+<script defer src="assets/vendor/proj4.js"></script>
+<script defer src="assets/vendor/purify.min.js"></script>
 
-<!-- 3️⃣ 主入口 -->
+<!-- 3️⃣ 主入口（module 本身即 defer） -->
 <script type="module" src="assets/js/app.js"></script>
 
 <!-- 🔥 PWA Service Worker 註冊 -->

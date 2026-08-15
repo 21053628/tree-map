@@ -6,7 +6,7 @@
  *   4. install 記錄預快取結果，方便排查漏檔
  *   5. 升版號強制清走舊快取
  */
-const VERSION = 'v1.3.5'; // 🔥 [Phase6] 共用 services，升版強制清舊快取
+const VERSION = 'v1.3.6'; // 🔥 升版強制清舊快取（GAS 超時回退 + 導航簡化）
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -153,6 +153,27 @@ function isCacheFresh(res, maxAge) {
   return (Date.now() - parseInt(cachedAt, 10)) < maxAge;
 }
 
+// 🔥 可中止嘅 fetch：弱網下唔會長期掛住，超時即刻回退快取
+function fetchWithTimeout(req, timeout) {
+  return new Promise(function(resolve, reject) {
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var signal = controller ? controller.signal : null;
+    var timer = setTimeout(function() {
+      if (controller) controller.abort();
+      reject(new Error('TIMEOUT'));
+    }, timeout);
+    var opts = {};
+    if (signal) opts.signal = signal;
+    fetch(req, opts).then(function(res) {
+      clearTimeout(timer);
+      resolve(res);
+    }).catch(function(err) {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
 self.addEventListener('sync', function(e) {
   if (e.tag === 'sync-outbox') {
     e.waitUntil(
@@ -180,35 +201,33 @@ self.addEventListener('fetch', function(e) {
   var url;
   try { url = new URL(req.url); } catch (err) { return; }
 
-  // 1. 導航請求 (HTML) - App Shell + 離線 fallback
+  // 1. 導航請求 (HTML) - Network-First + 離線 fallback
   if (req.mode === 'navigate') {
     e.respondWith(
-      caches.match(req).then(function(cached) {
-        var fetchPromise = fetch(req).then(function(res) {
-          if (res.ok) {
-            var copy = res.clone();
-            caches.open(STATIC_CACHE).then(function(c) {
-              return cacheAPIResponse(c, req, copy);
-            }).catch(function(){});
-          }
-          return res;
-        }).catch(function() {
-          // 🔥 關鍵修正：網路失敗 → 先回退 exact cached，再回退 index.html，絕不拋錯
+      fetch(req).then(function(res) {
+        if (res.ok) {
+          var copy = res.clone();
+          caches.open(STATIC_CACHE).then(function(c) {
+            return cacheAPIResponse(c, req, copy);
+          }).catch(function(){});
+        }
+        return res;
+      }).catch(function() {
+        // 🔥 關鍵修正：網路失敗 → 先回退 exact cached，再回退 index.html，絕不拋錯
+        return caches.match(req).then(function(cached) {
           return cached || caches.match('./index.html').then(function(shell) {
             return shell || Response.error();
           });
         });
-        // 🔥 修正：改為 Network-First，優先回傳最新頁面，避免快取舊版本造成 PWA 內容不更新
-        return fetchPromise;
       })
     );
     return;
   }
 
-  // 2. GAS API 請求
+  // 2. GAS API 請求 - 加超時，弱網下即刻回退快取，唔會長期掛住
   if (url.hostname.indexOf('script.google.com') !== -1) {
     e.respondWith(
-      fetch(req).then(function(res) {
+      fetchWithTimeout(req, 12000).then(function(res) {
         if (res.ok) {
           var copy = res.clone();
           caches.open(DATA_CACHE).then(function(c) {
