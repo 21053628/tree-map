@@ -13,9 +13,10 @@
   'use strict';
 
   // ========== 設定 ==========
+  // 🔥 [Phase1] 統一由 Config.API_ENDPOINT 管理，移除硬編碼 fallback
   var API_URL = (typeof Config !== 'undefined' && Config.API_ENDPOINT)
     ? Config.API_ENDPOINT
-    : 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec';
+    : '';
 
   var DB_NAME = 'tree-offline';
   var STORE = 'outbox';

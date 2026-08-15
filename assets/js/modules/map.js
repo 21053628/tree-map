@@ -5,21 +5,17 @@
  * v2.50 - 手機版 layer bar 變身 FAB 抽屜
  */
 import { state } from './state.js';
-import { updateStatus } from './dom.js';
+import { updateStatus, closePanel } from './dom.js';
+import { hideSearch } from './search.js';
 import { toggleLotLayer } from './lots.js';
 import { toggleTreeLabels, scheduleRedraw } from './trees.js';
 import { toggleFilterPanel, closeFilterPanel } from './filters.js'; // 🔥 [v2.52]
 import { startMeasure, startDrawPolygon, cancelInteraction, clearAllDrawings, getMode as getDrawMode } from './draw.js'; // 🔥 [Phase1]
 import { toggleGeolocation, locateOnce } from './geolocate.js'; // 🔥 [Phase1]
+import { on } from '../core/event-bus.js'; // 🔥 [Phase4] 訂閱 project:selected 以觸發航拍圖刷新
 
 // 🔥 layers 圖示（filter 掣用，清楚表示「分層」）
 const LAYERS_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
-
-let _closePanel = null;
-let _hideSearch = null;
-
-export function setClosePanel(fn) { _closePanel = fn; }
-export function setHideSearch(fn) { _hideSearch = fn; }
 
 // 🔥 [Phase1] 邊界繪製完成後暫存（Phase2 接後端儲存）
 function onDrawBoundary(latlngs) {
@@ -344,10 +340,10 @@ export function initMap() {
     if (closeDrawerFn && layerWrap && layerWrap.classList.contains('open')) {
       closeDrawerFn();
     }
-    if (document.body.classList.contains('panel-open') && _closePanel) {
-      _closePanel();
+    if (document.body.classList.contains('panel-open')) {
+      closePanel();
     }
-    if (_hideSearch) _hideSearch();
+    hideSearch();
   });
 
   // 🔥 [v2.61] 桌面 filter 掣（#bar 搜尋框下面）
@@ -368,6 +364,11 @@ export function toggleAerial() {
   refreshAerial();
   updateStatus(state.aerialEnabled ? '✅ 已開啟航拍圖層' : '✅ 已關閉航拍圖層');
 }
+
+// 🔥 [Phase4] 訂閱地盤選擇事件，取代 projects/locate 直接 import refreshAerial（斷循環）
+on('project:selected', function () {
+  refreshAerial();
+});
 
 export function refreshAerial() {
   if (state.aerialLayer) {

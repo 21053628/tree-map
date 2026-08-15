@@ -5,9 +5,8 @@
 import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
 import { hideSearch } from './search.js';
-import { saveViewState } from './locate.js';
 import { drawTrees } from './trees.js';
-import { refreshAerial } from './map.js'; // 🔥 [v2.33] 加入航拍圖刷新
+import { emit } from '../core/event-bus.js'; // 🔥 [Phase4] 事件解耦，移除對 map.js 的直接依賴
 
 export function buildSelect() {
   const sel = DOM.projSel;
@@ -111,10 +110,10 @@ export function selectProject(pid) {
   state.curProject = pid;
   buildSelect();
   hideSearch();
-  saveViewState('', null, null);
-  
-  // 🔥 [v2.33] 轉地盤自動換航拍圖
-  refreshAerial();
+
+  // 🔥 [Phase4] 移除 no-op saveViewState 呼叫，斷開 projects ⇄ locate 循環依賴
+  // 🔥 [Phase4] 轉地盤自動換航拍圖：改用事件通知，交由 map.js 訂閱處理
+  emit('project:selected', pid);
 
   if (state.map) {
     state.map.closePopup();

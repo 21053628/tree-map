@@ -7,7 +7,7 @@ import { DOM, updateStatus } from './dom.js';
 import { buildSelect } from './projects.js';
 import { drawProjects } from './projects.js';
 import { drawTrees, bringTreeToFront } from './trees.js';
-import { refreshAerial } from './map.js'; // 🔥 [v2.33] 加入航拍圖刷新
+import { emit } from '../core/event-bus.js'; // 🔥 [Phase4] 事件解耦，移除對 map.js 的直接依賴
 
 export function saveViewState(treeId, lat, lng) {
   // 🔥 [v2.44] 移除 localStorage 儲存，F5 刷新時不再跳回上次位置
@@ -76,9 +76,9 @@ export function locateTree(treeId, projectId, lat, lng) {
     state.coordGroupsCache = null;
     drawProjects();
     drawTrees();
-    
-    // 🔥 [v2.33] 定位後同步換航拍圖
-    refreshAerial();
+
+    // 🔥 [Phase4] 定位後同步換航拍圖：改用事件通知
+    emit('project:selected', finalPid);
   }
 
   if (targetLat && targetLng && !isNaN(targetLat) && !isNaN(targetLng)) {

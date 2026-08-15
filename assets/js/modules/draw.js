@@ -17,8 +17,8 @@ let pickCb = null;
 let polygonCb = null;
 let barEl = null;
 
-const LINE_STYLE = { color: '#1565c0', weight: 3, interactive: false };
-const AREA_STYLE = { color: '#1565c0', weight: 2, fillColor: '#1565c0', fillOpacity: 0.15, interactive: false };
+const LINE_STYLE = { color: '#1565c0', weight: 3 };
+const AREA_STYLE = { color: '#1565c0', weight: 2, fillColor: '#1565c0', fillOpacity: 0.15 };
 
 // 🔥 修復：量測圖形改用 SVG renderer（否則用 map 預設 Canvas renderer，
 // 會生成覆蓋全視窗嘅 canvas 並食晒點擊，令下方樹木撳唔到）
@@ -69,8 +69,7 @@ function render() {
   pts.forEach(function (p) {
     vertexLayer.addLayer(L.circleMarker(p, {
       radius: 5, color: '#fff', weight: 1.5, fillColor: '#1565c0', fillOpacity: 1,
-      renderer: getSvgRenderer(),
-      interactive: false
+      renderer: getSvgRenderer()
     }));
   });
   if (pts.length >= 2) {
@@ -133,7 +132,7 @@ function onMouseMove(e) {
   if (barEl) barEl.querySelector('.ib-readout').textContent = text;
 
   if (rubber) state.map.removeLayer(rubber);
-  rubber = L.polyline([pts[pts.length - 1], e.latlng], { color: '#1565c0', weight: 2, dashArray: '4 6', opacity: 0.6, renderer: getSvgRenderer(), interactive: false }).addTo(state.map);
+  rubber = L.polyline([pts[pts.length - 1], e.latlng], { color: '#1565c0', weight: 2, dashArray: '4 6', opacity: 0.6, renderer: getSvgRenderer() }).addTo(state.map);
 }
 
 function finishShape() {

@@ -6,7 +6,7 @@
  *   4. install 記錄預快取結果，方便排查漏檔
  *   5. 升版號強制清走舊快取
  */
-const VERSION = 'v1.3.0'; // 🔥 升級版本，強制清理舊快取
+const VERSION = 'v1.3.5'; // 🔥 [Phase6] 共用 services，升版強制清舊快取
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -33,8 +33,14 @@ const PRECACHE = [
   './assets/js/api.js',
   './assets/js/auth.js',
   './assets/js/app.js',
+  // 共用核心 [Phase0/4]
+  './assets/js/core/utils.js',
+  './assets/js/core/global-utils.js',
+  './assets/js/core/event-bus.js',
+  './assets/js/core/coord-lazy.js',
   // ES Modules（app.js 靜態 import）
   './assets/js/modules/state.js',
+  './assets/js/modules/ui-state.js',
   './assets/js/modules/dom.js',
   './assets/js/modules/map.js',
   './assets/js/modules/search.js',
@@ -47,6 +53,10 @@ const PRECACHE = [
   './assets/js/modules/forms.js',
   './assets/js/modules/draw.js',
   './assets/js/modules/geolocate.js',
+  './assets/js/modules/loader.js',
+  // 頁面邏輯 [Phase5]
+  './assets/js/pages/nfc.js',
+  './assets/js/pages/t.js',
   // 自托管第三方函式庫（地圖核心，離線必需）
   './assets/vendor/leaflet.css',
   './assets/vendor/leaflet.js',

@@ -1,6 +1,7 @@
 /**
  * DOM 快取與 UI 工具模組
  */
+import { escapeHtml, debounce, throttle } from '../core/utils.js';
 
 export const DOM = {
   statusEl: null,
@@ -14,37 +15,8 @@ export const DOM = {
 
 export const $ = (s) => document.querySelector(s);
 
-// 🔥 HTML 跳脫（防 XSS）
-export function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-// 防抖
-export function debounce(fn, delay) {
-  let timer = null;
-  return function () {
-    const context = this, args = arguments;
-    clearTimeout(timer);
-    timer = setTimeout(() => fn.apply(context, args), delay);
-  };
-}
-
-// 節流
-export function throttle(fn, limit) {
-  let lastTime = 0;
-  return function () {
-    const now = Date.now();
-    if (now - lastTime >= limit) {
-      lastTime = now;
-      fn.apply(this, arguments);
-    }
-  };
-}
+// re-export 共用工具（保持對外介面不變，供其他 module 繼續 import）
+export { escapeHtml, debounce, throttle };
 
 // 狀態列更新
 export function updateStatus(message) {

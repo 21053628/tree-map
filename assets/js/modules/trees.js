@@ -6,7 +6,7 @@
  * v4.1 - L.circleMarker + Canvas 渲染
  */
 import { state } from './state.js';
-import { updateStatus } from './dom.js';
+import { updateStatus, escapeHtml } from './dom.js';
 
 /* =========================================================
  * 🔥 [C2] 共用 Canvas renderer（全 App 只建立一次，所有 circleMarker 共用）
@@ -63,10 +63,6 @@ const LABEL_MAX_COUNT = 400;
 let labelMode = 'auto';
 let labelLayer = null;
 let _labelTimer = null;
-
-function escapeHtml(str){
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 function labelsShouldShow(){
   if (labelMode === 'on') return true;

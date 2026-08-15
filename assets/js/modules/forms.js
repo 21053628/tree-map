@@ -7,11 +7,10 @@ import { $, showPanel, closePanel, updateStatus, escapeHtml } from './dom.js';
 import { loadTreeSpecies, fillSpeciesDatalist } from './species.js';
 import { bringTreeToFront } from './trees.js';
 import { startPick } from './draw.js'; // 🔥 [Phase1]
+import { load } from './loader.js'; // 🔥 [Phase2] 直接 import，移除 setLoad 注入
 
-let _load = null;
 let _promptAuth = null;
 
-export function setLoad(fn) { _load = fn; }
 export function setPromptAuth(fn) { _promptAuth = fn; }
 
 export async function openProjectForm() {
@@ -57,7 +56,7 @@ export async function doCreateProject() {
       state.treesCache.clear();
       state.spatialIndexCache = null;
       state.coordGroupsCache = null;
-      if (_load) await _load();
+      await load();
     } else {
       alert('❌ ' + r.error);
     }
@@ -138,7 +137,7 @@ export async function doCreateTree() {
       state.treesCache.clear();
       state.spatialIndexCache = null;
       state.coordGroupsCache = null;
-      if (_load) await _load();
+      await load();
 
       const newId = String(r.tree_id);
       const nt = state.treeMap.get(state.curProject + '_' + newId) ||
