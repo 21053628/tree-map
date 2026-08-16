@@ -1,3 +1,8 @@
+<!--
+  ⚠️ LEGACY / 未使用：呢個注入 script 依賴後端 HtmlService 模板（<?= token ?>）注入 token，
+  但現時 code.gs 只用 JSON API（doGet/doPost），冇用 HtmlService 派發任何頁面，所以呢個檔唔會被用到。
+  實際 token 注入由前端 assets/js/api.js 完成，請勿依賴呢個檔。
+-->
 <script>
   (function() {
     // 由後端注入嘅登入 token（可從 sessionStorage 讀取，作為 fallback）

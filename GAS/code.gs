@@ -17,6 +17,7 @@ const BOOTSTRAP_CACHE_KEY = 'bootstrap_data';
 const BOOTSTRAP_CACHE_TTL = 60;
 const TREES_CACHE_KEY = 'trees_all';
 const PROJECTS_CACHE_KEY = 'projects_all';
+const INSPECTIONS_CACHE_KEY = 'inspections_all';
 const CACHE_TTL = 60; // 一般唯讀快取 60 秒
 
 /* ---------- 快取清理工具 ---------- */
@@ -26,6 +27,7 @@ function clearDataCache_(){
     cache.remove(BOOTSTRAP_CACHE_KEY);
     cache.remove(TREES_CACHE_KEY);
     cache.remove(PROJECTS_CACHE_KEY);
+    cache.remove(INSPECTIONS_CACHE_KEY);
   } catch(e) {}
 }
 
@@ -45,6 +47,33 @@ function createToken_(){
 function isValidToken_(token){
   if(!token) return false;
   return CacheService.getScriptCache().get('TOKEN_' + token) === '1';
+}
+
+/* ---------- 登入 rate-limit（防暴力破解） ---------- */
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_LOCK_SECONDS = 600; // 鎖 10 分鐘
+
+function loginFailKey_(){
+  try { return 'LOGIN_FAIL_' + Session.getTemporaryActiveUserKey(); }
+  catch(e) { return 'LOGIN_FAIL_GLOBAL'; }
+}
+
+function loginFailed_(){
+  const cache = CacheService.getScriptCache();
+  const key = loginFailKey_();
+  const fails = parseInt(cache.get(key) || '0', 10) + 1;
+  cache.put(key, String(fails), LOGIN_LOCK_SECONDS);
+}
+
+function loginAllowed_(){
+  const cache = CacheService.getScriptCache();
+  return parseInt(cache.get(loginFailKey_()) || '0', 10) < LOGIN_MAX_FAILURES;
+}
+
+function resetLoginFailures_(){
+  try {
+    CacheService.getScriptCache().remove(loginFailKey_());
+  } catch(e) {}
 }
 
 /* ---------- 只記日期工具 ---------- */
@@ -163,11 +192,15 @@ function hk80ToWgs84_(Nn, Ee){
 function getProjectIds_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_PRJ);
   if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return [];
-  const idIdx = data[0].indexOf('project_id');
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return [];
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const idIdx = headers.indexOf('project_id');
   if (idIdx === -1) return [];
-  return data.slice(1).map(row => String(row[idIdx]));
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  // 只讀 project_id 一欄，避免成張表讀取
+  return sheet.getRange(2, idIdx + 1, lastRow - 1, 1).getValues().map(row => String(row[0]));
 }
 
 function makeProjectId_(name, customId){
@@ -228,7 +261,7 @@ function doGet(e){
     }
 
     if(action === 'inspections'){
-      let list = rows_(SH_INS).filter(r => String(r.tree_id) === p.id);
+      let list = getCachedRows_(SH_INS, INSPECTIONS_CACHE_KEY, CACHE_TTL).filter(r => String(r.tree_id) === p.id);
       if(p.prj){ list = list.filter(r => String(r.project_id||'') === p.prj); }
       return json_({ok:true, data: list});
     }
@@ -246,35 +279,118 @@ function doGet(e){
     return json_({ok:false, error:'伺服器讀取錯誤'});
   }
 }
+/* ---------- 相片上傳工具（喺鎖外執行，縮短佔鎖時間） ---------- */
+function uploadPhotoBlob_(folder, base64Str, filename){
+  const cleanBase64 = String(base64Str).split(',').pop();
+  const blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), 'image/jpeg', filename);
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w1200';
+}
+
+// 多張相片上傳（逐張容錯：單張失敗唔影響其他）
+function uploadPhotos_(treeId, photoBase64, startIndex){
+  const folder = DriveApp.getFolderById(FOLDER_ID);
+  const bases = Array.isArray(photoBase64) ? photoBase64 : [photoBase64];
+  const urls = [];
+  bases.forEach((base64Str, index) => {
+    try {
+      urls.push(uploadPhotoBlob_(folder, base64Str, treeId + '_' + Date.now() + '_' + (startIndex + index) + '.jpg'));
+    } catch(err) { console.error('Photo upload failed:', err); }
+  });
+  return urls;
+}
+
+// 單張相片上傳（嚴格模式：失敗即 throw，俾 inspection_photo 回報錯誤）
+function uploadPhotoStrict_(treeId, photoBase64, index){
+  const folder = DriveApp.getFolderById(FOLDER_ID);
+  return uploadPhotoBlob_(folder, photoBase64, treeId + '_' + Date.now() + '_' + index + '.jpg');
+}
+
 /* ---------- POST：寫入一定要密碼 Token ---------- */
 function doPost(e){
+  // 1️⃣ 解析 + 認證（唔使鎖，避免無效請求/登入長期佔鎖）
+  if(!e || !e.postData || !e.postData.contents){
+    return json_({ok:false, error:'無效請求'});
+  }
+  let d;
+  try {
+    d = JSON.parse(e.postData.contents);
+  } catch(err) {
+    return json_({ok:false, error:'無效的 JSON 請求'});
+  }
+
+  if(d.type === 'login'){
+    if(!loginAllowed_()){
+      return json_({ok:false, error:'嘗試太頻繁，請稍後再試'});
+    }
+    if(checkPassword_(d.password)){
+      resetLoginFailures_();
+      return json_({ok:true, token: createToken_()});
+    }
+    loginFailed_();
+    return json_({ok:false, error:'密碼錯誤'});
+  }
+
+  if(!isValidToken_(d.token)){
+    return json_({ok:false, error:'UNAUTHORIZED'});
+  }
+
+  // 🔥 提取前端傳來的冪等性鍵值
+  const clientId = d.client_id || '';
+  const clientCreatedAt = d.client_created_at || '';
+
+  // 2️⃣ 防重預檢 + 相片上傳（喺鎖外執行，縮短佔鎖時間，避免其他寫入 timeout）
+  let prePhotoUrls = [];
+  let prePhotoUrl = '';
+  let preTreeId = '';
+  try {
+    if(d.type === 'inspection'){
+      if (checkDuplicate_(SH_INS, clientId)) {
+        const existingInsId = getExistingIdByClientId_(SH_INS, clientId, 'inspection_id');
+        const existingPhotos = getExistingFieldByClientId_(SH_INS, clientId, 'photo_url');
+        const photoUrls = existingPhotos ? String(existingPhotos).split(',').filter(Boolean) : [];
+        return json_({ok: true, duplicate: true, inspection_id: existingInsId, message: '巡查記錄已存在', photo_urls: photoUrls});
+      }
+      const isDeferred = (+d.photos_total > 0 && (!d.photo_base64 || d.photo_base64 === '' || (Array.isArray(d.photo_base64) && d.photo_base64.length === 0)));
+      if(!isDeferred && d.photo_base64){
+        prePhotoUrls = uploadPhotos_(d.tree_id, d.photo_base64, 0);
+      }
+    }
+    else if(d.type === 'inspection_photo'){
+      if (checkPhotoDuplicate_(SH_INS, clientId)) {
+        return json_({ok: true, duplicate: true, message: '相片已存在'});
+      }
+      if (!d.inspection_id) {
+        return json_({ok: false, error: '缺少 inspection_id'});
+      }
+      if(d.photo_base64){
+        prePhotoUrl = uploadPhotoStrict_(d.tree_id, d.photo_base64, d.photo_index || 0);
+      }
+    }
+    else if(d.type === 'create_tree'){
+      if (checkDuplicate_(SH_TREES, clientId)) {
+        const existingTid = getExistingIdByClientId_(SH_TREES, clientId, 'tree_id');
+        return json_({ok: true, duplicate: true, tree_id: existingTid, message: '樹木已存在'});
+      }
+      preTreeId = d.tree_id || ('T' + Date.now());
+      if(d.photo_base64){
+        prePhotoUrls = uploadPhotos_(preTreeId, d.photo_base64, 0);
+      }
+    }
+  } catch(err) {
+    return json_({ok:false, error:'相片上傳失敗: ' + err.message});
+  }
+
+  // 3️⃣ 鎖住「試算表讀寫」段（相片上傳已完成，唔再長期佔鎖）
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000); 
+    lock.waitLock(10000);
   } catch (err) {
     return json_({ok:false, error:'系統忙碌中，請稍後再試'});
   }
 
   try {
-    if(!e || !e.postData || !e.postData.contents){
-      return json_({ok:false, error:'無效請求'});
-    }
-    const d = JSON.parse(e.postData.contents);
-
-    if(d.type === 'login'){
-      if(checkPassword_(d.password)){
-        return json_({ok:true, token: createToken_()});
-      }
-      return json_({ok:false, error:'密碼錯誤'});
-    }
-
-    if(!isValidToken_(d.token)){
-      return json_({ok:false, error:'UNAUTHORIZED'});
-    }
-
-    // 🔥 提取前端傳來的冪等性鍵值
-    const clientId = d.client_id || '';
-    const clientCreatedAt = d.client_created_at || '';
 
     if(d.type === 'checkin'){
       if (checkDuplicate_(SH_CHK, clientId)) {
@@ -285,6 +401,8 @@ function doPost(e){
         lat: d.lat || '', lng: d.lng || '',
         client_id: clientId, client_created_at: clientCreatedAt
       });
+      clearDataCache_();
+      return json_({ok:true});
     }
     else if(d.type === 'inspection'){
       if (checkDuplicate_(SH_INS, clientId)) {
@@ -296,25 +414,7 @@ function doPost(e){
       }
 
       const insId = 'INS-' + Date.now() + '-' + Utilities.getUuid().slice(0,8);
-      let photoUrls = [];
-      
-      // 🔥 判斷是否為「先傳 metadata，後傳相片」模式
-      const isDeferredPhotoMode = (+d.photos_total > 0 && (!d.photo_base64 || d.photo_base64 === '' || (Array.isArray(d.photo_base64) && d.photo_base64.length === 0)));
-
-      if (!isDeferredPhotoMode && d.photo_base64) {
-        // 舊行為：直接處理相片
-        const folder = DriveApp.getFolderById(FOLDER_ID);
-        const bases = Array.isArray(d.photo_base64) ? d.photo_base64 : [d.photo_base64];
-        bases.forEach((base64Str, index) => {
-          try {
-            const cleanBase64 = String(base64Str).split(',').pop();
-            const blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), 'image/jpeg', d.tree_id + '_' + Date.now() + '_' + index + '.jpg');
-            const file = folder.createFile(blob);
-            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-            photoUrls.push('https://lh3.googleusercontent.com/d/' + file.getId() + '=w1200');
-          } catch (err) { console.error('Photo upload failed:', err); }
-        });
-      }
+      const photoUrls = prePhotoUrls; // 相片已喺鎖外上傳
       const photoUrlString = photoUrls.join(',');
 
       appendByHeader_(SH_INS, { 
@@ -344,20 +444,7 @@ function doPost(e){
         return json_({ok: false, error: '缺少 inspection_id'});
       }
 
-      let photoUrl = '';
-      if (d.photo_base64) {
-        try {
-          const folder = DriveApp.getFolderById(FOLDER_ID);
-          const cleanBase64 = String(d.photo_base64).split(',').pop();
-          const blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), 'image/jpeg', d.tree_id + '_' + Date.now() + '_' + (d.photo_index || 0) + '.jpg');
-          const file = folder.createFile(blob);
-          file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-          photoUrl = 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w1200';
-        } catch (err) { 
-          console.error('Photo upload failed:', err);
-          return json_({ok: false, error: '相片上傳失敗: ' + err.message});
-        }
-      }
+      const photoUrl = prePhotoUrl; // 相片已喺鎖外上傳
 
       if (photoUrl) {
         // 更新 inspections 表的 photo_url 同 photo_client_ids
@@ -444,6 +531,8 @@ function doPost(e){
       if(Object.keys(updates).length > 0) {
         updateTreeFields_(d.tree_id, d.prj, updates);
       }
+      clearDataCache_();
+      return json_({ok:true});
     }
     else if(d.type === 'create_project'){
       if (checkDuplicate_(SH_PRJ, clientId)) {
@@ -463,25 +552,12 @@ function doPost(e){
         const existingTid = getExistingIdByClientId_(SH_TREES, clientId, 'tree_id');
         return json_({ok: true, duplicate: true, tree_id: existingTid, message: '樹木已存在'});
       }
-      const tid = d.tree_id || ('T' + Date.now());
+      const tid = preTreeId;
       let lat = d.lat, lng = d.lng, hkN = d.hk80_n, hkE = d.hk80_e;
       if((lat === undefined || lat === '') && hkN && hkE){ const w = hk80ToWgs84_(hkN, hkE); if(w){ lat = +w.lat.toFixed(6); lng = +w.lng.toFixed(6); } }
       if((hkN === undefined || hkN === '') && lat && lng){ const hk = wgs84ToHk80_(lat, lng); if(hk){ hkN = hk.N; hkE = hk.E; } }
       
-      let photoUrls = [];
-      if(d.photo_base64){
-        const folder = DriveApp.getFolderById(FOLDER_ID);
-        const bases = Array.isArray(d.photo_base64) ? d.photo_base64 : [d.photo_base64];
-        bases.forEach((base64Str, index) => {
-          try {
-            const cleanBase64 = base64Str.split(',').pop();
-            const blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), 'image/jpeg', tid + '_' + Date.now() + '_' + index + '.jpg');
-            const file = folder.createFile(blob);
-            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-            photoUrls.push('https://lh3.googleusercontent.com/d/' + file.getId() + '=w1200');
-          } catch (err) { console.error('Photo upload failed:', err); }
-        });
-      }
+      const photoUrls = prePhotoUrls; // 相片已喺鎖外上傳
 
       appendByHeader_(SH_TREES, {
         tree_id: tid, name: d.name || '新樹木', lat: lat, lng: lng, status: d.status || 'Normal', risk: '',
@@ -495,8 +571,8 @@ function doPost(e){
       return json_({ok:true, tree_id: tid, photo_urls: photoUrls});
     }
 
-    clearDataCache_(); 
-    return json_({ok:true});
+    // 未支援嘅寫入型別：明確回報錯誤，唔好靜默成功（避免前端誤以為成功）
+    return json_({ok:false, error:'不支援的操作: ' + d.type});
   } catch (error) {
     console.error('Error in doPost:', error);
     return json_({ok:false, error:'伺服器寫入錯誤: ' + error.message});
@@ -630,44 +706,44 @@ function getExistingIdByClientId_(sheetName, clientId, idFieldName) {
 function updateTreeFields_(treeId, prj, fieldUpdates) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_TREES);
   if (!sheet) return;
-  const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return;
-  const headers = data[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  const lastCol = sheet.getLastColumn();
+  let headers = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
   const idIdx = headers.indexOf('tree_id');
   const prjIdx = headers.indexOf('project_id');
   if (idIdx === -1) return;
 
+  // 只讀 tree_id 一欄定位目標列
   let rowIndex = -1;
-  for (let i = 1; i < data.length; i++) {
-    const idMatch = String(data[i][idIdx]) === String(treeId);
-    const prjMatch = (!prj || prjIdx === -1) ? true : String(data[i][prjIdx] || '') === String(prj);
-    if (idMatch && prjMatch) {
-      rowIndex = i;
-      break;
+  const ids = sheet.getRange(2, idIdx + 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) !== String(treeId)) continue;
+    if (prj && prjIdx !== -1) {
+      const prjVal = sheet.getRange(2 + i, prjIdx + 1).getValue();
+      if (String(prjVal || '') !== String(prj)) continue;
     }
+    rowIndex = 2 + i;
+    break;
   }
   if (rowIndex === -1) return;
 
-  let newHeaders = [];
+  // 動態新增表頭（少見，只喺有新欄位時觸發）
   const objKeys = Object.keys(fieldUpdates);
-  for (let i = 0; i < objKeys.length; i++) {
-    if (headers.indexOf(objKeys[i]) === -1) newHeaders.push(objKeys[i]);
-  }
+  const newHeaders = objKeys.filter(k => headers.indexOf(k) === -1);
   if (newHeaders.length > 0) {
     const startCol = headers.length + 1;
     sheet.getRange(1, startCol, 1, newHeaders.length).setValues([newHeaders]);
+    // 為既有列補空字串，保持表格矩形
+    sheet.getRange(2, startCol, lastRow - 1, newHeaders.length).setValue('');
     headers = headers.concat(newHeaders);
-    for(let i=0; i<data.length; i++){
-      for(let j=0; j<newHeaders.length; j++) data[i].push('');
-    }
   }
 
-  Object.keys(fieldUpdates).forEach(field => {
+  // 只更新目標列嘅格（唔再成表重寫）
+  objKeys.forEach(field => {
     const colIdx = headers.indexOf(field);
-    if (colIdx !== -1) data[rowIndex][colIdx] = fieldUpdates[field];
+    if (colIdx !== -1) sheet.getRange(rowIndex, colIdx + 1).setValue(fieldUpdates[field]);
   });
-
-  sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
 }
 
 /**
@@ -676,18 +752,18 @@ function updateTreeFields_(treeId, prj, fieldUpdates) {
 function updateInspectionFields_(inspectionId, fieldUpdates) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_INS);
   if (!sheet) return;
-  const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return;
-  const headers = data[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  const lastCol = sheet.getLastColumn();
+  let headers = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
   const insIdIdx = headers.indexOf('inspection_id');
   if (insIdIdx === -1) return;
 
+  // 只讀 inspection_id 一欄定位目標列
   let rowIndex = -1;
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][insIdIdx]) === String(inspectionId)) {
-      rowIndex = i;
-      break;
-    }
+  const ids = sheet.getRange(2, insIdIdx + 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(inspectionId)) { rowIndex = 2 + i; break; }
   }
   if (rowIndex === -1) return;
 
@@ -699,40 +775,33 @@ function updateInspectionFields_(inspectionId, fieldUpdates) {
     else actualFields[field] = fieldUpdates[field];
   });
 
-  let newHeaders = [];
   const objKeys = Object.keys(actualFields);
-  for (let i = 0; i < objKeys.length; i++) {
-    if (headers.indexOf(objKeys[i]) === -1) newHeaders.push(objKeys[i]);
-  }
+  const newHeaders = objKeys.filter(k => headers.indexOf(k) === -1);
   if (newHeaders.length > 0) {
     const startCol = headers.length + 1;
     sheet.getRange(1, startCol, 1, newHeaders.length).setValues([newHeaders]);
+    sheet.getRange(2, startCol, lastRow - 1, newHeaders.length).setValue('');
     headers = headers.concat(newHeaders);
-    for(let i=0; i<data.length; i++){
-      for(let j=0; j<newHeaders.length; j++) data[i].push('');
-    }
   }
 
   Object.keys(fieldUpdates).forEach(field => {
     if (field === 'photo_url_append') {
-       const pIdx = headers.indexOf('photo_url');
-       if (pIdx !== -1) {
-          let existing = String(data[rowIndex][pIdx] || '');
-          data[rowIndex][pIdx] = existing ? (existing + ',' + fieldUpdates[field]) : fieldUpdates[field];
-       }
+      const pIdx = headers.indexOf('photo_url');
+      if (pIdx !== -1) {
+        let existing = String(sheet.getRange(rowIndex, pIdx + 1).getValue() || '');
+        sheet.getRange(rowIndex, pIdx + 1).setValue(existing ? (existing + ',' + fieldUpdates[field]) : fieldUpdates[field]);
+      }
     } else if (field === 'photo_client_ids_append') {
-       const pIdx = headers.indexOf('photo_client_ids');
-       if (pIdx !== -1) {
-          let existing = String(data[rowIndex][pIdx] || '');
-          data[rowIndex][pIdx] = existing ? (existing + ',' + fieldUpdates[field]) : fieldUpdates[field];
-       }
+      const pIdx = headers.indexOf('photo_client_ids');
+      if (pIdx !== -1) {
+        let existing = String(sheet.getRange(rowIndex, pIdx + 1).getValue() || '');
+        sheet.getRange(rowIndex, pIdx + 1).setValue(existing ? (existing + ',' + fieldUpdates[field]) : fieldUpdates[field]);
+      }
     } else {
-       const colIdx = headers.indexOf(field);
-       if (colIdx !== -1) data[rowIndex][colIdx] = fieldUpdates[field];
+      const colIdx = headers.indexOf(field);
+      if (colIdx !== -1) sheet.getRange(rowIndex, colIdx + 1).setValue(fieldUpdates[field]);
     }
   });
-
-  sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
 }
 
 /**

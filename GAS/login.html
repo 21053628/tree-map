@@ -1,3 +1,8 @@
+<!--
+  ⚠️ LEGACY / 未使用：呢個登入頁用 google.script.run.doLogin()，但現時 code.gs 冇 doLogin 函式，
+  亦冇用 HtmlService 派發任何頁面。實際登入由前端 assets/js/auth.js 直接 fetch POST {type:'login'} 完成。
+  若要重新啟用呢個頁面，需要喺 code.gs 補 doLogin + doGet 派發 HTML。
+-->
 <!DOCTYPE html>
 <html>
 <head>
