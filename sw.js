@@ -6,7 +6,7 @@
  *   4. install 記錄預快取結果，方便排查漏檔
  *   5. 升版號強制清走舊快取
  */
-const VERSION = 'v2.1.0'; // 🔥 Phase1-6：outbox + idempotency + Sync Center + 提交驗證 + 相片 + 審計記錄
+const VERSION = 'v2.3.0'; // 🔥 UI 修訂：t.html 頂欄 Flex（返回掣左、同步掣右）+ 桌面圖例避讓 + 手機 FAB
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;

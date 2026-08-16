@@ -17,6 +17,10 @@
   var _els = {};
   var _pollTimer = null;
 
+  function isTreePage() {
+    return !!document.getElementById('app') && !document.getElementById('map');
+  }
+
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
     var css = [
@@ -44,13 +48,41 @@
       '#' + PANEL_ID + ' .sp-failed-item .f-actions{margin-top:6px;display:flex;gap:6px;}',
       '#' + PANEL_ID + ' .sp-failed-item .f-btn{border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;background:#546e7a;color:#fff;}',
       '#' + PANEL_ID + ' .sp-failed-item .f-btn.del{background:#b71c1c;}',
-      '#' + PANEL_ID + ' .sp-empty{color:#999;font-size:12px;padding:6px 0;}'
+      '#' + PANEL_ID + ' .sp-empty{color:#999;font-size:12px;padding:6px 0;}',
+      // [UI] 樹木詳情頁（t.html）：頂欄 Flex（返回掣左、同步掣右，與下方白卡齊平）
+      '.sync-topbar{display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:12px;}',
+      '.sync-topbar a.back{margin-bottom:0;}',
+      '#' + BADGE_ID + '.compact{position:static;right:auto;bottom:auto;display:inline-flex;width:auto;margin:0;padding:6px 12px;font-size:13px;box-shadow:none;vertical-align:middle;white-space:nowrap;flex-shrink:0;}',
+      '#' + PANEL_ID + '.compact-panel{bottom:auto;top:56px;}',
+      // [UI] 電腦版地圖頁：同步掣上移，避開右下角 Tree Status 圖例
+      '@media (min-width: 601px){#' + BADGE_ID + ':not(.compact){bottom:96px;} #' + PANEL_ID + ':not(.compact-panel){bottom:156px;}}'
     ].join('\n');
     var style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = css;
     document.head.appendChild(style);
   }
+  // [UI] 樹木詳情頁：等 t.js 異步 render 出 .back 後，包成 Flex 頂欄（返回掣左、同步掣右）
+  function mountTreeBadge(badge) {
+    var app = document.getElementById('app');
+    if (!app) { document.body.appendChild(badge); return; }
+    var done = false;
+    var attempt = function () {
+      var back = app.querySelector('a.back');
+      if (back && !done) {
+        done = true;
+        var topbar = document.createElement('div');
+        topbar.className = 'sync-topbar';
+        back.parentNode.insertBefore(topbar, back);
+        topbar.appendChild(back);
+        topbar.appendChild(badge);
+      }
+    };
+    var mo = new MutationObserver(attempt);
+    mo.observe(app, { childList: true, subtree: true });
+    attempt();
+  }
+
   function build() {
     injectStyles();
 
@@ -79,11 +111,18 @@
       '  <div class="sp-failed" id="spFailedList"></div>' +
       '</div>';
 
-    document.body.appendChild(badge);
-    document.body.appendChild(panel);
+    if (isTreePage()) {
+      badge.classList.add('compact');
+      panel.classList.add('compact-panel');
+      document.body.appendChild(panel);
+      mountTreeBadge(badge);
+    } else {
+      document.body.appendChild(badge);
+      document.body.appendChild(panel);
+    }
 
     _els = {
-      bubble: document.getElementById('syncBadgeBubble'),
+      bubble: badge.querySelector('#syncBadgeBubble'),
       panel: panel,
       status: document.getElementById('spStatus'),
       pending: document.getElementById('spPending'),

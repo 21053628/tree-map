@@ -605,6 +605,7 @@ button.is-loading::after {
 
   .layerbar-wrap {
     flex-direction: column-reverse;   /* FAB 固定喺底，抽屜向上彈 */
+    margin-bottom: 60px;              /* [UI] 提升 FAB，避開右下角同步掣 */
   }
   .layerbar {
     display: none;

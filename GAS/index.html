@@ -1,0 +1,81 @@
+<script>
+  (function() {
+    // 由後端注入嘅登入 token（可從 sessionStorage 讀取，作為 fallback）
+    var AUTH_TOKEN = '<?= token ?>' || sessionStorage.getItem('auth_token') || '';
+
+    if (!window.fetch || !AUTH_TOKEN) return;
+
+    var originalFetch = window.fetch;
+    var isRedirecting = false;
+
+    function redirectToLogin() {
+      if (isRedirecting) return;
+      isRedirecting = true;
+      try {
+        // 移除所有 query 參數，避免 token 殘留喺 URL
+        var url = window.top.location.href.split('?')[0];
+        window.top.location.href = url;
+      } catch(e) {
+        // 如果跨域無法存取 top，退而求其次用當前視窗
+        var currentUrl = window.location.href.split('?')[0];
+        window.location.href = currentUrl;
+      }
+    }
+
+    function addTokenToBody(body) {
+      // 只處理字串型態嘅 body（通常係 JSON 字串）
+      if (typeof body !== 'string') return body;
+      
+      try {
+        var data = JSON.parse(body);
+        if (data && typeof data === 'object' && !data.token) {
+          data.token = AUTH_TOKEN;
+          return JSON.stringify(data);
+        }
+      } catch(e) {
+        // 唔係合法 JSON，或者已經有 token，就原樣返回
+      }
+      return body;
+    }
+
+    window.fetch = function(url, opts) {
+      opts = opts || {};
+      
+      // 只攔截 POST 且帶有 body 嘅請求
+      if (String(opts.method || 'GET').toUpperCase() === 'POST' && opts.body) {
+        try {
+          opts = Object.assign({}, opts, {
+            body: addTokenToBody(opts.body)
+          });
+        } catch(e) {
+          // 忽略錯誤，保持原樣
+        }
+      }
+      
+      return originalFetch.call(this, url, opts).then(function(res) {
+        // 快速檢查：HTTP 401 通常代表未授權
+        if (res.status === 401) {
+          redirectToLogin();
+          return res;
+        }
+        
+        // 再檢查回應內容是否有 UNAUTHORIZED 錯誤
+        try {
+          // clone 一份，唔影響原本嘅 response body
+          var cloned = res.clone();
+          cloned.json().then(function(data) {
+            if (data && data.ok === false && data.error === 'UNAUTHORIZED') {
+              redirectToLogin();
+            }
+          }).catch(function() {
+            // 唔係 JSON 或者解析失敗，忽略
+          });
+        } catch(e) {
+          // clone 失敗，忽略
+        }
+        
+        return res;
+      });
+    };
+  })();
+</script>
