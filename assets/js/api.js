@@ -20,7 +20,7 @@ const ApiService = (function() {
   const MAX_CONCURRENT_POST = 3;     // POST 最大並發數
   const MAX_CACHE_SIZE = 100;        // LRU 快取上限
   
-  const WRITE_TYPES = ['checkin', 'inspection', 'update_tree', 'create_project', 'create_tree', 'create_aerial', 'update_project', 'delete_project', 'delete_tree'];
+  const WRITE_TYPES = ['checkin', 'inspection', 'inspection_photo', 'update_tree', 'create_project', 'create_tree', 'create_aerial', 'update_project', 'delete_project', 'delete_tree'];
 
   let apiEndpoint = null;
   let requestCount = 0;
@@ -35,6 +35,40 @@ const ApiService = (function() {
   function init(endpoint) {
     if (!endpoint) throw new Error('API 端點未提供');
     apiEndpoint = endpoint;
+  }
+
+  // 產生 idempotency 資料：client_id（UUID，含非安全環境 fallback）+ client_created_at（ISO 時間）
+  function newClientMeta() {
+    var id = '';
+    try {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        id = window.crypto.randomUUID();
+      }
+    } catch (e) {}
+    if (!id) {
+      id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0;
+        var v = (c === 'x') ? r : ((r & 0x3) | 0x8);
+        return v.toString(16);
+      });
+    }
+    return { client_id: id, client_created_at: new Date().toISOString() };
+  }
+
+  // [Phase6] 本地審計記錄（若有載入 audit-log.js）
+  function auditWrite(payload, status, error) {
+    if (typeof window === 'undefined' || !window.AuditLog) return;
+    try {
+      window.AuditLog.log({
+        action: 'write',
+        type: payload.type || null,
+        tree_id: payload.tree_id || payload.treeId || null,
+        project_id: payload.project_id || payload.prj || null,
+        staff: payload.staff || null,
+        status: status,
+        error: error || null
+      });
+    } catch (e) {}
   }
 
   function getFromCache(key) {
@@ -150,11 +184,26 @@ const ApiService = (function() {
     if (!apiEndpoint) throw new Error('API 服務未初始化');
     requestCount++;
 
-    if (WRITE_TYPES.indexOf(payload.type) !== -1 && typeof AuthService !== 'undefined') {
+    var isWrite = WRITE_TYPES.indexOf(payload.type) !== -1;
+
+    if (isWrite && typeof AuthService !== 'undefined') {
       const ok = await AuthService.promptAuth();
       if (!ok) return { ok: false, error: '未登入，操作已取消' };
       const token = AuthService.getToken();
       if (token) payload.token = token;
+    }
+
+    // 🔐 Idempotency：寫入 payload 一律帶 client_id + client_created_at（重試時不變）
+    if (isWrite) {
+      if (!payload.client_id) {
+        var meta = newClientMeta();
+        payload.client_id = meta.client_id;
+        payload.client_created_at = meta.client_created_at;
+      } else if (!payload.client_created_at) {
+        payload.client_created_at = new Date().toISOString();
+      }
+      console.log('🆔 [Idempotency] 寫入 ' + payload.type + ' client_id=' + payload.client_id + '（後端未支援 dedupe 時僅供追蹤）');
+      auditWrite(payload, 'attempt');
     }
 
     if (payload.type) invalidateCache(payload.type);
@@ -173,9 +222,16 @@ const ApiService = (function() {
           return response.json();
         })
         .then(data => {
+          if (data && data.duplicate === true) {
+            // 後端回報重複：呢筆 client_id 早已成功處理，視為成功（避免重複 alert 失敗）
+            data.ok = true;
+          }
           if (data && data.ok === false && data.error === 'UNAUTHORIZED') {
             if (typeof AuthService !== 'undefined') AuthService.logout();
             data.error = '未登入或登入已過期，請再試一次並輸入工作人員密碼';
+          }
+          if (isWrite) {
+            auditWrite(payload, (data && data.ok) ? 'success' : 'error', (data && data.ok) ? null : (data && data.error));
           }
           return data;
         })
@@ -218,7 +274,7 @@ const ApiService = (function() {
 
   function resetStats() { requestCount = 0; errorCount = 0; cacheHitCount = 0; }
 
-  return { init, get, post, getStats, resetStats, clearCache };
+  return { init, get, post, getStats, resetStats, clearCache, newClientMeta };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {

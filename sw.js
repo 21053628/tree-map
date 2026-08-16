@@ -6,7 +6,7 @@
  *   4. install 記錄預快取結果，方便排查漏檔
  *   5. 升版號強制清走舊快取
  */
-const VERSION = 'v1.3.6'; // 🔥 升版強制清舊快取（GAS 超時回退 + 導航簡化）
+const VERSION = 'v2.1.0'; // 🔥 Phase1-6：outbox + idempotency + Sync Center + 提交驗證 + 相片 + 審計記錄
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -25,6 +25,8 @@ const PRECACHE = [
   './nfc.html',
   './manifest.webmanifest',
   './offline.js',
+  './assets/js/modules/sync-panel.js',
+  './assets/js/modules/audit-log.js',
   // 樣式
   './assets/css/main.css',
   // 自家全域腳本

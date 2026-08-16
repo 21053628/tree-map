@@ -41,7 +41,11 @@ const Config = {
     MAX_ZOOM: 22,
     PROJECT_ZOOM: 19,  // 🔥 揀地盤：19（政府底圖原生最清＋睇晒全盤）
     TREE_ZOOM: 22      // 🔥 搵樹：22（極清近鏡）
-  }
+  },
+
+  // 📷 [Phase5] 相片上傳策略：true＝兩階段（先傳 metadata 得 inspection_id，再逐張傳相片）
+  // ⚠️ 需要後端支援 inspection_photo type，且 inspection 成功時回傳 inspection_id
+  INSPECTION_SPLIT_PHOTOS: false
 };
 
 // 初始化配置

@@ -98,6 +98,7 @@
 <!-- 🔥 [Phase6] 統一 services：config → api → auth，再由 pages/t.js 共用 -->
 <!-- 註：t.html 保留原本 async 延遲載入 proj4 嘅座標轉換，以維持首屏效能，不改行為 -->
 <script src="assets/js/config.js"></script>
+<script src="assets/js/modules/audit-log.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/vendor/purify.min.js"></script>
@@ -108,6 +109,7 @@
 
 <!-- 🔥 PWA 離線佇列（會 hook ApiService）與 Service Worker 註冊 -->
 <script src="offline.js"></script>
+<script src="assets/js/modules/sync-panel.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {

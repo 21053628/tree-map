@@ -39,7 +39,7 @@ export function updateStatus(message) {
 
 // 顯示側邊面板
 export function showPanel(html) {
-  DOM.panelContent.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['onclick'] });
+  DOM.panelContent.innerHTML = DOMPurify.sanitize(html); // [Phase7] 移除 inline onclick，改用 addEventListener
   DOM.panel.style.display = 'block';
   document.body.classList.add('panel-open');
 }

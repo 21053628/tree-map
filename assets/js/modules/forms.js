@@ -9,6 +9,17 @@ import { bringTreeToFront } from './trees.js';
 import { startPick } from './draw.js'; // 🔥 [Phase1]
 import { load } from './loader.js'; // 🔥 [Phase2] 直接 import，移除 setLoad 注入
 
+// ========== [Phase4] 提交前驗證 ==========
+const VALID_HEALTH = ['Normal', 'Fair', 'Poor', 'Very Poor', 'Dead'];
+
+function isValidHK80(N, E) {
+  if (N === '' || N === null || N === undefined) return false;
+  if (E === '' || E === null || E === undefined) return false;
+  const n = Number(N), e = Number(E);
+  if (!isFinite(n) || !isFinite(e)) return false;
+  return n >= 800000 && n <= 850000 && e >= 800000 && e <= 870000;
+}
+
 let _promptAuth = null;
 
 export function setPromptAuth(fn) { _promptAuth = fn; }
@@ -24,9 +35,11 @@ export async function openProjectForm() {
     '<input id="pCustomId" placeholder="自訂英文 ID（NFC 用，e.g. NaiChung）">' +
     '<div style="font-size:12px;color:#666;margin-top:4px">💡 此 ID 會寫入 NFC tag，建議用簡短英文</div>' +
     '<div class="row2"><input id="pN" placeholder="HK80 N" inputmode="decimal"><input id="pE" placeholder="HK80 E" inputmode="decimal"></div>' +
-    '<button onclick="App.doCreateProject()">💾 建立</button>' +
-    '<button class="x" onclick="App.closePanel()">✖ 關閉</button>'
+    '<button id="btnCreateProject">💾 建立</button>' +
+    '<button class="x" id="btnCloseProject">✖ 關閉</button>'
   );
+  document.getElementById('btnCreateProject').addEventListener('click', doCreateProject);
+  document.getElementById('btnCloseProject').addEventListener('click', closePanel);
 }
 
 export async function doCreateProject() {
@@ -37,12 +50,17 @@ export async function doCreateProject() {
 
   if (!name || !N || !E) { alert('請填寫完整'); return; }
 
+  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須係有效數字，並喺香港範圍內'); return; }
+
   const w = CoordUtils.toWGS84(N, E);
   if (!w) { alert('HK80 座標轉換失敗'); return; }
 
   try {
+    const meta = ApiService.newClientMeta();
     const r = await ApiService.post({
       type: 'create_project',
+      client_id: meta.client_id,
+      client_created_at: meta.client_created_at,
       name: name,
       custom_id: customId,
       lat: w.lat.toFixed(6),
@@ -77,7 +95,7 @@ export async function openTreeForm(preset) {
 
   showPanel(
     '<b>🌳 新增樹木</b>' +
-    '<button class="pick-loc-btn" onclick="App.pickTreeLocation()">📍 喺地圖撳位置（自動填 N/E）</button>' +
+    '<button class="pick-loc-btn" id="btnPickLocation">📍 喺地圖撳位置（自動填 N/E）</button>' +
     '<input id="tId" placeholder="樹木編號（留空自動）">' +
     '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）...">' +
     '<datalist id="tree_datalist"></datalist>' +
@@ -88,9 +106,13 @@ export async function openTreeForm(preset) {
     '<input id="tCrownVol" placeholder="Crown Volume (m³)" inputmode="decimal">' +
     '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal" value="' + presetN + '"><input id="tE" placeholder="HK80 E" inputmode="decimal" value="' + presetE + '"></div>' +
     '<input id="tLevel" placeholder="Level (m)" inputmode="decimal">' +
-    '<button onclick="App.doCreateTree()">💾 建立樹木</button>' +
-    '<button class="x" onclick="App.closePanel()">✖ 關閉</button>'
+    '<button id="btnCreateTree">💾 建立樹木</button>' +
+    '<button class="x" id="btnCloseTree">✖ 關閉</button>'
   );
+
+  document.getElementById('btnPickLocation').addEventListener('click', pickTreeLocation);
+  document.getElementById('btnCreateTree').addEventListener('click', doCreateTree);
+  document.getElementById('btnCloseTree').addEventListener('click', closePanel);
 
   loadTreeSpecies().then(fillSpeciesDatalist);
 }
@@ -111,13 +133,19 @@ export async function doCreateTree() {
 
   if (!N || !E) { alert('請填寫 HK80 座標 N/E'); return; }
 
+  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須係有效數字，並喺香港範圍內'); return; }
+  if (VALID_HEALTH.indexOf($('#tStatus').value) === -1) { alert('樹木狀態不合法：' + $('#tStatus').value); return; }
+
   const w = CoordUtils.toWGS84(N, E);
   if (!w) { alert('HK80 座標轉換失敗'); return; }
 
   try {
-    // 🔥 [v5.0] 改用新欄位名 + 補齊新增欄位
+    // 🔥 [v5.0] 改用新欄位名 + 補齊新增欄位；[Phase2] 加 client_id/client_created_at
+    const meta = ApiService.newClientMeta();
     const r = await ApiService.post({
       type: 'create_tree',
+      client_id: meta.client_id,
+      client_created_at: meta.client_created_at,
       tree_id: $('#tId').value, project_id: state.curProject,
       name: $('#tName').value, status: $('#tStatus').value,
       tree_height: $('#tHeight').value,

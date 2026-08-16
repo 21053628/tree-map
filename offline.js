@@ -1,13 +1,12 @@
 /**
  * 樹木管理系統 - 離線寫入佇列 (IndexedDB Outbox)
- * v1.9.0 - 改進版：
- *   - 修正 IndexedDB 交易 Promise 包裝
- *   - 同步流程改為逐筆處理，失敗不阻塞後續
- *   - 加入重試上限（MAX_RETRY），超過即丟棄並通知
- *   - 快取鍵加入參數序列化，避免不同參數互相覆蓋
- *   - warmGAS 使用 no-cors 模式，避免 CORS 錯誤
- *   - 使用 finally 確保 _syncing 狀態正確重置
- *   - 其他程式碼品質與可讀性提升
+ * v2.0.0 - Phase 1：outbox 資料結構升級（可追蹤、唔會靜雞雞消失）
+ *   - 每筆記錄加入 client_id/uuid、type、tree_id、project_id、status、時間戳、lastError
+ *   - MAX_RETRY 超過後唔再丟棄，改為 status='failed' 並保留
+ *   - 新增 helpers：getPendingCount/getFailedCount/markSyncing/markSynced/markFailed/retryOne/retryAllFailed
+ *   - 相容舊 queue items（讀取時自動補齊欄位）
+ *   - cleanupExpired 只清理已同步(synced)且過期記錄，唔再刪除 pending/failed
+ *   - 保留既有：修正 IndexedDB 交易 Promise 包裝、逐筆同步、warmGAS no-cors、finally 重置 _syncing
  */
 (function() {
   'use strict';
@@ -57,6 +56,23 @@
     pwaToast(msg, 3000);
   }
 
+  // [Phase6] 本地審計記錄（若有載入 audit-log.js）
+  function auditWrite(payload, action, status, error) {
+    if (typeof window === 'undefined' || !window.AuditLog) return;
+    var p = payload || {};
+    try {
+      window.AuditLog.log({
+        action: action,
+        type: p.type || null,
+        tree_id: p.tree_id || p.treeId || null,
+        project_id: p.project_id || p.prj || null,
+        staff: p.staff || null,
+        status: status,
+        error: error || null
+      });
+    } catch (e) {}
+  }
+
   function getCurrentToken() {
     var TOKEN_KEY = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.STORAGE_KEY)
       ? Config.AUTH.STORAGE_KEY
@@ -69,6 +85,38 @@
       if (data && data.token && data.until > Date.now()) return data.token;
     } catch (e) {}
     return null;
+  }
+
+  // 產生 UUID（idempotency key）。優先 crypto.randomUUID，非安全環境 fallback。
+  function genUUID() {
+    try {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+      }
+    } catch (e) {}
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0;
+      var v = (c === 'x') ? r : ((r & 0x3) | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  // 相容舊 queue items：讀取時自動補齊缺少嘅欄位（唔會靜雞雞丟失）
+  function normalize(item) {
+    if (!item) return item;
+    var now = Date.now();
+    var p = item.payload || {};
+    if (!item.client_id) item.client_id = p.client_id || genUUID();
+    if (!item.type) item.type = p.type || 'unknown';
+    if (item.tree_id === undefined || item.tree_id === null) item.tree_id = (p.tree_id || p.treeId) || null;
+    if (item.project_id === undefined || item.project_id === null) item.project_id = (p.project_id || p.prj) || null;
+    if (!item.status) item.status = 'queued';
+    if (!item.createdAt) item.createdAt = item.ts || now;
+    if (!item.updatedAt) item.updatedAt = item.ts || now;
+    if (item.syncedAt === undefined) item.syncedAt = null;
+    if (item.retry === undefined || item.retry === null) item.retry = 0;
+    if (item.lastError === undefined) item.lastError = null;
+    return item;
   }
 
   // ========== IndexedDB 操作（Promise 化） ==========
@@ -107,8 +155,27 @@
   }
 
   function push(payload) {
+    payload = payload || {};
+    var now = Date.now();
+    // 確保 payload 帶有 client_id（idempotency key），離線／重試都保持同一個 id
+    if (!payload.client_id) payload.client_id = genUUID();
+    if (!payload.client_created_at) payload.client_created_at = new Date().toISOString();
+    auditWrite(payload, 'queue', 'queued');
     return txPromise(STORE, 'readwrite', function(store) {
-      store.add({ payload: payload, ts: Date.now(), retry: 0 });
+      store.add({
+        payload: payload,
+        ts: now,
+        client_id: payload.client_id,
+        type: payload.type || 'unknown',
+        tree_id: (payload.tree_id || payload.treeId) || null,
+        project_id: (payload.project_id || payload.prj) || null,
+        status: 'queued',
+        createdAt: now,
+        updatedAt: now,
+        syncedAt: null,
+        retry: 0,
+        lastError: null
+      });
     });
   }
 
@@ -118,9 +185,11 @@
         var tx = db.transaction(STORE, 'readonly');
         var store = tx.objectStore(STORE);
         var req = store.getAll();
-        req.onsuccess = function() { resolve(req.result || []); };
+        req.onsuccess = function() {
+          var items = (req.result || []).map(normalize);
+          resolve(items);
+        };
         req.onerror = function() { reject(req.error); };
-        // 不需要等待 tx.oncomplete，因為 getAll 已完成
       });
     });
   }
@@ -136,16 +205,21 @@
     });
   }
 
-  function incrementRetry(id) {
+  // 讀寫單筆：讀出 → 正規化 → 套用 changes/mutator → 寫回（並更新 updatedAt）
+  function updateItem(id, changes, mutator) {
     return openDB().then(function(db) {
       return new Promise(function(resolve, reject) {
         var tx = db.transaction(STORE, 'readwrite');
         var store = tx.objectStore(STORE);
         var req = store.get(id);
         req.onsuccess = function() {
-          var item = req.result;
+          var item = normalize(req.result);
           if (item) {
-            item.retry = (item.retry || 0) + 1;
+            if (changes) {
+              Object.keys(changes).forEach(function(k) { item[k] = changes[k]; });
+            }
+            if (mutator) mutator(item);
+            item.updatedAt = Date.now();
             store.put(item);
           }
         };
@@ -155,15 +229,76 @@
     });
   }
 
+  function getById(id) {
+    return openDB().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var req = db.transaction(STORE, 'readonly').objectStore(STORE).get(id);
+        req.onsuccess = function() { resolve(normalize(req.result || null)); };
+        req.onerror = function() { reject(req.error); };
+      });
+    });
+  }
+
+  // 增加重試次數，並記錄最後錯誤（狀態維持 queued，仍可重試）
+  function incrementRetry(id, error) {
+    return updateItem(id, null, function(item) {
+      item.retry = (item.retry || 0) + 1;
+      if (error) item.lastError = String(error);
+      item.status = 'queued';
+    });
+  }
+
+  function markSyncing(id) { return updateItem(id, { status: 'syncing' }); }
+  function markSynced(id)  { return updateItem(id, { status: 'synced', syncedAt: Date.now(), lastError: null }); }
+  function markFailed(id, error) { return updateItem(id, { status: 'failed', lastError: String(error || '未知錯誤') }); }
+
+  function getPendingCount() {
+    return all().then(function(items) {
+      return items.filter(function(it) {
+        return it.status === 'queued' || it.status === 'syncing';
+      }).length;
+    });
+  }
+
+  function getFailedCount() {
+    return all().then(function(items) {
+      return items.filter(function(it) { return it.status === 'failed'; }).length;
+    });
+  }
+
+  async function retryOne(id) {
+    var item = await getById(id);
+    if (!item) return { ok: false, error: '記錄不存在' };
+    await updateItem(id, { status: 'queued', retry: 0, lastError: null });
+    if (navigator.onLine) syncOutbox(true);
+    return { ok: true };
+  }
+
+  async function retryAllFailed() {
+    var items = await all();
+    var failedItems = items.filter(function(it) { return it.status === 'failed'; });
+    for (var i = 0; i < failedItems.length; i++) {
+      await updateItem(failedItems[i].id, { status: 'queued', retry: 0, lastError: null });
+    }
+    if (failedItems.length && navigator.onLine) syncOutbox(true);
+    return failedItems.length;
+  }
+
+  // 只清理「已同步(synced)且過期」嘅記錄；pending/failed 一律保留，唔會靜雞雞刪除
   function cleanupExpired() {
     var cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
     return all().then(function(items) {
-      var expired = items.filter(function(it) { return it.ts < cutoff; });
+      var expired = items.filter(function(it) {
+        if (it.status !== 'synced') return false;
+        var age = it.syncedAt || it.ts || 0;
+        return age < cutoff;
+      });
       return Promise.all(expired.map(function(it) { return remove(it.id); }))
         .then(function() { return expired.length; });
     });
   }
 
+  // 全部記錄總數（含 synced/failed），向後相容；「待同步」請用 getPendingCount
   function getQueueCount() {
     return all().then(function(items) { return items.length; });
   }
@@ -172,7 +307,15 @@
     push: push,
     all: all,
     remove: remove,
+    getById: getById,
     getQueueCount: getQueueCount,
+    getPendingCount: getPendingCount,
+    getFailedCount: getFailedCount,
+    markSyncing: markSyncing,
+    markSynced: markSynced,
+    markFailed: markFailed,
+    retryOne: retryOne,
+    retryAllFailed: retryAllFailed,
     cleanupExpired: cleanupExpired
   };
 
@@ -257,25 +400,32 @@
     try {
       await cleanupExpired();
       var items = await all();
-      if (!items.length) return;
+      // 只處理「待同步」記錄（queued/syncing）；synced/failed 唔會自動重送
+      var pending = items.filter(function(it) {
+        return it.status === 'queued' || it.status === 'syncing';
+      });
+      if (!pending.length) return;
 
-      console.log('🔄 [Sync] 佇列中有 ' + items.length + ' 筆記錄');
+      console.log('🔄 [Sync] 待同步 ' + pending.length + ' 筆（總共 ' + items.length + ' 筆）');
 
       var synced = 0;
       var failed = 0;
-      var batch = items.slice(0, SYNC_BATCH_SIZE);
+      var batch = pending.slice(0, SYNC_BATCH_SIZE);
 
       for (var i = 0; i < batch.length; i++) {
         var item = batch[i];
-        // 若 retry 超過上限，丟棄並記錄
+
+        // 若 retry 超過上限：改為 status='failed' 並保留，等用戶手動重試／匯出（唔再丟棄）
         if (item.retry >= MAX_RETRY) {
-          console.warn('🔄 [Sync] 記錄超過重試上限，丟棄:', item.id);
-          await remove(item.id);
+          console.warn('🔄 [Sync] 記錄超過重試上限，標記為 failed（保留）:', item.id);
+          await markFailed(item.id, '超過重試上限(' + MAX_RETRY + '次)');
+          auditWrite(item.payload, 'sync', 'failed', '超過重試上限(' + MAX_RETRY + '次)');
           failed++;
           continue;
         }
 
-        // 附加最新 token
+        // 標記為同步中，並附加最新 token
+        await markSyncing(item.id);
         var tk = getCurrentToken();
         if (tk) item.payload.token = tk;
 
@@ -289,34 +439,40 @@
           if (!res.ok) {
             console.warn('🔄 [Sync] 伺服器狀態 ' + res.status + '，稍後重試');
             quietFailToast('⏳ 後端不穩，記錄已安全排隊');
-            await incrementRetry(item.id);
+            await incrementRetry(item.id, 'HTTP ' + res.status);
+            auditWrite(item.payload, 'sync', 'retry', 'HTTP ' + res.status);
             failed++;
             continue; // 繼續處理下一筆，不阻塞
           }
 
           var json = await res.json();
-          if (json && json.ok) {
-            await remove(item.id);
+          if (json && (json.ok || json.duplicate === true)) {
+            // 成功／後端回報重複（同一 client_id 已處理）：都視為成功
+            if (json.duplicate === true) {
+              console.log('🔄 [Sync] 後端回報重複（client_id 已處理），視為成功:', item.id);
+            }
+            await markSynced(item.id);
+            auditWrite(item.payload, 'sync', 'synced');
             synced++;
           } else if (json && json.error === 'UNAUTHORIZED') {
+            // 登入過期：記錄錯誤並退回 queued，重新驗證後重試同一筆
+            auditWrite(item.payload, 'sync', 'unauthorized', '登入已過期');
+            await updateItem(item.id, { status: 'queued', lastError: '登入已過期' });
             if (typeof AuthService !== 'undefined' && AuthService.promptAuth) {
               var reOk = await AuthService.promptAuth('🔐 登入已過期，請重新驗證以繼續同步');
               if (reOk) {
                 // 重新驗證成功，重試同一筆（不增加 retry）
                 i--; // 重試本筆
                 continue;
-              } else {
-                failed++;
-                continue;
               }
-            } else {
-              failed++;
-              continue;
             }
+            failed++;
+            continue;
           } else {
             // 業務錯誤：記錄錯誤並保留重試（但會受 MAX_RETRY 限制）
             console.warn('🔄 [Sync] 業務錯誤（保留重試）:', json && json.error);
-            await incrementRetry(item.id);
+            await incrementRetry(item.id, (json && json.error) || '業務錯誤');
+            auditWrite(item.payload, 'sync', 'error', (json && json.error) || '業務錯誤');
             failed++;
             continue;
           }
@@ -324,7 +480,8 @@
           // 網路錯誤
           console.warn('🔄 [Sync] 網絡不穩，稍後重試');
           quietFailToast('⏳ 網絡不穩，記錄已安全排隊');
-          await incrementRetry(item.id);
+          await incrementRetry(item.id, (err && err.message) || '網絡不穩');
+          auditWrite(item.payload, 'sync', 'retry', (err && err.message) || '網絡不穩');
           failed++;
           continue;
         }
@@ -355,7 +512,7 @@
     }
     pwaToast('⏳ 正在同步…');
     await syncOutbox(true);
-    var count = await getQueueCount();
+    var count = await getPendingCount();
     if (count === 0) pwaToast('✅ 已全部同步');
     return count;
   }

@@ -23,6 +23,14 @@
     return html;
   }
 
+  // [Phase7] 巡查記錄（#logs）用嚴格淨化：唔允許任何 inline onclick/onerror
+  function sanitizeLogsHTML(html) {
+    if (typeof DOMPurify !== 'undefined') {
+      return DOMPurify.sanitize(html);
+    }
+    return html;
+  }
+
   const $ = function(s){ return document.querySelector(s); };
 
   // 🔥 [Phase6] 座標轉換收斂到共用 CoordLazy service（保留 lazy proj4 效能）
@@ -317,10 +325,40 @@
     updatePhotoPreview();
   }
 
+  // ========== [Phase4] 提交前驗證 ==========
+  const VALID_HEALTH = ['Normal', 'Fair', 'Poor', 'Very Poor', 'Dead'];
+  const MAX_PHOTOS = 6;
+  const MAX_PHOTO_CHARS = Math.floor(1.5 * 1024 * 1024 * 4 / 3); // ≈1.5MB base64
+
+  function isValidHealth(v){ return VALID_HEALTH.indexOf(v) !== -1; }
+
+  // HK80 N/E 必須係有效數字，並喺香港合理範圍
+  function isValidHK80(N, E){
+    if (N === '' || N === null || N === undefined) return false;
+    if (E === '' || E === null || E === undefined) return false;
+    const n = Number(N), e = Number(E);
+    if (!isFinite(n) || !isFinite(e)) return false;
+    return n >= 800000 && n <= 850000 && e >= 800000 && e <= 870000;
+  }
+
+  function requireTreeId(){
+    if (!id) { alert('⚠️ 缺少樹木編號（tree_id），請由地圖選擇樹木'); return false; }
+    return true;
+  }
+
+  function requireStaff(v){
+    if (!v || !String(v).trim()) { alert('⚠️ 工作人員姓名（staff）必填'); return false; }
+    return true;
+  }
+
   async function checkin(){
-    const staff = prompt('工作人員姓名：') || '未填';
+    if (!requireTreeId()) return;
+    const staff = prompt('工作人員姓名：');
+    if (!requireStaff(staff)) return;
+    const meta = ApiService.newClientMeta();
     try {
-      const r = await post({type:'checkin', staff:staff, tree_id:id, prj:prj});
+      const r = await post({type:'checkin', staff:staff, tree_id:id, prj:prj,
+        client_id: meta.client_id, client_created_at: meta.client_created_at});
       alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：' + r.error);
       if(r.ok && r.queued) { /* 離線暫存不刷新 */ }
       else if(r.ok) { setTimeout(function(){ location.reload(); }, 800); }
@@ -330,11 +368,28 @@
   }
 
   async function submitInspection(){
-    const staff  = prompt('工作人員姓名：') || '未填';
-    if(selectedPhotos.length === 0){
+    if (!requireTreeId()) return;
+    const staff  = prompt('工作人員姓名：');
+    if (!requireStaff(staff)) return;
+    if (!isValidHealth($('#health').value)) {
+      alert('⚠️ 樹木健康狀態（health）不合法：' + $('#health').value);
+      return;
+    }
+    if (selectedPhotos.length > MAX_PHOTOS) {
+      alert('⚠️ 相片數量超出上限（最多 ' + MAX_PHOTOS + ' 張）');
+      return;
+    }
+
+    const health = $('#health').value;
+    const note = $('#note').value;
+    const meta = ApiService.newClientMeta();
+
+    // 冇相片：純文字記錄（保持原有 photo_base64:'' 行為）
+    if (selectedPhotos.length === 0) {
       try {
         const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
-          health:$('#health').value, note:$('#note').value, photo_base64:''});
+          health:health, note:note, photo_base64:'',
+          client_id: meta.client_id, client_created_at: meta.client_created_at});
         alert(r.ok ? '✅ 已上傳！' : '❌ 失敗：' + r.error);
         if(r.ok && !r.queued) { setTimeout(function(){ location.reload(); }, 1000); }
       } catch(err) {
@@ -342,37 +397,114 @@
       }
       return;
     }
+
+    // [Phase5] 逐張壓縮；失敗／超大嘅相片略過，唔會拖死整筆文字記錄
     const photosData = [];
+    const skipped = [];
     for(let i = 0; i < selectedPhotos.length; i++){
       try {
         const b64 = await compress(selectedPhotos[i]);
+        if (b64 && b64.length > MAX_PHOTO_CHARS) { skipped.push(i + 1); continue; }
         photosData.push(b64);
       } catch(err) {
-        alert('❌ 壓縮圖片失敗：' + err.message);
-        return;
+        skipped.push(i + 1);
       }
     }
+    if (skipped.length) {
+      alert('⚠️ 第 ' + skipped.join('、') + ' 張相片處理失敗，已略過；其餘 ' + photosData.length + ' 張繼續上傳');
+    }
+    if (photosData.length === 0) {
+      alert('❌ 冇相片可上傳（全部處理失敗）');
+      return;
+    }
+
+    // [Phase5] 兩階段上傳（需後端支援 inspection_photo + inspection 回傳 inspection_id）
+    // 離線時唔用兩階段（攞唔到 inspection_id），直接落入單一 POST 排隊
+    const splitPhotos = navigator.onLine && (typeof Config !== 'undefined' && Config.INSPECTION_SPLIT_PHOTOS === true);
+    if (splitPhotos) {
+      try {
+        const r = await post({
+          type:'inspection', staff:staff, tree_id:id, prj:prj,
+          health:health, note:note, photo_base64:'', photos_total: photosData.length,
+          photos_pending: photosData.length,
+          client_id: meta.client_id, client_created_at: meta.client_created_at
+        });
+        if (r.queued) {
+          alert('📥 文字記錄已離線暫存（兩階段相片需後端回傳 inspection_id，請連線後重試）');
+          return;
+        }
+        if (r.ok && r.inspection_id) {
+          const done = await uploadPhotos(r.inspection_id, photosData);
+          alert('✅ 文字記錄已上傳；相片 ' + done + '/' + photosData.length + ' 張已處理');
+          selectedPhotos = []; setTimeout(function(){ location.reload(); }, 1000);
+        } else if (r.ok) {
+          alert('⚠️ 文字記錄已上傳，但後端未回傳 inspection_id，相片未能上傳');
+          selectedPhotos = []; setTimeout(function(){ location.reload(); }, 1000);
+        } else {
+          alert('❌ 失敗：' + r.error);
+        }
+      } catch(err) {
+        alert('❌ 連線錯誤：' + err.message);
+      }
+      return;
+    }
+
+    // 預設：單一 POST（後端未支援兩階段，保留現有行為）
     const payload = {
       type:'inspection', staff:staff, tree_id:id, prj:prj,
-      health:$('#health').value, note:$('#note').value, photo_base64: photosData
+      health:health, note:note, photo_base64: photosData,
+      client_id: meta.client_id, client_created_at: meta.client_created_at
     };
     try {
       const r = await post(payload);
-      alert(r.ok ? '✅ 已上傳 ' + selectedPhotos.length + ' 張相片！' : '❌ 失敗：' + r.error);
+      alert(r.ok ? '✅ 已上傳 ' + photosData.length + ' 張相片！' : '❌ 失敗：' + r.error);
       if(r.ok && !r.queued) { selectedPhotos = []; setTimeout(function(){ location.reload(); }, 1000); }
     } catch(err) {
       alert('❌ 連線錯誤：' + err.message);
     }
   }
+  // [Phase5] 兩階段相片上傳：逐張傳（各自有 client_id，失敗由 offline queue 獨立重試）
+  async function uploadPhotos(inspectionId, photosData){
+    const total = photosData.length;
+    let done = 0;
+    for(let i = 0; i < total; i++){
+      const pm = ApiService.newClientMeta();
+      const r = await post({
+        type:'inspection_photo', inspection_id: inspectionId,
+        tree_id:id, prj:prj, photo_base64: photosData[i], photo_index: i + 1,
+        client_id: pm.client_id, client_created_at: pm.client_created_at
+      });
+      if (r && (r.ok || r.queued)) done++;
+      updatePhotoProgress(done, total);
+    }
+    return done;
+  }
+
+  // [Phase5] 顯示「x/N 張相片已上傳」
+  function updatePhotoProgress(done, total){
+    const el = $('#photoCount');
+    if (el) el.textContent = done + '/' + total;
+    if (typeof pwaToast === 'function') pwaToast('📷 ' + done + '/' + total + ' 張相片已處理');
+  }
 
   async function saveTreeInfo(){
+    if (!requireTreeId()) return;
+    if (!isValidHealth($('#eStatus').value)) {
+      alert('⚠️ 樹木健康狀態（status）不合法：' + $('#eStatus').value);
+      return;
+    }
     let lat = TREE.lat, lng = TREE.lng;
     const N = $('#eN').value, E = $('#eE').value;
-    if(N && E){
+    if(N || E){
+      if (!isValidHK80(N, E)) {
+        alert('⚠️ HK80 座標 N/E 必須係有效數字，並喺香港範圍內（N≈800000-850000, E≈800000-870000）');
+        return;
+      }
       const w = await toWGS(N, E);
       if(!w){ alert('HK80 座標轉換失敗，請檢查 N/E 數值'); return; }
       lat = w.lat.toFixed(6); lng = w.lng.toFixed(6);
     }
+    const meta = ApiService.newClientMeta();
     try {
       const r = await post({type:'update_tree', tree_id:id, prj:prj,
         name:$('#eName').value, status:$('#eStatus').value,
@@ -381,7 +513,8 @@
         dbh:$('#eDbh').value, ground_diameter:$('#eGroundDia').value,
         stem_length:$('#eStemLen').value, crown_area:$('#eCrownArea').value,
         crown_volume:$('#eCrownVol').value, level:$('#eLevel').value,
-        lat:lat, lng:lng, description:$('#eDesc').value});
+        lat:lat, lng:lng, description:$('#eDesc').value,
+        client_id: meta.client_id, client_created_at: meta.client_created_at});
       alert(r.ok ? '✅ 已更新！' : '❌ 失敗：' + r.error);
       if(r.ok && !r.queued) setTimeout(function(){ location.reload(); }, 800);
     } catch(err) {
@@ -439,7 +572,44 @@
     return str;
   }
 
+  var _logsDelegated = false;
+  // [Phase7] 巡查相片用事件委派（唔再用 inline onclick/onerror）
+  function attachLogsDelegation(){
+    if (_logsDelegated) return;
+    var logs = $('#logs');
+    if (!logs) return;
+    _logsDelegated = true;
+
+    logs.addEventListener('click', function(e){
+      var img = (e.target && e.target.closest) ? e.target.closest('.inspection-photo-thumb') : null;
+      if (img) {
+        e.stopPropagation();
+        var src = img.getAttribute('data-zoom');
+        if (src && window.zoomImage) window.zoomImage(src);
+        return;
+      }
+      var btn = (e.target && e.target.closest) ? e.target.closest('.inspection-photo-btn') : null;
+      if (btn) {
+        e.stopPropagation();
+        var url = btn.getAttribute('data-download');
+        var tree = btn.getAttribute('data-tree');
+        var time = btn.getAttribute('data-time');
+        var idx = parseInt(btn.getAttribute('data-index') || '1', 10);
+        if (window.downloadPhoto) window.downloadPhoto(url, tree, time, idx);
+      }
+    });
+
+    // error 事件唔冒泡，用 capture 攔截圖片載入失敗
+    logs.addEventListener('error', function(e){
+      var img = e.target;
+      if (img && img.classList && img.classList.contains('inspection-photo-thumb') && img.parentElement) {
+        img.parentElement.style.display = 'none';
+      }
+    }, true);
+  }
+
   function loadLogs(){
+    attachLogsDelegation();
     fetch(API + '?action=inspections&id=' + encodeURIComponent(id) + '&prj=' + encodeURIComponent(prj))
       .then(function(r){ return r.json(); })
       .then(function(res){
@@ -481,14 +651,14 @@
               var displayUrlEscaped = escapeHtml(displayUrl);
               var downloadUrlEscaped = escapeHtml(downloadUrl);
               var photoIndex = i + 1;
-              photoHtml += '<div class="inspection-photo-item"><img class="inspection-photo-thumb" src="' + displayUrlEscaped + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="event.stopPropagation(); zoomImage(\'' + displayUrlEscaped + '\')" title="點擊放大" onerror="this.parentElement.style.display=\'none\'"><button class="inspection-photo-btn" onclick="event.stopPropagation(); downloadPhoto(\'' + downloadUrlEscaped + '\', \'' + treeIdEscaped + '\', \'' + timeStrForDownload + '\', ' + photoIndex + ')">⬇️ #' + photoIndex + '</button></div>';
+              photoHtml += '<div class="inspection-photo-item"><img class="inspection-photo-thumb" src="' + displayUrlEscaped + '" data-zoom="' + displayUrlEscaped + '" loading="lazy" decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" title="點擊放大"><button class="inspection-photo-btn" data-download="' + downloadUrlEscaped + '" data-tree="' + treeIdEscaped + '" data-time="' + timeStrForDownload + '" data-index="' + photoIndex + '">⬇️ #' + photoIndex + '</button></div>';
             }
             photoHtml += '</div>';
           }
           html += '<div class="log"><span class="ok">' + escapeHtml(r.health) + '</span>｜' +
                  escapeHtml(r.staff) + '｜' + fmtTime(r.time) + '<br>' + escapeHtml(r.note||'') + photoHtml + '</div>';
         });
-        $('#logs').innerHTML = sanitizeHTML(html);
+        $('#logs').innerHTML = sanitizeLogsHTML(html);
       })
       .catch(function(err){
         console.error('Load logs error:', err);
