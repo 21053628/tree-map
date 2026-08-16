@@ -44,8 +44,8 @@ const Config = {
   },
 
   // 📷 [Phase5] 相片上傳策略：true＝兩階段（先傳 metadata 得 inspection_id，再逐張傳相片）
-  // ⚠️ 需要後端支援 inspection_photo type，且 inspection 成功時回傳 inspection_id
-  INSPECTION_SPLIT_PHOTOS: false
+  // ✅ [v2.58] 後端已支援 inspection_photo type，且 inspection 成功時回傳 inspection_id，故此啟用兩階段上傳
+  INSPECTION_SPLIT_PHOTOS: true
 };
 
 // 初始化配置
