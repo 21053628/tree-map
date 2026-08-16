@@ -30,7 +30,7 @@
       '#' + BADGE_ID + ' .bubble.ok{background:#2e7d32;}',
       '#' + BADGE_ID + ' .bubble.warn{background:#ffb300;color:#000;}',
       '#' + BADGE_ID + ' .bubble.err{background:#e53935;}',
-      '#' + PANEL_ID + '{position:fixed;right:12px;bottom:150px;z-index:99991;width:min(360px,calc(100vw - 24px));max-height:72vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;font-size:14px;color:#222;line-height:1.5;}',
+      '#' + PANEL_ID + '{position:fixed;right:12px;bottom:88px;z-index:99991;width:min(360px,calc(100vw - 24px));max-height:72vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;font-size:14px;color:#222;line-height:1.5;}',
       '#' + PANEL_ID + '.open{display:block;}',
       '#' + PANEL_ID + ' .sp-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee;font-weight:600;position:sticky;top:0;background:#fff;}',
       '#' + PANEL_ID + ' .sp-close{border:none;background:none;font-size:18px;cursor:pointer;color:#666;padding:0 4px;}',
@@ -53,6 +53,7 @@
       '.sync-topbar{display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:12px;}',
       '.sync-topbar a.back{margin-bottom:0;}',
       '#' + BADGE_ID + '.compact{position:static;right:auto;bottom:auto;display:inline-flex;width:auto;margin:0;padding:6px 12px;font-size:13px;box-shadow:none;vertical-align:middle;white-space:nowrap;flex-shrink:0;}',
+      '#' + BADGE_ID + '.in-drawer{position:static;right:auto;bottom:auto;display:flex;width:100%;justify-content:center;margin:0;padding:8px 12px;font-size:13px;border-radius:8px;box-shadow:none;}',
       '#' + PANEL_ID + '.compact-panel{bottom:auto;top:56px;}',
       // [UI] 電腦版地圖頁：同步掣上移，避開右下角 Tree Status 圖例
       '@media (min-width: 601px){#' + BADGE_ID + ':not(.compact){bottom:96px;} #' + PANEL_ID + ':not(.compact-panel){bottom:156px;}}'
@@ -80,6 +81,27 @@
     };
     var mo = new MutationObserver(attempt);
     mo.observe(app, { childList: true, subtree: true });
+    attempt();
+  }
+
+  // [UI] 地圖頁：等 Leaflet 建立 .layerbar 後，將同步掣插入「新增樹木」掣下方
+  function mountDrawerBadge(badge) {
+    var done = false;
+    var attempt = function () {
+      var bar = document.querySelector('.layerbar');
+      if (bar && !done) {
+        done = true;
+        var addTree = bar.querySelector('button[data-act="addTree"]');
+        if (addTree) {
+          addTree.parentNode.insertBefore(badge, addTree.nextSibling);
+        } else {
+          bar.appendChild(badge);
+        }
+        mo.disconnect();
+      }
+    };
+    var mo = new MutationObserver(attempt);
+    mo.observe(document.body, { childList: true, subtree: true });
     attempt();
   }
 
@@ -117,8 +139,9 @@
       document.body.appendChild(panel);
       mountTreeBadge(badge);
     } else {
-      document.body.appendChild(badge);
+      badge.classList.add('in-drawer');
       document.body.appendChild(panel);
+      mountDrawerBadge(badge);
     }
 
     _els = {
