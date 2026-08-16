@@ -24,13 +24,13 @@
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
     var css = [
-      '#' + BADGE_ID + '{position:fixed;right:12px;bottom:24px;z-index:99990;display:flex;align-items:center;gap:6px;background:#263238;color:#fff;border:none;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);touch-action:manipulation;}',
+      '#' + BADGE_ID + '{position:fixed;right:12px;bottom:100px;z-index:99990;display:flex;align-items:center;gap:6px;background:#263238;color:#fff;border:none;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);touch-action:manipulation;}',
       '#' + BADGE_ID + ':active{transform:scale(.97);}',
       '#' + BADGE_ID + ' .bubble{min-width:20px;height:20px;line-height:20px;border-radius:999px;font-size:12px;text-align:center;padding:0 6px;background:#546e7a;}',
       '#' + BADGE_ID + ' .bubble.ok{background:#2e7d32;}',
       '#' + BADGE_ID + ' .bubble.warn{background:#ffb300;color:#000;}',
       '#' + BADGE_ID + ' .bubble.err{background:#e53935;}',
-      '#' + PANEL_ID + '{position:fixed;right:12px;bottom:76px;z-index:99991;width:min(360px,calc(100vw - 24px));max-height:72vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;font-size:14px;color:#222;line-height:1.5;}',
+      '#' + PANEL_ID + '{position:fixed;right:12px;bottom:150px;z-index:99991;width:min(360px,calc(100vw - 24px));max-height:72vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;font-size:14px;color:#222;line-height:1.5;}',
       '#' + PANEL_ID + '.open{display:block;}',
       '#' + PANEL_ID + ' .sp-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee;font-weight:600;position:sticky;top:0;background:#fff;}',
       '#' + PANEL_ID + ' .sp-close{border:none;background:none;font-size:18px;cursor:pointer;color:#666;padding:0 4px;}',

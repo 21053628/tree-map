@@ -560,7 +560,7 @@ button.is-loading::after {
 
   .leaflet-top.leaflet-left {
     top: auto;
-    bottom: calc(10px + var(--safe-bottom));
+    bottom: calc(50px + var(--safe-bottom));
     left: 6px;
   }
   .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
@@ -606,7 +606,7 @@ button.is-loading::after {
 
   .layerbar-wrap {
     flex-direction: column-reverse;   /* FAB 固定喺底，抽屜向上彈 */
-    margin-bottom: 68px;              /* [UI] 提升 FAB，懸浮喺同步掣上方，避開版權文字 */
+    margin-bottom: 144px;             /* [UI] 提升 FAB，懸浮喺同步掣上方，避開版權文字 */
   }
   .layerbar {
     display: none;
