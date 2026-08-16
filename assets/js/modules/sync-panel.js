@@ -56,7 +56,9 @@
       '#' + BADGE_ID + '.in-drawer{position:static;right:auto;bottom:auto;display:flex;width:100%;justify-content:center;margin:0;padding:8px 12px;font-size:13px;border-radius:8px;box-shadow:none;}',
       '#' + PANEL_ID + '.compact-panel{bottom:auto;top:56px;}',
       // [UI] 電腦版地圖頁：同步掣上移，避開右下角 Tree Status 圖例
-      '@media (min-width: 601px){#' + BADGE_ID + ':not(.compact){bottom:96px;} #' + PANEL_ID + ':not(.compact-panel){bottom:156px;}}'
+      '@media (min-width: 601px){#' + BADGE_ID + ':not(.compact){bottom:96px;} #' + PANEL_ID + ':not(.compact-panel){bottom:156px;}}',
+      // [UI] 電腦版（≥769px）地圖頁：同步掣獨立固定喺右下、Tree Status 圖例正上方
+      '@media (min-width: 769px){#' + BADGE_ID + '.desktop-fixed{right:10px;bottom:96px;}}'
     ].join('\n');
     var style = document.createElement('style');
     style.id = STYLE_ID;
@@ -139,9 +141,17 @@
       document.body.appendChild(panel);
       mountTreeBadge(badge);
     } else {
-      badge.classList.add('in-drawer');
+      // [UI] 電腦版地圖頁：同步掣獨立固定喺右下，唔塞入左下工具列；
+      //      手機版維持插入抽屜（in-drawer）不變。
+      var isDesktop = window.matchMedia && window.matchMedia('(min-width: 769px)').matches;
       document.body.appendChild(panel);
-      mountDrawerBadge(badge);
+      if (isDesktop) {
+        badge.classList.add('desktop-fixed');
+        document.body.appendChild(badge);
+      } else {
+        badge.classList.add('in-drawer');
+        mountDrawerBadge(badge);
+      }
     }
 
     _els = {
