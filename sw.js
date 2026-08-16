@@ -6,7 +6,7 @@
  *   4. install 記錄預快取結果，方便排查漏檔
  *   5. 升版號強制清走舊快取
  */
-const VERSION = 'v2.3.0'; // 🔥 UI 修訂：t.html 頂欄 Flex（返回掣左、同步掣右）+ 桌面圖例避讓 + 手機 FAB
+const VERSION = 'v2.4.0'; // 🔥 手機版 UI：搜尋列垂直堆疊 + 同步掣避開版權 + FAB 間距 + 狀態提示移至頂部
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;

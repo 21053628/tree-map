@@ -538,9 +538,9 @@ button.is-loading::after {
 
 /* ================= 12. 手機版整合佈局 ================= */
 @media (max-width: 600px) {
-  #bar { left: 8px; right: 8px; top: 8px; width: auto; flex-direction: row; flex-wrap: nowrap; gap: 4px; }
-  #bar select { flex: 0 1 42%; min-width: 0; width: auto; font-size: 16px; padding: 10px 8px; }
-  .search-wrap { flex: 1 1 160px; width: auto; order: 2; min-width: 0; }
+  #bar { left: 8px; right: 8px; top: 8px; width: auto; flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+  #bar select { width: 100%; flex: none; min-width: 0; font-size: 16px; padding: 10px 8px; }
+  .search-wrap { width: 100%; flex: none; order: 0; min-width: 0; }
   .search-wrap input { font-size: 16px; padding: 10px; }
   .search-wrap input:focus { background: rgba(255,255,255,0.98); }
 
@@ -574,7 +574,7 @@ button.is-loading::after {
 
   .leaflet-bottom.leaflet-right {
     bottom: calc(10px + var(--safe-bottom));
-    right: 6px;
+    right: 12px;
     max-width: calc(100vw - 12px);
   }
 
@@ -583,7 +583,8 @@ button.is-loading::after {
 
   #status {
     font-size: 12px;
-    bottom: calc(100px + var(--safe-bottom)) !important;
+    top: calc(116px + var(--safe-top, 0px));
+    bottom: auto !important;
     max-width: 92%;
   }
 
@@ -605,7 +606,7 @@ button.is-loading::after {
 
   .layerbar-wrap {
     flex-direction: column-reverse;   /* FAB 固定喺底，抽屜向上彈 */
-    margin-bottom: 60px;              /* [UI] 提升 FAB，避開右下角同步掣 */
+    margin-bottom: 68px;              /* [UI] 提升 FAB，懸浮喺同步掣上方，避開版權文字 */
   }
   .layerbar {
     display: none;

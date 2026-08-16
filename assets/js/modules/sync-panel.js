@@ -24,7 +24,7 @@
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
     var css = [
-      '#' + BADGE_ID + '{position:fixed;right:12px;bottom:16px;z-index:99990;display:flex;align-items:center;gap:6px;background:#263238;color:#fff;border:none;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);touch-action:manipulation;}',
+      '#' + BADGE_ID + '{position:fixed;right:12px;bottom:24px;z-index:99990;display:flex;align-items:center;gap:6px;background:#263238;color:#fff;border:none;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);touch-action:manipulation;}',
       '#' + BADGE_ID + ':active{transform:scale(.97);}',
       '#' + BADGE_ID + ' .bubble{min-width:20px;height:20px;line-height:20px;border-radius:999px;font-size:12px;text-align:center;padding:0 6px;background:#546e7a;}',
       '#' + BADGE_ID + ' .bubble.ok{background:#2e7d32;}',
