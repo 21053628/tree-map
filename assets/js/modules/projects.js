@@ -1,6 +1,6 @@
 /**
  * 地盤標記與選擇模組
- * v2.43 - 修正「前往地盤」按鈕嘅 zoom 級別
+ * v2.43 - 修正「前往地盤」按鈕的 zoom 級別
  */
 import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';

@@ -3,9 +3,9 @@
  * 
  * 🚀 優化重點：
  * 1. [殺手級優化] 重構 LRU 快取：利用 Map 原生順序特性，將 get/set 複雜度由 O(N) 降至 O(1)
- * 2. [記憶體優化] 移除冗餘嘅 cacheOrder 陣列，減少 GC (垃圾回收) 壓力
- * 3. [批量優化] batchToHK80 減少不必要嘅 parseFloat 呼叫與記憶體分配
- * 4. [容錯優化] 強化 proj4 未載入時嘅降級處理，避免阻斷主線程
+ * 2. [記憶體優化] 移除冗餘的 cacheOrder 陣列，減少 GC (垃圾回收) 壓力
+ * 3. [批量優化] batchToHK80 減少不必要的 parseFloat 呼叫與記憶體分配
+ * 4. [容錯優化] 強化 proj4 未載入時的降級處理，避免阻斷主線程
  */
 
 const CoordUtils = (function() {
@@ -60,7 +60,7 @@ const CoordUtils = (function() {
   
   /**
    * 🔥 [核心優化] O(1) 複雜度的 LRU 讀取
-   * 利用 Map 嘅特性：delete 後再 set，該 key 就會自動排到最後面（最新訪問）
+   * 利用 Map 的特性：delete 後再 set，該 key 就會自動排到最後面（最新訪問）
    */
   function getFromCache(key) {
     if (!coordCache.has(key)) return null;

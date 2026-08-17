@@ -4,10 +4,10 @@
  * - toggleGeolocation：開啟／關閉持續追蹤（含即時精度顯示）
  *
  * 精準度改善（方案 A）：
- * 1. maximumAge: 0   → 強制攞全新 fix，唔用舊定位
- * 2. CALIBRATION_TIMEOUT: 25000 → 加長等待，等收多啲衛星
- * 3. 多點採樣＋中位數過濾 → 一班 sample 取中位數，剔走異常大誤差點
- * 4. MIN_ACCURACY 門檻 → 等到精度夠先鎖定，否則顯示「等緊」
+ * 1. maximumAge: 0   → 強制取得全新 fix，不使用舊定位
+ * 2. CALIBRATION_TIMEOUT: 25000 → 加長等待，等接收更多衛星
+ * 3. 多點採樣＋中位數過濾 → 一批 sample 取中位數，剔除異常大誤差點
+ * 4. MIN_ACCURACY 門檻 → 等到精度足夠才鎖定，否則顯示「等待中」
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
@@ -25,7 +25,7 @@ const samples = [];
 let continuousMode = false;
 
 // 🔥 修復：精準度圓圈專用 SVG renderer（否則用 map 預設 Canvas renderer，
-// 會生成覆蓋全視窗嘅 canvas 並食晒點擊，令下方樹木撳唔到）
+// 會生成覆蓋全視窗的 canvas 並佔滿點擊，令下方樹木無法點擊）
 let circleRenderer = null;
 function getCircleRenderer() {
   if (!circleRenderer) {
@@ -80,7 +80,7 @@ function median(arr) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-// 由採樣池計算「穩定位置」：剔走異常大誤差點後取中位數
+// 由採樣池計算「穩定位置」：剔除異常大誤差點後取中位數
 function computeStable() {
   let pool = samples;
   if (samples.length >= 4) {
@@ -112,7 +112,7 @@ function lockBest(fly) {
     drawPosition(stable.lat, stable.lng, stable.acc, fly);
     updateStatus('✅ 已定位（精準度 ±' + Math.round(stable.acc) + ' m）');
   } else {
-    updateStatus('❌ 定位失敗（收唔到有效訊號）');
+    updateStatus('❌ 定位失敗（收不到有效訊號）');
   }
 }
 
@@ -129,10 +129,10 @@ function addSample(pos, flyNow) {
   if (stable.acc <= MIN_ACCURACY) {
     updateStatus('📡 定位中（±' + Math.round(stable.acc) + ' m）✅ 已達目標精度');
   } else {
-    updateStatus('📡 定位中（±' + Math.round(stable.acc) + ' m）… 請企定，遠離樹冠／高牆');
+    updateStatus('📡 定位中（±' + Math.round(stable.acc) + ' m）… 請站穩，遠離樹冠／高牆');
   }
 
-  // 一次性定位：精度夠／收夠 sample 就鎖定（持續追蹤則唔鎖，等用家手動停止）
+  // 一次性定位：精度足夠／收到足夠 sample 就鎖定（持續追蹤則不鎖定，等待使用者手動停止）
   if (!continuousMode && (stable.acc <= MIN_ACCURACY || samples.length >= SAMPLE_COUNT)) {
     lockBest(true);
   }
@@ -140,7 +140,7 @@ function addSample(pos, flyNow) {
 
 function onError(err) {
   const msg = {
-    1: '❌ 定位被拒絕（請喺瀏覽器允許位置權限）',
+    1: '❌ 定位被拒絕（請在瀏覽器允許位置權限）',
     2: '❌ 定位失敗（訊號不佳）',
     3: '❌ 定位超時'
   };
@@ -148,11 +148,11 @@ function onError(err) {
 }
 
 export function locateOnce() {
-  if (!('geolocation' in navigator)) { updateStatus('❌ 呢部機唔支援定位'); return; }
+  if (!('geolocation' in navigator)) { updateStatus('❌ 此裝置不支援定位'); return; }
   stopWatch();
   samples.length = 0;
   continuousMode = false;
-  updateStatus('📡 定位中… 請舉高手機、遠離樹冠、企定等 10–25 秒');
+  updateStatus('📡 定位中… 請舉高手機、遠離樹冠、站穩等 10–25 秒');
 
   navigator.geolocation.getCurrentPosition(
     function (p) { addSample(p, true); },
@@ -166,7 +166,7 @@ export function locateOnce() {
     { enableHighAccuracy: true, timeout: CALIBRATION_TIMEOUT, maximumAge: 0 }
   );
 
-  // 超時後備：時間到就用目前最佳定位，唔會鎖死喺「等緊」
+  // 超時後備：時間到就用目前最佳定位，不會卡在「等待中」
   finishTimer = setTimeout(function () {
     lockBest(true);
   }, CALIBRATION_TIMEOUT);
@@ -179,7 +179,7 @@ export function toggleGeolocation(btn) {
     updateStatus('✅ 已停止追蹤位置');
     return;
   }
-  if (!('geolocation' in navigator)) { updateStatus('❌ 呢部機唔支援定位'); return; }
+  if (!('geolocation' in navigator)) { updateStatus('❌ 此裝置不支援定位'); return; }
   if (btn) btn.classList.add('on');
   samples.length = 0;
   continuousMode = true;

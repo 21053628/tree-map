@@ -1,11 +1,11 @@
 <!--
-  ⚠️ LEGACY / 未使用：呢個注入 script 依賴後端 HtmlService 模板（<?= token ?>）注入 token，
-  但現時 code.gs 只用 JSON API（doGet/doPost），冇用 HtmlService 派發任何頁面，所以呢個檔唔會被用到。
-  實際 token 注入由前端 assets/js/api.js 完成，請勿依賴呢個檔。
+  ⚠️ LEGACY / 未使用：這個注入 script 依賴後端 HtmlService 模板（<?= token ?>）注入 token，
+  但現時 code.gs 只用 JSON API（doGet/doPost），沒有使用 HtmlService 派發任何頁面，所以這個檔案不會被用到。
+  實際 token 注入由前端 assets/js/api.js 完成，請勿依賴這個檔案。
 -->
 <script>
   (function() {
-    // 由後端注入嘅登入 token（可從 sessionStorage 讀取，作為 fallback）
+    // 由後端注入的登入 token（可從 sessionStorage 讀取，作為 fallback）
     var AUTH_TOKEN = '<?= token ?>' || sessionStorage.getItem('auth_token') || '';
 
     if (!window.fetch || !AUTH_TOKEN) return;
@@ -17,18 +17,18 @@
       if (isRedirecting) return;
       isRedirecting = true;
       try {
-        // 移除所有 query 參數，避免 token 殘留喺 URL
+        // 移除所有 query 參數，避免 token 殘留在 URL
         var url = window.top.location.href.split('?')[0];
         window.top.location.href = url;
       } catch(e) {
-        // 如果跨域無法存取 top，退而求其次用當前視窗
+        // 如果跨域無法存取 top，退而求其次使用當前視窗
         var currentUrl = window.location.href.split('?')[0];
         window.location.href = currentUrl;
       }
     }
 
     function addTokenToBody(body) {
-      // 只處理字串型態嘅 body（通常係 JSON 字串）
+      // 只處理字串型態的 body（通常是 JSON 字串）
       if (typeof body !== 'string') return body;
       
       try {
@@ -38,7 +38,7 @@
           return JSON.stringify(data);
         }
       } catch(e) {
-        // 唔係合法 JSON，或者已經有 token，就原樣返回
+        // 不是合法 JSON，或者已經有 token，就原樣返回
       }
       return body;
     }
@@ -46,7 +46,7 @@
     window.fetch = function(url, opts) {
       opts = opts || {};
       
-      // 只攔截 POST 且帶有 body 嘅請求
+      // 只攔截 POST 且帶有 body 的請求
       if (String(opts.method || 'GET').toUpperCase() === 'POST' && opts.body) {
         try {
           opts = Object.assign({}, opts, {
@@ -66,14 +66,14 @@
         
         // 再檢查回應內容是否有 UNAUTHORIZED 錯誤
         try {
-          // clone 一份，唔影響原本嘅 response body
+          // clone 一份，不影響原本的 response body
           var cloned = res.clone();
           cloned.json().then(function(data) {
             if (data && data.ok === false && data.error === 'UNAUTHORIZED') {
               redirectToLogin();
             }
           }).catch(function() {
-            // 唔係 JSON 或者解析失敗，忽略
+            // 不是 JSON 或者解析失敗，忽略
           });
         } catch(e) {
           // clone 失敗，忽略

@@ -1,6 +1,6 @@
 /**
  * 事件匯流排 [Phase4]（零業務依賴）
- * 用於解除模組間循環依賴：模組只 emit 事件，唔再直接互相 import。
+ * 用於解除模組間循環依賴：模組只 emit 事件，不再直接互相 import。
  */
 const listeners = new Map(); // event -> Set<fn>
 

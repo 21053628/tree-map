@@ -2,7 +2,7 @@
  * 繪圖／量測／落點互動模組 [Phase1]（零 vendor）
  * - startMeasure('line'|'area')：量距離／面積
  * - startDrawPolygon(cb)：畫地盤邊界（多邊形）
- * - startPick(cb, hint)：撳一下揀位置（新增／移動樹木）
+ * - startPick(cb, hint)：按一下選位置（新增／移動樹木）
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
@@ -21,7 +21,7 @@ const LINE_STYLE = { color: '#1565c0', weight: 3 };
 const AREA_STYLE = { color: '#1565c0', weight: 2, fillColor: '#1565c0', fillOpacity: 0.15 };
 
 // 🔥 修復：量測圖形改用 SVG renderer（否則用 map 預設 Canvas renderer，
-// 會生成覆蓋全視窗嘅 canvas 並食晒點擊，令下方樹木撳唔到）
+// 會生成覆蓋全視窗的 canvas 並佔滿點擊，令下方樹木無法點擊）
 let svgRenderer = null;
 function getSvgRenderer() {
   if (!svgRenderer) svgRenderer = L.svg({ padding: 0.5 });
@@ -127,7 +127,7 @@ function onMouseMove(e) {
   } else if (pts.length >= 2) {
     text = '📐 ' + fmtArea(computeArea(preview)) + '｜周 ' + fmtLen(computeLength(preview));
   } else {
-    text = '📐 撳多一點…';
+    text = '📐 請繼續加點…';
   }
   if (barEl) barEl.querySelector('.ib-readout').textContent = text;
 
@@ -138,7 +138,7 @@ function onMouseMove(e) {
 function finishShape() {
   const m = mode;
   if (m === 'line') {
-    if (pts.length < 2) { updateStatus('⚠️ 至少撳兩點先可以量距離'); return; }
+    if (pts.length < 2) { updateStatus('⚠️ 至少按兩點才能量距離'); return; }
     const donePts = pts.slice();
     const len = computeLength(donePts);
     removeFinal();
@@ -149,7 +149,7 @@ function finishShape() {
     return;
   }
   if (m === 'area' || m === 'polygon') {
-    if (pts.length < 3) { updateStatus('⚠️ 至少撳三點先可以量面積'); return; }
+    if (pts.length < 3) { updateStatus('⚠️ 至少按三點才能量面積'); return; }
     const donePts = pts.slice();
     const area = computeArea(donePts);
     const len = computeLength(donePts);
@@ -205,17 +205,17 @@ function begin(m, opts) {
 }
 
 export function startMeasure(kind) {
-  begin(kind, { hint: kind === 'line' ? '📏 量距：撳地圖加點，撳「完成」結束' : '📐 量面積：撳地圖加點，撳「完成」結束' });
+  begin(kind, { hint: kind === 'line' ? '📏 量距：按地圖加點，按「完成」結束' : '📐 量面積：按地圖加點，按「完成」結束' });
 }
 
 export function startDrawPolygon(cb) {
   polygonCb = cb;
-  begin('polygon', { hint: '🖍 畫邊界：撳地圖加角點，撳「完成」閉合' });
+  begin('polygon', { hint: '🖍 畫邊界：按地圖加角點，按「完成」閉合' });
 }
 
 export function startPick(cb, hint) {
   pickCb = cb;
-  begin('pick', { hint: hint || '📍 撳一下選擇位置' });
+  begin('pick', { hint: hint || '📍 按一下選擇位置' });
 }
 
 document.addEventListener('keydown', function (e) {

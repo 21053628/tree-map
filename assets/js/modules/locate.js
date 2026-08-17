@@ -125,8 +125,8 @@ export function checkURLParams() {
   let lat = params.get('lat');
   let lng = params.get('lng');
 
-  // 🔥 [v2.44] 移除 localStorage 讀取：F5 刷新時 URL 乾淨，直接留喺預設位置
-  // 只有當 URL 真正帶有參數（例如由 t.html 撳返回掣）先至會定位
+  // 🔥 [v2.44] 移除 localStorage 讀取：F5 刷新時 URL 乾淨，直接留在預設位置
+  // 只有當 URL 真正帶有參數（例如由 t.html 按返回按鈕）才會定位
 
   if (treeId || projectId || (lat && lng)) {
     setTimeout(function () { locateTree(treeId, projectId, lat, lng); }, 600);

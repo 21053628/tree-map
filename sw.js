@@ -4,9 +4,9 @@
  *   2. 導航離線 fallback：網路失敗絕不拋錯，改回退 cached index.html
  *   3. 快取清理精準化（用「前綴 + 完整版本」比對，不再用 indexOf）
  *   4. install 記錄預快取結果，方便排查漏檔
- *   5. 升版號強制清走舊快取
+ *   5. 升版號強制清除舊快取
  */
-const VERSION = 'v2.6.0'; // 🔥 手機版 UI：同步掣移入抽屜 + FAB 獨立右下 + 縮放掣避開比例尺
+const VERSION = 'v2.6.0'; // 🔥 手機版 UI：同步按鈕移入抽屜 + FAB 獨立右下 + 縮放按鈕避開比例尺
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -155,7 +155,7 @@ function isCacheFresh(res, maxAge) {
   return (Date.now() - parseInt(cachedAt, 10)) < maxAge;
 }
 
-// 🔥 可中止嘅 fetch：弱網下唔會長期掛住，超時即刻回退快取
+// 🔥 可中止的 fetch：弱網下不會長時間停滯，超時即刻回退快取
 function fetchWithTimeout(req, timeout) {
   return new Promise(function(resolve, reject) {
     var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -226,7 +226,7 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  // 2. GAS API 請求 - 加超時，弱網下即刻回退快取，唔會長期掛住
+  // 2. GAS API 請求 - 加超時，弱網下即刻回退快取，不會長時間停滯
   if (url.hostname.indexOf('script.google.com') !== -1) {
     e.respondWith(
       fetchWithTimeout(req, 12000).then(function(res) {

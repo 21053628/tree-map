@@ -1,7 +1,7 @@
 /**
  * 全域狀態模組
  * [Phase3] 拆分職責：
- *   - 業務資料（PROJECTS / TREES / 索引 / speciesCache）留喺呢度
+ *   - 業務資料（PROJECTS / TREES / 索引 / speciesCache）留在這裡
  *   - UI/渲染層狀態（map / layers / GPS / draw / perfMetrics）移到 ui-state.js
  * 透過 Proxy 將 UI 欄位轉發到 uiState，對下游保持 `state.xxx` 存取不變。
  */

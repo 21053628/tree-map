@@ -81,7 +81,7 @@ export async function load() {
     }
   }
 
-  // 2️⃣ 背景刷新：只接受「真・最新」數據，過期快取一律拒絕＋自動重試
+  // 2️⃣ 背景刷新：只接受「真正最新」的資料，過期快取一律拒絕並自動重試
   async function refreshFromGAS() {
     const res = await ApiService.get('bootstrap');
 

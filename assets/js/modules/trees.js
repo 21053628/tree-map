@@ -1,7 +1,7 @@
 /**
  * 樹木標記與 popup 模組
  * v4.4 - 加入狀態過濾（配合 filters.js）
- * v4.3 - 🔢 掣升級做三模式循環：智能(默認) → 恆常 → 關閉 → 智能…
+ * v4.3 - 🔢 按鈕升級做三模式循環：智能(默認) → 恆常 → 關閉 → 智能…
  * v4.2 - 樹木編號標籤系統
  * v4.1 - L.circleMarker + Canvas 渲染
  */
@@ -63,7 +63,7 @@ const LABEL_MAX_COUNT = 400;
 let labelMode = 'auto';
 let labelLayer = null;
 let _labelTimer = null;
-let _lastLabelZoom = null; // 🔥 記錄上次 label 刷新時嘅 zoom，平移時唔重建 label
+let _lastLabelZoom = null; // 🔥 記錄上次 label 刷新時的 zoom，平移時不重建 label
 
 function labelsShouldShow(){
   if (labelMode === 'on') return true;
@@ -71,7 +71,7 @@ function labelsShouldShow(){
   return !!(state.map && state.map.getZoom() >= LABEL_MIN_ZOOM); // auto
 }
 
-// 🔥 按鈕外觀跟住模式變
+// 🔥 按鈕外觀跟隨模式變
 function updateLabelBtn(){
   const btn = document.querySelector('.layerbar button[data-l="labels"]');
   if (!btn) return;
@@ -83,18 +83,18 @@ function updateLabelBtn(){
     btn.style.opacity = '';
     btn.style.filter = '';
   }
-  btn.title = labelMode === 'on' ? '樹木編號：恆常顯示（撳切換）'
-        : labelMode === 'off' ? '樹木編號：關閉（撳切換）'
-        : '樹木編號：智能（撳切換）';
+  btn.title = labelMode === 'on' ? '樹木編號：恆常顯示（按切換）'
+        : labelMode === 'off' ? '樹木編號：關閉（按切換）'
+        : '樹木編號：智能（按切換）';
 }
 
-// 🔥 三模式循環（map.js 嘅 🔢 掣 call 呢個）
+// 🔥 三模式循環（map.js 的 🔢 按鈕呼叫這個）
 export function toggleTreeLabels(){
   labelMode = labelMode === 'auto' ? 'on' : (labelMode === 'on' ? 'off' : 'auto');
   updateLabelBtn();
   refreshLabels();
   if (labelMode === 'on' && !labelLayer && state.curProject) {
-    updateStatus('⚠️ 可見樹木太多，請放大先顯示編號');
+    updateStatus('⚠️ 可見樹木太多，請先放大再顯示編號');
   } else if (labelMode === 'on') {
     updateStatus('✅ 樹木編號：恆常顯示');
   } else if (labelMode === 'off') {
@@ -112,7 +112,7 @@ export function refreshLabels(){
   if (!labelsShouldShow() || !state.curProject) return;
 
   const bounds = state.map.getBounds();
-  const list = currentTrees(); // 🔥 [v4.4] 使用過濾後嘅樹木
+  const list = currentTrees(); // 🔥 [v4.4] 使用過濾後的樹木
   const visible = [];
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
@@ -140,7 +140,7 @@ export function refreshLabels(){
   labelLayer.addTo(state.map);
 }
 
-// 🔥 防抖版本（俾 moveend 用）
+// 🔥 防抖版本（供 moveend 用）
 export function scheduleRefreshLabels(){
   clearTimeout(_labelTimer);
   _labelTimer = setTimeout(refreshLabels, 120);
@@ -152,7 +152,7 @@ export function scheduleRefreshLabels(){
 export function drawTrees(silent) {
   const startTime = performance.now();
 
-  // 🔥 拖動地圖重繪前，記低目前開緊嘅樹木 popup 編號，等重繪完可以重新開返
+  // 🔥 拖動地圖重繪前，記錄目前開啟中的樹木 popup 編號，等重繪完可以重新開啟
   let openTreeId = null;
   if (state.map && state.map._popup && state.map._popup.isOpen() && state.map._popup._source && state.map._popup._source._treeId != null) {
     openTreeId = String(state.map._popup._source._treeId);
@@ -169,9 +169,9 @@ export function drawTrees(silent) {
   }
 
   const allTrees = state.treeSearchIndex.get(state.curProject) || [];
-  const list = currentTrees(); // 🔥 [v4.4] 使用過濾後嘅樹木
+  const list = currentTrees(); // 🔥 [v4.4] 使用過濾後的樹木
 
-  // 🔥 [C1] 只渲染可視範圍內嘅樹（含邊距）
+  // 🔥 [C1] 只渲染可視範圍內的樹（含邊距）
   let viewBounds = null;
   if (state.map) {
     viewBounds = state.map.getBounds().pad(BOUNDS_PADDING);
@@ -252,7 +252,7 @@ export function drawTrees(silent) {
     state.treeLayer.addLayers(markers);
   }
 
-  // 🔥 拖動重繪後重新開返先前開緊嘅樹木 popup（保留「移動唔關視窗」行為）
+  // 🔥 拖動重繪後重新開啟先前開啟中的樹木 popup（保留「移動不關視窗」行為）
   if (silent && openTreeId) {
     const key = state.curProject + '_' + openTreeId;
     const m = state.treesCache.get(key) || state.treesCache.get(openTreeId);
@@ -262,8 +262,8 @@ export function drawTrees(silent) {
   state.perfMetrics.totalRenders++;
   state.perfMetrics.renderTime = performance.now() - startTime;
 
-  // 🔥 [優化] 平移重繪（silent）唔重建 label（Leaflet 會自動跟住移動），
-  // 只有 zoom 變化（或非 silent 的全量重繪）先至重建，避免重複 DOM 操作
+  // 🔥 [優化] 平移重繪（silent）不重建 label（Leaflet 會自動跟隨移動），
+  // 只有 zoom 變化（或非 silent 的全量重繪）才重建，避免重複 DOM 操作
   if (silent) {
     const z = state.map ? state.map.getZoom() : null;
     if (z !== _lastLabelZoom) refreshLabels();

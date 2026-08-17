@@ -1,7 +1,7 @@
 /**
  * 樹木管理系統 - 認證服務模組（真實後端驗證版）
- * - 密碼唔再放前端，由 Apps Script 後端驗證
- * - 成功後攞 Token，存 4 小時，過期自動再問
+ * - 密碼不再放在前端，由 Apps Script 後端驗證
+ * - 成功後取得 Token，存 4 小時，過期自動重新詢問
  */
 const AuthService = (function() {
   'use strict';
@@ -65,7 +65,7 @@ const AuthService = (function() {
     if (store) store.removeItem(TOKEN_KEY);
   }
 
-  /* 工作人員閘：已登入直接放行；未登入彈密碼框驗證 */
+  /* 工作人員閘：已登入直接放行；未登入跳出密碼框驗證 */
   async function promptAuth(message) {
     if (isAuthenticated()) return true;
     for (;;) {

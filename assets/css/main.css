@@ -1,8 +1,8 @@
 /* =========================================================
    樹木管理系統 main.css v2.61
    - 改進：動畫曲線優化、焦點可見性、觸控回饋、效能提升
-   - 修正：平板/細視窗桌面 bar 被推去左邊（left: auto）
-   - 修正：filter 面板開住時隱藏狀態雲（body:has）
+   - 修正：平板/細視窗桌面 bar 被推到左邊（left: auto）
+   - 修正：filter 面板開啟時隱藏狀態雲（body:has）
    - 新增：focus-visible、高對比模式、滾動條優化
    ========================================================= */
 
@@ -307,7 +307,7 @@ body.panel-open::before {
   transform: translateX(-50%) scale(1.08);
   box-shadow: 0 10px 30px rgba(0,0,0,.3);
 }
-/* 🔥 [v2.60] filter 面板開住時，狀態雲自動隱藏，唔再擋路 */
+/* 🔥 [v2.60] filter 面板開啟時，狀態雲自動隱藏，不再擋路 */
 body:has(.filter-panel) #status {
   opacity: 0 !important;
   visibility: hidden;
@@ -346,7 +346,7 @@ body:has(.filter-panel) #status {
   cursor: pointer;
 }
 
-/* ================= 8. Layer Bar＋FAB＋動作掣 ================= */
+/* ================= 8. Layer Bar＋FAB＋動作按鈕 ================= */
 .layerbar-wrap {
   position: relative;
   display: flex;
@@ -605,8 +605,8 @@ button.is-loading::after {
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 
   .layerbar-wrap {
-    flex-direction: column-reverse;   /* FAB 固定喺底，抽屜向上彈 */
-    margin-bottom: 24px;              /* [UI] FAB 獨立喺右下，唔再堆疊其他掣 */
+    flex-direction: column-reverse;   /* FAB 固定在底部，抽屜向上彈 */
+    margin-bottom: 24px;              /* [UI] FAB 獨立在右下，不再堆疊其他按鈕 */
   }
   .layerbar {
     display: none;
@@ -629,7 +629,7 @@ button.is-loading::after {
   .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
   .drawer-sep { width: auto; height: 1px; align-self: auto; margin: 4px 2px; }
 
-  /* 🔥 分類掣（測量工具／圖層）：可展開／收起 */
+  /* 🔥 分類按鈕（測量工具／圖層）：可展開／收起 */
   .layerbar .drawer-cat {
     justify-content: space-between;
     font-weight: 600;
@@ -816,7 +816,7 @@ button.is-loading::after {
   }
 }
 
-/* ================= 🎚 桌面過濾（圖層）掣 ================= */
+/* ================= 🎚 桌面過濾（圖層）按鈕 ================= */
 #filterBtn.filter-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%; padding: 10px 12px; border-radius: 8px;
@@ -840,7 +840,7 @@ button.is-loading::after {
 }
 
 /* ================= 📍 [Phase1] GIS 工具（定位／量測／繪圖／全螢幕） ================= */
-/* 全螢幕＋工具 icon bar（電腦版，垂直排列喺縮放掣下面） */
+/* 全螢幕＋工具 icon bar（電腦版，垂直排列在縮放按鈕下面） */
 .leaflet-control .gis-btn {
   width: 34px; height: 34px; line-height: 34px;
   font-size: 16px; text-align: center; color: #333;
@@ -852,7 +852,7 @@ button.is-loading::after {
 .leaflet-control .gis-btn:hover { background: #f4f4f4; }
 .leaflet-control .gis-btn:active { transform: scale(0.95); }
 .leaflet-touch .leaflet-control .gis-btn { width: 40px; height: 40px; line-height: 40px; font-size: 18px; }
-/* 手機版：隱藏全螢幕＋工具 icon bar（工具已喺箭咀抽屜入面） */
+/* 手機版：隱藏全螢幕＋工具 icon bar（工具已在箭頭抽屜內） */
 @media (max-width: 600px) {
   .leaflet-top.leaflet-left .gis-tools { display: none; }
 }
@@ -896,7 +896,7 @@ button.is-loading::after {
 }
 .measure-tip::before { border-top-color: rgba(21,101,192,.92) !important; }
 
-/* 新增樹木表單「地圖落點」掣 */
+/* 新增樹木表單「地圖落點」按鈕 */
 #panel .pick-loc-btn {
   background: var(--accent); color: #fff; width: 100%; padding: 12px;
   border: none; border-radius: 8px; font-size: 14px; font-weight: 600; margin-top: 8px;

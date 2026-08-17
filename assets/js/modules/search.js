@@ -1,6 +1,6 @@
 /**
  * 搜尋功能模組
- * v2.46 - 加入 Debounce 優化，減少手機打字時嘅 CPU 空轉
+ * v2.46 - 加入 Debounce 優化，減少手機打字時的 CPU 空轉
  */
 import { state } from './state.js';
 import { DOM, escapeHtml } from './dom.js';
@@ -19,7 +19,7 @@ export function buildSearchIndex() {
 }
 
 export function handleSearch(query) {
-  // 🔥 [v2.46 性能優化] Debounce：停低打字 150ms 先至觸發搜尋
+  // 🔥 [v2.46 性能優化] Debounce：停止打字 150ms 才觸發搜尋
   if (_searchTimer) clearTimeout(_searchTimer);
   
   _searchTimer = setTimeout(() => {
@@ -28,7 +28,7 @@ export function handleSearch(query) {
     const q = String(query || '').trim().toLowerCase();
 
     if (!state.curProject) {
-      box.innerHTML = '<div class="sr-item sr-hint">👉 請先選擇地盤先可以搜尋</div>';
+      box.innerHTML = '<div class="sr-item sr-hint">👉 請先選擇地盤才能搜尋</div>';
       box.style.display = 'block';
       return;
     }
@@ -45,7 +45,7 @@ export function handleSearch(query) {
     }
 
     if (!results.length) {
-      box.innerHTML = '<div class="sr-item sr-hint">🤷 搵唔到「' + escapeHtml(query) + '」</div>';
+      box.innerHTML = '<div class="sr-item sr-hint">🤷 找不到「' + escapeHtml(query) + '」</div>';
       box.style.display = 'block';
       return;
     }

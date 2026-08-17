@@ -7,7 +7,7 @@
     ? Config.API_ENDPOINT
     : '';
 
-  // 🔥 [Phase6] 初始化共用 API service，移除各頁散落嘅 fetch endpoint 設定
+  // 🔥 [Phase6] 初始化共用 API service，移除各頁散落的 fetch endpoint 設定
   // 注意：api.js 用 const 建立 ApiService（非同 window property），故用 global 變數檢查
   if (typeof ApiService !== 'undefined' && Config.API_ENDPOINT) {
     ApiService.init(Config.API_ENDPOINT);
@@ -15,7 +15,7 @@
 
   const escapeHtml = window.TreeUtils.escapeHtml;
 
-  // DOMPurify 兜底（保留本頁 rely 嘅 inline onclick/onerror，其餘一律淨化）
+  // DOMPurify 兜底（保留本頁 rely 的 inline onclick/onerror，其餘一律淨化）
   function sanitizeHTML(html) {
     if (typeof DOMPurify !== 'undefined') {
       return DOMPurify.sanitize(html, { ADD_ATTR: ['onclick', 'onerror'] });
@@ -23,7 +23,7 @@
     return html;
   }
 
-  // [Phase7] 巡查記錄（#logs）用嚴格淨化：唔允許任何 inline onclick/onerror
+  // [Phase7] 巡查記錄（#logs）用嚴格淨化：不允許任何 inline onclick/onerror
   function sanitizeLogsHTML(html) {
     if (typeof DOMPurify !== 'undefined') {
       return DOMPurify.sanitize(html);
@@ -57,8 +57,8 @@
     return true;
   };
 
-  // 🔥 [Phase6] 認證收斂到共用 AuthService，刪走內嵌重複登入邏輯。
-  // 保留原離線特判：離線且無有效 token 時，直接提示，唔好傻等網路。
+  // 🔥 [Phase6] 認證收斂到共用 AuthService，刪除內嵌重複登入邏輯。
+  // 保留原離線特判：離線且無有效 token 時，直接提示，不要空等網路。
   async function staffOk(){
     if (typeof AuthService !== 'undefined' && AuthService.isAuthenticated()) return true;
 
@@ -94,7 +94,7 @@
         }
         const t = res.data;
         if(!t){
-          $('#app').innerHTML = '<div class="card error">❌ 搵唔到樹木：<b>' + escapeHtml(id) + '</b></div>';
+          $('#app').innerHTML = '<div class="card error">❌ 找不到樹木：<b>' + escapeHtml(id) + '</b></div>';
           return;
         }
         TREE = t; render(t); initMiniMap(t); loadLogs();
@@ -332,7 +332,7 @@
 
   function isValidHealth(v){ return VALID_HEALTH.indexOf(v) !== -1; }
 
-  // HK80 N/E 必須係有效數字，並喺香港合理範圍
+  // HK80 N/E 必須是有效數字，並在香港合理範圍
   function isValidHK80(N, E){
     if (N === '' || N === null || N === undefined) return false;
     if (E === '' || E === null || E === undefined) return false;
@@ -384,7 +384,7 @@
     const note = $('#note').value;
     const meta = ApiService.newClientMeta();
 
-    // 冇相片：純文字記錄（保持原有 photo_base64:'' 行為）
+    // 沒有相片：純文字記錄（保持原有 photo_base64:'' 行為）
     if (selectedPhotos.length === 0) {
       try {
         const r = await post({type:'inspection', staff:staff, tree_id:id, prj:prj,
@@ -398,7 +398,7 @@
       return;
     }
 
-    // [Phase5] 逐張壓縮；失敗／超大嘅相片略過，唔會拖死整筆文字記錄
+    // [Phase5] 逐張壓縮；失敗／超大的相片略過，不會拖垮整筆文字記錄
     const photosData = [];
     const skipped = [];
     for(let i = 0; i < selectedPhotos.length; i++){
@@ -414,12 +414,12 @@
       alert('⚠️ 第 ' + skipped.join('、') + ' 張相片處理失敗，已略過；其餘 ' + photosData.length + ' 張繼續上傳');
     }
     if (photosData.length === 0) {
-      alert('❌ 冇相片可上傳（全部處理失敗）');
+      alert('❌ 沒有相片可上傳（全部處理失敗）');
       return;
     }
 
     // [Phase5] 兩階段上傳（需後端支援 inspection_photo + inspection 回傳 inspection_id）
-    // 離線時唔用兩階段（攞唔到 inspection_id），直接落入單一 POST 排隊
+    // 離線時不使用兩階段（拿不到 inspection_id），直接落入單一 POST 排隊
     const splitPhotos = navigator.onLine && (typeof Config !== 'undefined' && Config.INSPECTION_SPLIT_PHOTOS === true);
     if (splitPhotos) {
       try {
@@ -497,7 +497,7 @@
     const N = $('#eN').value, E = $('#eE').value;
     if(N || E){
       if (!isValidHK80(N, E)) {
-        alert('⚠️ HK80 座標 N/E 必須係有效數字，並喺香港範圍內（N≈800000-850000, E≈800000-870000）');
+        alert('⚠️ HK80 座標 N/E 必須是有效數字，並在香港範圍內（N≈800000-850000, E≈800000-870000）');
         return;
       }
       const w = await toWGS(N, E);
@@ -573,7 +573,7 @@
   }
 
   var _logsDelegated = false;
-  // [Phase7] 巡查相片用事件委派（唔再用 inline onclick/onerror）
+  // [Phase7] 巡查相片用事件委派（不再用 inline onclick/onerror）
   function attachLogsDelegation(){
     if (_logsDelegated) return;
     var logs = $('#logs');
@@ -599,7 +599,7 @@
       }
     });
 
-    // error 事件唔冒泡，用 capture 攔截圖片載入失敗
+    // error 事件不會冒泡，用 capture 攔截圖片載入失敗
     logs.addEventListener('error', function(e){
       var img = e.target;
       if (img && img.classList && img.classList.contains('inspection-photo-thumb') && img.parentElement) {
@@ -704,7 +704,7 @@
       })
       .catch(function(err){
         window.open(url, '_blank');
-        alert('⚠️ 自動下載失敗，已喺新分頁打開圖片，請手動右鍵保存。\n錯誤：' + err.message);
+        alert('⚠️ 自動下載失敗，已在新分頁開啟圖片，請手動右鍵保存。\n錯誤：' + err.message);
       });
   };
 

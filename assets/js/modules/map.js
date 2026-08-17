@@ -1,7 +1,7 @@
 /**
  * 地圖初始化模組
- * v2.52 - 加入 🎚 狀態過濾掣（配合 filters.js）
- * v2.51 - 抽屜加入「建立地盤／新增樹木」動作掣
+ * v2.52 - 加入 🎚 狀態過濾按鈕（配合 filters.js）
+ * v2.51 - 抽屜加入「建立地盤／新增樹木」動作按鈕
  * v2.50 - 手機版 layer bar 變身 FAB 抽屜
  */
 import { state } from './state.js';
@@ -14,7 +14,7 @@ import { startMeasure, startDrawPolygon, cancelInteraction, clearAllDrawings, ge
 import { toggleGeolocation, locateOnce } from './geolocate.js'; // 🔥 [Phase1]
 import { on } from '../core/event-bus.js'; // 🔥 [Phase4] 訂閱 project:selected 以觸發航拍圖刷新
 
-// 🔥 layers 圖示（filter 掣用，清楚表示「分層」）
+// 🔥 layers 圖示（filter 按鈕用，清楚表示「分層」）
 const LAYERS_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
 
 // 🔥 [Phase1] 邊界繪製完成後暫存（Phase2 接後端儲存）
@@ -45,15 +45,15 @@ export function initMap() {
   state.map = L.map('map', mapOptions).setView(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM);
 
   if (isMobile) {
-    // 🔥 GPS 定位掣（放喺縮放 +/− 掣上面，一撳定位自己）
+    // 🔥 GPS 定位按鈕（放在縮放 +/− 按鈕上面，一按定位自己）
     const geoCtrl = L.control({ position: 'topleft' });
     geoCtrl.onAdd = function () {
       const bar = L.DomUtil.create('div', 'leaflet-bar geo-locate-bar');
       const a = L.DomUtil.create('a', '', bar);
       a.href = '#';
-      a.title = '定位到我嘅位置';
+      a.title = '定位到我的位置';
       a.setAttribute('role', 'button');
-      a.setAttribute('aria-label', '定位到我嘅位置');
+      a.setAttribute('aria-label', '定位到我的位置');
       a.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>';
       L.DomEvent.on(a, 'click', function (e) {
         L.DomEvent.preventDefault(e);
@@ -111,7 +111,7 @@ export function initMap() {
     startDrawPolygon(onDrawBoundary);
   }
 
-  // 🔥 全螢幕＋三個 GIS 工具（電腦版 icon bar，垂直排列喺縮放掣下面）
+  // 🔥 全螢幕＋三個 GIS 工具（電腦版 icon bar，垂直排列在縮放按鈕下面）
   const gisCtrl = L.control({ position: 'topleft' });
   gisCtrl.onAdd = function () {
     const div = L.DomUtil.create('div', 'leaflet-bar gis-tools');
@@ -160,7 +160,7 @@ export function initMap() {
 
     const div = L.DomUtil.create('div', 'layerbar', layerWrap);
     if (isMobile) {
-      // 🔥 手機版：兩大分類（測量工具／圖層）+ 4 個直接掣
+      // 🔥 手機版：兩大分類（測量工具／圖層）+ 4 個直接按鈕
       div.innerHTML =
         '<button class="drawer-cat" data-cat="tools">📏 測量工具</button>' +
         '<div class="drawer-sub" data-sub="tools">' +
@@ -195,7 +195,7 @@ export function initMap() {
         '<button data-l="hk" class="on">政府</button>' +
         '<button data-l="sat">官航</button>' +
         '<button data-l="labels">🔢</button>' +
-        '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +   // 🔥 [v2.52] 狀態過濾掣
+        '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +   // 🔥 [v2.52] 狀態過濾按鈕
         '<button data-l="lot">🗺️ 地段</button>' +
         '<button data-l="aerial">🛰 航拍</button>';
     }
@@ -276,7 +276,7 @@ export function initMap() {
         } else if (layerType === 'labels') {
           toggleTreeLabels();
         } else if (layerType === 'filter') {
-          // 🔥 [v2.52] 撳 filter 掣：收起抽屜，彈出 filter 面板
+          // 🔥 [v2.52] 按 filter 按鈕：收起抽屜，彈出 filter 面板
           if (layerWrap && layerWrap.classList.contains('open')) closeDrawer();
           toggleFilterPanel(b);
         } else {
@@ -336,7 +336,7 @@ export function initMap() {
   legend.addTo(state.map);
 
   state.map.on('click', function () {
-    closeFilterPanel(); // 🔥 [v2.52] 撳地圖自動收埋 filter 面板
+    closeFilterPanel(); // 🔥 [v2.52] 點擊地圖自動收起 filter 面板
     if (closeDrawerFn && layerWrap && layerWrap.classList.contains('open')) {
       closeDrawerFn();
     }
@@ -346,7 +346,7 @@ export function initMap() {
     hideSearch();
   });
 
-  // 🔥 [v2.61] 桌面 filter 掣（#bar 搜尋框下面）
+  // 🔥 [v2.61] 桌面 filter 按鈕（#bar 搜尋框下方）
   const filterBtn = document.getElementById('filterBtn');
   if (filterBtn) {
     filterBtn.addEventListener('click', function () {
@@ -379,7 +379,7 @@ export function refreshAerial() {
 
   const p = state.PROJECTS.find((x) => String(x.project_id) === String(state.curProject));
   if (!p || !p.aerial_url || !p.aerial_n1 || !p.aerial_e1 || !p.aerial_n2 || !p.aerial_e2) {
-    updateStatus('⚠️ 此地盤未配置航拍圖（請喺 projects 表填寫）');
+    updateStatus('⚠️ 此地盤未配置航拍圖（請在 projects 表填寫）');
     return;
   }
 

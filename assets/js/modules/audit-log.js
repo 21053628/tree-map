@@ -24,7 +24,7 @@
       if (arr.length > MAX_ENTRIES) arr = arr.slice(arr.length - MAX_ENTRIES);
       localStorage.setItem(KEY, JSON.stringify(arr));
     } catch (e) {
-      // localStorage 滿：清走一半再試
+      // localStorage 滿：清除一半再試
       try {
         arr = arr.slice(Math.floor(arr.length / 2));
         localStorage.setItem(KEY, JSON.stringify(arr));

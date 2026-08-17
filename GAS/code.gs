@@ -1,6 +1,6 @@
 /*************************************************
  * 樹木 NFC 巡查系統 - 後端（密碼保護版 + HK80 儲存 + 自訂地盤 ID + 冪等性防重 + 相片分離）
- * 睇資料（GET）= 公開；寫入（POST）= 要密碼 Token
+ * 查看資料（GET）= 公開；寫入（POST）= 要密碼 Token
  * [v2.59] 🔥 支援 inspection_photo 分離上傳 + inspection_id 生成 + 完美相容舊行為
  *         🔥 [修正] inspection 儲存 photos_total；重複時回傳已存在相片
  *************************************************/
@@ -228,7 +228,7 @@ function getCachedRows_(sheetName, cacheKey, ttl) {
   return rows;
 }
 
-/* ---------- GET：公開，高層隨時睇 ---------- */
+/* ---------- GET：公開，高層隨時查看 ---------- */
 function doGet(e){
   try {
     const p = (e && e.parameter) || {};
@@ -279,7 +279,7 @@ function doGet(e){
     return json_({ok:false, error:'伺服器讀取錯誤'});
   }
 }
-/* ---------- 相片上傳工具（喺鎖外執行，縮短佔鎖時間） ---------- */
+/* ---------- 相片上傳工具（在鎖外執行，縮短佔鎖時間） ---------- */
 function uploadPhotoBlob_(folder, base64Str, filename){
   const cleanBase64 = String(base64Str).split(',').pop();
   const blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), 'image/jpeg', filename);
@@ -288,7 +288,7 @@ function uploadPhotoBlob_(folder, base64Str, filename){
   return 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w1200';
 }
 
-// 多張相片上傳（逐張容錯：單張失敗唔影響其他）
+// 多張相片上傳（逐張容錯：單張失敗不影響其他）
 function uploadPhotos_(treeId, photoBase64, startIndex){
   const folder = DriveApp.getFolderById(FOLDER_ID);
   const bases = Array.isArray(photoBase64) ? photoBase64 : [photoBase64];
@@ -301,7 +301,7 @@ function uploadPhotos_(treeId, photoBase64, startIndex){
   return urls;
 }
 
-// 單張相片上傳（嚴格模式：失敗即 throw，俾 inspection_photo 回報錯誤）
+// 單張相片上傳（嚴格模式：失敗即 throw，供 inspection_photo 回報錯誤）
 function uploadPhotoStrict_(treeId, photoBase64, index){
   const folder = DriveApp.getFolderById(FOLDER_ID);
   return uploadPhotoBlob_(folder, photoBase64, treeId + '_' + Date.now() + '_' + index + '.jpg');
@@ -309,7 +309,7 @@ function uploadPhotoStrict_(treeId, photoBase64, index){
 
 /* ---------- POST：寫入一定要密碼 Token ---------- */
 function doPost(e){
-  // 1️⃣ 解析 + 認證（唔使鎖，避免無效請求/登入長期佔鎖）
+  // 1️⃣ 解析 + 認證（不需鎖定，避免無效請求/登入長期佔鎖）
   if(!e || !e.postData || !e.postData.contents){
     return json_({ok:false, error:'無效請求'});
   }
@@ -340,7 +340,7 @@ function doPost(e){
   const clientId = d.client_id || '';
   const clientCreatedAt = d.client_created_at || '';
 
-  // 2️⃣ 防重預檢 + 相片上傳（喺鎖外執行，縮短佔鎖時間，避免其他寫入 timeout）
+  // 2️⃣ 防重預檢 + 相片上傳（在鎖外執行，縮短佔鎖時間，避免其他寫入 timeout）
   let prePhotoUrls = [];
   let prePhotoUrl = '';
   let preTreeId = '';
@@ -382,7 +382,7 @@ function doPost(e){
     return json_({ok:false, error:'相片上傳失敗: ' + err.message});
   }
 
-  // 3️⃣ 鎖住「試算表讀寫」段（相片上傳已完成，唔再長期佔鎖）
+  // 3️⃣ 鎖住「試算表讀寫」段（相片上傳已完成，不再長期佔鎖）
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -414,7 +414,7 @@ function doPost(e){
       }
 
       const insId = 'INS-' + Date.now() + '-' + Utilities.getUuid().slice(0,8);
-      const photoUrls = prePhotoUrls; // 相片已喺鎖外上傳
+      const photoUrls = prePhotoUrls; // 相片已在鎖外上傳
       const photoUrlString = photoUrls.join(',');
 
       appendByHeader_(SH_INS, { 
@@ -423,7 +423,7 @@ function doPost(e){
         health: d.health, note: d.note, photo_url: photoUrlString, lat: d.lat || '', lng: d.lng || '',
         photos_total: (+d.photos_total || 0), // 🔥 [修正] 記錄應有相片數，追蹤補傳進度
         client_id: clientId, client_created_at: clientCreatedAt,
-        photo_client_ids: '' // 預留欄位俾後續相片使用
+        photo_client_ids: '' // 預留欄位供後續相片使用
       });
 
       const updates = {};
@@ -444,7 +444,7 @@ function doPost(e){
         return json_({ok: false, error: '缺少 inspection_id'});
       }
 
-      const photoUrl = prePhotoUrl; // 相片已喺鎖外上傳
+      const photoUrl = prePhotoUrl; // 相片已在鎖外上傳
 
       if (photoUrl) {
         // 更新 inspections 表的 photo_url 同 photo_client_ids
@@ -557,7 +557,7 @@ function doPost(e){
       if((lat === undefined || lat === '') && hkN && hkE){ const w = hk80ToWgs84_(hkN, hkE); if(w){ lat = +w.lat.toFixed(6); lng = +w.lng.toFixed(6); } }
       if((hkN === undefined || hkN === '') && lat && lng){ const hk = wgs84ToHk80_(lat, lng); if(hk){ hkN = hk.N; hkE = hk.E; } }
       
-      const photoUrls = prePhotoUrls; // 相片已喺鎖外上傳
+      const photoUrls = prePhotoUrls; // 相片已在鎖外上傳
 
       appendByHeader_(SH_TREES, {
         tree_id: tid, name: d.name || '新樹木', lat: lat, lng: lng, status: d.status || 'Normal', risk: '',
@@ -571,7 +571,7 @@ function doPost(e){
       return json_({ok:true, tree_id: tid, photo_urls: photoUrls});
     }
 
-    // 未支援嘅寫入型別：明確回報錯誤，唔好靜默成功（避免前端誤以為成功）
+    // 未支援的寫入型別：明確回報錯誤，不要靜默成功（避免前端誤以為成功）
     return json_({ok:false, error:'不支援的操作: ' + d.type});
   } catch (error) {
     console.error('Error in doPost:', error);
@@ -583,15 +583,15 @@ function doPost(e){
 /* ---------- 批量回填工具（保持不變） ---------- */
 function backfillLatLng(){
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_TREES);
-  if(!sheet) return '❌ 搵唔到 trees 表';
+  if(!sheet) return '❌ 找不到 trees 表';
   const lastCol = sheet.getLastColumn();
   const header = sheet.getRange(1,1,1,lastCol).getValues()[0];
   const nIdx = header.indexOf('hk80_n'), eIdx = header.indexOf('hk80_e');
   const latIdx = header.indexOf('lat'), lngIdx = header.indexOf('lng');
-  if(nIdx === -1 || eIdx === -1) return '❌ 搵唔到 hk80_n/hk80_e 欄';
-  if(latIdx === -1 || lngIdx === -1) return '❌ 搵唔到 lat/lng 欄';
+  if(nIdx === -1 || eIdx === -1) return '❌ 找不到 hk80_n/hk80_e 欄';
+  if(latIdx === -1 || lngIdx === -1) return '❌ 找不到 lat/lng 欄';
   const lastRow = sheet.getLastRow();
-  if(lastRow < 2) return '⚠️ 冇資料需要回填';
+  if(lastRow < 2) return '⚠️ 沒有資料需要回填';
   const data = sheet.getRange(2,1,lastRow-1,lastCol).getValues();
   let count = 0;
   for(let i=0;i<data.length;i++){
@@ -610,7 +610,7 @@ function backfillLatLng(){
 
 function backfillHK80(){
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_TREES);
-  if(!sheet) return '❌ 搵唔到 trees 表';
+  if(!sheet) return '❌ 找不到 trees 表';
   let lastCol = sheet.getLastColumn();
   const header = sheet.getRange(1,1,1,lastCol).getValues()[0];
   let nIdx = header.indexOf('hk80_n');
@@ -618,9 +618,9 @@ function backfillHK80(){
   if(nIdx === -1){ nIdx = lastCol; lastCol++; sheet.getRange(1, nIdx+1).setValue('hk80_n'); }
   if(eIdx === -1){ eIdx = lastCol; lastCol++; sheet.getRange(1, eIdx+1).setValue('hk80_e'); }
   const latIdx = header.indexOf('lat'), lngIdx = header.indexOf('lng');
-  if(latIdx === -1 || lngIdx === -1) return '❌ 搵唔到 lat/lng 欄';
+  if(latIdx === -1 || lngIdx === -1) return '❌ 找不到 lat/lng 欄';
   const lastRow = sheet.getLastRow();
-  if(lastRow < 2) return '⚠️ 冇資料需要回填';
+  if(lastRow < 2) return '⚠️ 沒有資料需要回填';
   const data = sheet.getRange(2,1,lastRow-1,lastCol).getValues();
   let count = 0;
   for(let i=0;i<data.length;i++){
@@ -728,7 +728,7 @@ function updateTreeFields_(treeId, prj, fieldUpdates) {
   }
   if (rowIndex === -1) return;
 
-  // 動態新增表頭（少見，只喺有新欄位時觸發）
+  // 動態新增表頭（少見，只在有新欄位時觸發）
   const objKeys = Object.keys(fieldUpdates);
   const newHeaders = objKeys.filter(k => headers.indexOf(k) === -1);
   if (newHeaders.length > 0) {
@@ -739,7 +739,7 @@ function updateTreeFields_(treeId, prj, fieldUpdates) {
     headers = headers.concat(newHeaders);
   }
 
-  // 只更新目標列嘅格（唔再成表重寫）
+  // 只更新目標列的格子（不再整表重寫）
   objKeys.forEach(field => {
     const colIdx = headers.indexOf(field);
     if (colIdx !== -1) sheet.getRange(rowIndex, colIdx + 1).setValue(fieldUpdates[field]);

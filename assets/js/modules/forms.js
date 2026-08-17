@@ -50,7 +50,7 @@ export async function doCreateProject() {
 
   if (!name || !N || !E) { alert('請填寫完整'); return; }
 
-  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須係有效數字，並喺香港範圍內'); return; }
+  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須是有效數字，並在香港範圍內'); return; }
 
   const w = CoordUtils.toWGS84(N, E);
   if (!w) { alert('HK80 座標轉換失敗'); return; }
@@ -95,7 +95,7 @@ export async function openTreeForm(preset) {
 
   showPanel(
     '<b>🌳 新增樹木</b>' +
-    '<button class="pick-loc-btn" id="btnPickLocation">📍 喺地圖撳位置（自動填 N/E）</button>' +
+    '<button class="pick-loc-btn" id="btnPickLocation">📍 在地圖按位置（自動填 N/E）</button>' +
     '<input id="tId" placeholder="樹木編號（留空自動）">' +
     '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）...">' +
     '<datalist id="tree_datalist"></datalist>' +
@@ -124,7 +124,7 @@ export function pickTreeLocation() {
     const hk = CoordUtils.toHK80(latlng.lat, latlng.lng);
     if (!hk) { alert('HK80 座標轉換失敗'); return; }
     openTreeForm({ N: CoordUtils.format1(hk.N), E: CoordUtils.format1(hk.E) });
-  }, '📍 撳一下選擇樹木位置');
+  }, '📍 按一下選擇樹木位置');
 }
 
 export async function doCreateTree() {
@@ -133,7 +133,7 @@ export async function doCreateTree() {
 
   if (!N || !E) { alert('請填寫 HK80 座標 N/E'); return; }
 
-  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須係有效數字，並喺香港範圍內'); return; }
+  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須是有效數字，並在香港範圍內'); return; }
   if (VALID_HEALTH.indexOf($('#tStatus').value) === -1) { alert('樹木狀態不合法：' + $('#tStatus').value); return; }
 
   const w = CoordUtils.toWGS84(N, E);

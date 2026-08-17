@@ -1,13 +1,13 @@
 /**
  * 樹木管理系統 - Sync Center 同步狀態面板 (Phase 3)
- * 純 plain script（IIFE），依賴 offline.js 暴露嘅：
+ * 純 plain script（IIFE），依賴 offline.js 暴露的：
  *   window.OfflineQueue / window.syncNow / window.pwaToast
- * 用途：前線人員唔使開 devtools 都知道同步狀態、可重試／匯出失敗記錄
+ * 用途：前線人員不需開啟 devtools 都知道同步狀態、可重試／匯出失敗記錄
  */
 (function () {
   'use strict';
 
-  if (typeof window.OfflineQueue === 'undefined') return; // offline.js 未載入就唔顯示
+  if (typeof window.OfflineQueue === 'undefined') return; // offline.js 未載入就不顯示
 
   var BADGE_ID = 'syncBadge';
   var PANEL_ID = 'syncPanel';
@@ -49,15 +49,15 @@
       '#' + PANEL_ID + ' .sp-failed-item .f-btn{border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;background:#546e7a;color:#fff;}',
       '#' + PANEL_ID + ' .sp-failed-item .f-btn.del{background:#b71c1c;}',
       '#' + PANEL_ID + ' .sp-empty{color:#999;font-size:12px;padding:6px 0;}',
-      // [UI] 樹木詳情頁（t.html）：頂欄 Flex（返回掣左、同步掣右，與下方白卡齊平）
+      // [UI] 樹木詳情頁（t.html）：頂欄 Flex（返回按鈕左、同步按鈕右，與下方白卡齊平）
       '.sync-topbar{display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:12px;}',
       '.sync-topbar a.back{margin-bottom:0;}',
       '#' + BADGE_ID + '.compact{position:static;right:auto;bottom:auto;display:inline-flex;width:auto;margin:0;padding:6px 12px;font-size:13px;box-shadow:none;vertical-align:middle;white-space:nowrap;flex-shrink:0;}',
       '#' + BADGE_ID + '.in-drawer{position:static;right:auto;bottom:auto;display:flex;width:100%;justify-content:center;margin:0;padding:8px 12px;font-size:13px;border-radius:8px;box-shadow:none;}',
       '#' + PANEL_ID + '.compact-panel{bottom:auto;top:56px;}',
-      // [UI] 電腦版地圖頁：同步掣上移，避開右下角 Tree Status 圖例
+      // [UI] 電腦版地圖頁：同步按鈕上移，避開右下角 Tree Status 圖例
       '@media (min-width: 601px){#' + BADGE_ID + ':not(.compact){bottom:96px;} #' + PANEL_ID + ':not(.compact-panel){bottom:156px;}}',
-      // [UI] 電腦版（≥769px）地圖頁：同步掣獨立固定喺右下、Tree Status 圖例正上方
+      // [UI] 電腦版（≥769px）地圖頁：同步按鈕獨立固定在右下、Tree Status 圖例正上方
       '@media (min-width: 769px){#' + BADGE_ID + '.desktop-fixed{right:10px;bottom:96px;}}'
     ].join('\n');
     var style = document.createElement('style');
@@ -65,7 +65,7 @@
     style.textContent = css;
     document.head.appendChild(style);
   }
-  // [UI] 樹木詳情頁：等 t.js 異步 render 出 .back 後，包成 Flex 頂欄（返回掣左、同步掣右）
+  // [UI] 樹木詳情頁：等 t.js 異步 render 出 .back 後，包成 Flex 頂欄（返回按鈕左、同步按鈕右）
   function mountTreeBadge(badge) {
     var app = document.getElementById('app');
     if (!app) { document.body.appendChild(badge); return; }
@@ -86,7 +86,7 @@
     attempt();
   }
 
-  // [UI] 地圖頁：等 Leaflet 建立 .layerbar 後，將同步掣插入「新增樹木」掣下方
+  // [UI] 地圖頁：等 Leaflet 建立 .layerbar 後，將同步按鈕插入「新增樹木」按鈕下方
   function mountDrawerBadge(badge) {
     var done = false;
     var attempt = function () {
@@ -141,7 +141,7 @@
       document.body.appendChild(panel);
       mountTreeBadge(badge);
     } else {
-      // [UI] 電腦版地圖頁：同步掣獨立固定喺右下，唔塞入左下工具列；
+      // [UI] 電腦版地圖頁：同步按鈕獨立固定在右下，不塞入左下工具列；
       //      手機版維持插入抽屜（in-drawer）不變。
       var isDesktop = window.matchMedia && window.matchMedia('(min-width: 769px)').matches;
       document.body.appendChild(panel);
@@ -218,7 +218,7 @@
     if (!failedItems.length) {
       var empty = document.createElement('div');
       empty.className = 'sp-empty';
-      empty.textContent = '✅ 冇失敗記錄';
+      empty.textContent = '✅ 沒有失敗記錄';
       list.appendChild(empty);
       return;
     }
@@ -285,7 +285,7 @@
   async function doExport() {
     var items = await window.OfflineQueue.all();
     var failed = items.filter(function (it) { return it.status === 'failed'; });
-    if (!failed.length) { if (window.pwaToast) window.pwaToast('冇失敗記錄可匯出'); return; }
+    if (!failed.length) { if (window.pwaToast) window.pwaToast('沒有失敗記錄可匯出'); return; }
 
     var data = failed.map(function (it) {
       var p = {};

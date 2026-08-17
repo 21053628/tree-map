@@ -1,6 +1,6 @@
 /**
  * 樹木管理系統 - 主入口（ES Modules 版本）
- * v2.55 - 狀態雲「彈前→漸退」：更新時浮到最前 3 秒，然後漸變退返後面
+ * v2.55 - 狀態雲「前置→淡出」：更新時浮到最前 3 秒，然後漸變退回後面
  * v2.54 - 兩段式載入：快照 → GAS 背景刷新
  * [Phase2] 移除脆皮 setter 注入，改由模組直接 import
  */
@@ -67,7 +67,7 @@ function init() {
   DOM.searchResults = document.getElementById('searchResults');
   DOM.treeSearch = document.getElementById('treeSearch');
 
-  // 🔥 [v2.55] 狀態雲「彈前→漸退」：文字一變就浮到最前 3 秒，然後退返後面
+  // 🔥 [v2.55] 狀態雲「前置→淡出」：文字一變就浮到最前 3 秒，然後退回後面
   if (DOM.statusEl && 'MutationObserver' in window) {
     let frontTimer = null;
     const mo = new MutationObserver(function () {
@@ -117,7 +117,7 @@ function init() {
 
   load().then(() => checkURLParams());
 
-  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.55 - 狀態雲彈前漸退）');
+  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.55 - 狀態雲前置淡出）');
 }
 
 document.addEventListener('DOMContentLoaded', init);

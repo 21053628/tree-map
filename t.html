@@ -18,7 +18,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 
-<!-- 🔥 [Tier1-B] LCP 優化：刪除 jsdelivr preconnect，保留真正用嘅目標 -->
+<!-- 🔥 [Tier1-B] LCP 優化：刪除 jsdelivr preconnect，保留真正使用的目標 -->
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
 <link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
 <link rel="preconnect" href="https://drive.google.com" crossorigin>
@@ -96,7 +96,7 @@
 <script src="assets/vendor/leaflet.js" defer></script>
 
 <!-- 🔥 [Phase6] 統一 services：config → api → auth，再由 pages/t.js 共用 -->
-<!-- 註：t.html 保留原本 async 延遲載入 proj4 嘅座標轉換，以維持首屏效能，不改行為 -->
+<!-- 註：t.html 保留原本 async 延遲載入 proj4 的座標轉換，以維持首屏效能，不改行為 -->
 <script src="assets/js/config.js"></script>
 <script src="assets/js/modules/audit-log.js"></script>
 <script src="assets/js/api.js"></script>

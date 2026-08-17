@@ -1,11 +1,11 @@
 /**
  * 樹木管理系統 - 離線寫入佇列 (IndexedDB Outbox)
- * v2.0.0 - Phase 1：outbox 資料結構升級（可追蹤、唔會靜雞雞消失）
+ * v2.0.0 - Phase 1：outbox 資料結構升級（可追蹤、不會無故消失）
  *   - 每筆記錄加入 client_id/uuid、type、tree_id、project_id、status、時間戳、lastError
- *   - MAX_RETRY 超過後唔再丟棄，改為 status='failed' 並保留
+ *   - MAX_RETRY 超過後不再丟棄，改為 status='failed' 並保留
  *   - 新增 helpers：getPendingCount/getFailedCount/markSyncing/markSynced/markFailed/retryOne/retryAllFailed
  *   - 相容舊 queue items（讀取時自動補齊欄位）
- *   - cleanupExpired 只清理已同步(synced)且過期記錄，唔再刪除 pending/failed
+ *   - cleanupExpired 只清理已同步(synced)且過期記錄，不再刪除 pending/failed
  *   - 保留既有：修正 IndexedDB 交易 Promise 包裝、逐筆同步、warmGAS no-cors、finally 重置 _syncing
  */
 (function() {
@@ -101,7 +101,7 @@
     });
   }
 
-  // 相容舊 queue items：讀取時自動補齊缺少嘅欄位（唔會靜雞雞丟失）
+  // 相容舊 queue items：讀取時自動補齊缺少的欄位（不會無故丟失）
   function normalize(item) {
     if (!item) return item;
     var now = Date.now();
@@ -284,7 +284,7 @@
     return failedItems.length;
   }
 
-  // 只清理「已同步(synced)且過期」嘅記錄；pending/failed 一律保留，唔會靜雞雞刪除
+  // 只清理「已同步(synced)且過期」的記錄；pending/failed 一律保留，不會無故刪除
   function cleanupExpired() {
     var cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
     return all().then(function(items) {
@@ -400,7 +400,7 @@
     try {
       await cleanupExpired();
       var items = await all();
-      // 只處理「待同步」記錄（queued/syncing）；synced/failed 唔會自動重送
+      // 只處理「待同步」記錄（queued/syncing）；synced/failed 不會自動重送
       var pending = items.filter(function(it) {
         return it.status === 'queued' || it.status === 'syncing';
       });
@@ -415,7 +415,7 @@
       for (var i = 0; i < batch.length; i++) {
         var item = batch[i];
 
-        // 若 retry 超過上限：改為 status='failed' 並保留，等用戶手動重試／匯出（唔再丟棄）
+        // 若 retry 超過上限：改為 status='failed' 並保留，等待用戶手動重試／匯出（不再丟棄）
         if (item.retry >= MAX_RETRY) {
           console.warn('🔄 [Sync] 記錄超過重試上限，標記為 failed（保留）:', item.id);
           await markFailed(item.id, '超過重試上限(' + MAX_RETRY + '次)');
@@ -517,7 +517,7 @@
     return count;
   }
 
-  // 寫入 outbox 前移除 token，確保敏感憑證唔會明文殘留喺 IndexedDB
+  // 寫入 outbox 前移除 token，確保敏感憑證不會明文殘留在 IndexedDB
   function stripToken(payload) {
     if (payload && typeof payload === 'object' && 'token' in payload) {
       delete payload.token;
@@ -530,7 +530,7 @@
     var origPost = ApiService.post;
     ApiService.post = async function(payload) {
       if (!navigator.onLine) {
-        // 🔐 唔將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）
+        // 🔐 不將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）
         await push(stripToken(payload));
         pwaToast('📥 離線暫存：有網路時自動上傳');
         return { ok: true, queued: true };
@@ -544,7 +544,7 @@
         var isNetworkError = (err instanceof TypeError) || !navigator.onLine || err.message === 'TIMEOUT';
         var isServerError = (err && err.status && err.status >= 500);
         if (isNetworkError || isServerError) {
-          // 🔐 唔將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）
+          // 🔐 不將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）
           await push(stripToken(payload));
           pwaToast('📥 網路不穩，已離線暫存');
           return { ok: true, queued: true };

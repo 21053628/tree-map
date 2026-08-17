@@ -3,7 +3,7 @@
  * - GML 解析
  * - DD/Lot 編號顯示
  * - LRU 快取
- * v2.49 - 修正 walk() 條件反轉 bug（之前跳過咗數據 tag，導致 popup 淨係顯示「私人地段」）
+ * v2.49 - 修正 walk() 條件反轉 bug（之前跳過了資料 tag，導致 popup 只顯示「私人地段」）
  *       - 標題對齊航拍圖格式：「Lot 533 J,1」
  */
 import { state, LOT_CACHE_MAX } from './state.js';
@@ -54,7 +54,7 @@ function extractLotAttrs_(poly) {
     if (ln === 'featuremember' || ln === 'featurecollection' || ln.indexOf('collection') !== -1) break;
   }
 
-  // 🔥 [v2.49 修正] 條件反轉：跳過幾何 tag，收集數據 tag（之前寫反咗，導致屬性全部丟失）
+  // 🔥 [v2.49 修正] 條件反轉：跳過幾何 tag，收集資料 tag（之前寫反了，導致屬性全部丟失）
   (function walk(el) {
     for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
       const ln = (c.localName || '').toLowerCase();
@@ -170,7 +170,7 @@ function buildLotPopup_(a) {
   return html || '<b>🗺️ 私人地段</b>';
 }
 
-// 🔥 [優化] 可中止 fetch：避開弱網長期掛住，失敗靜默降級（唔會噴 error 阻住 UI）
+// 🔥 [優化] 可中止 fetch：避開弱網長時間停滯，失敗靜默降級（不會輸出錯誤訊息阻擋 UI）
 function fetchTimeout(url, timeout) {
   return new Promise((resolve, reject) => {
     const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;

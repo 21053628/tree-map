@@ -11,7 +11,7 @@ const ApiService = (function() {
 
   // 🔥 [v2.3] 極限超時設定
   const DEFAULT_TIMEOUT = 8000;      // 8秒：用戶交互請求 (如 get tree details)
-  const BACKGROUND_TIMEOUT = 30000;  // 🔥 30秒：俾足時間等 GAS 冷啟動（bootstrap 背景刷新，唔阻塞 UI）
+  const BACKGROUND_TIMEOUT = 30000;  // 🔥 30秒：預留足夠時間等 GAS 冷啟動（bootstrap 背景刷新，不阻塞 UI）
   const POST_TIMEOUT = 20000;        // 20秒：寫入請求 (需要確保成功)
   
   const MAX_RETRIES = 1;             // 只重試 1 次 (針對偶發網路波動)
@@ -28,7 +28,7 @@ const ApiService = (function() {
   let cacheHitCount = 0;
   const responseCache = new Map();
   
-  // POST 專用隊列 (GET 唔使用)
+  // POST 專用隊列 (GET 不使用)
   let pendingPosts = [];
   let activePosts = 0;
 
@@ -110,7 +110,7 @@ const ApiService = (function() {
       });
   }
 
-  // 🔥 [v2.3] 只有 POST 先至排隊，避免寫入衝突
+  // 🔥 [v2.3] 只有 POST 才排隊，避免寫入衝突
   function processPostQueue() {
     while (activePosts < MAX_CONCURRENT_POST && pendingPosts.length > 0) {
       const item = pendingPosts.shift();
@@ -138,7 +138,7 @@ const ApiService = (function() {
       return await requestFn();
     } catch (error) {
       errorCount++;
-      // 離線、超時 直接放棄，唔再傻等
+      // 離線、超時 直接放棄，不再空等
       if (retries > 0 && error.message !== 'OFFLINE' && error.message !== 'TIMEOUT') {
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
         return withRetry(requestFn, retries - 1, attempt + 1);
@@ -147,7 +147,7 @@ const ApiService = (function() {
     }
   }
 
-  /* GET：公開睇資料 (🔥 v2.3: 直接發送，絕對唔排隊！) */
+  /* GET：公開查看資料 (🔥 v2.3: 直接發送，絕對不排隊！) */
   async function get(action, params) {
     params = params || {};
     if (!apiEndpoint) throw new Error('API 服務未初始化');
@@ -165,7 +165,7 @@ const ApiService = (function() {
     const isBackground = (action === 'bootstrap');
     const timeout = isBackground ? BACKGROUND_TIMEOUT : DEFAULT_TIMEOUT;
     
-    // 直接 fetch，唔使經 enqueueRequest
+    // 直接 fetch，不需經 enqueueRequest
     return withRetry(() =>
       fetchWithTimeout(url, { method: 'GET' }, timeout)
         .then(response => {
@@ -223,7 +223,7 @@ const ApiService = (function() {
         })
         .then(data => {
           if (data && data.duplicate === true) {
-            // 後端回報重複：呢筆 client_id 早已成功處理，視為成功（避免重複 alert 失敗）
+            // 後端回報重複：這筆 client_id 早已成功處理，視為成功（避免重複 alert 失敗）
             data.ok = true;
           }
           if (data && data.ok === false && data.error === 'UNAUTHORIZED') {
