@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="樹木資訊管理系統 - 查看樹木詳細資料、巡查記錄">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self'; style-src 'self' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' https: 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; object-src 'none'; base-uri 'self';">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -111,12 +111,6 @@
 <!-- 🔥 PWA 離線佇列（會 hook ApiService）與 Service Worker 註冊 -->
 <script src="offline.js"></script>
 <script src="assets/js/modules/sync-panel.js"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-      navigator.serviceWorker.register('sw.js');
-    });
-  }
-</script>
+<script defer src="assets/js/sw-register.js"></script>
 </body>
 </html>
