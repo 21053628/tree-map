@@ -188,19 +188,64 @@ function fetchTimeout(url, timeout) {
 
 function renderLots(polygons) {
   state.lotLayer.clearLayers();
-  const fragment = L.layerGroup();
+  // 🔥 [修復] 直接將 polygon 加入 state.lotLayer（不再包 fragment layerGroup），
+  // 確保 eachLayer() 能遍歷到每個 polygon，ray casting 才查得到
   polygons.forEach((p) => {
     const polygon = L.polygon(p.coords, {
       color: '#1565c0',
       weight: 2,
       opacity: 0.7,
       fillColor: '#1565c0',
-      fillOpacity: 0.1
+      fillOpacity: 0.1,
+      pane: 'lotPane', // 🔥 [修復] 放入較低 z-index(350) 的 pane，不遮擋樹木 Canvas(400)
+      interactive: false // 🔥 [修復] 由 map click + 幾何查詢顯示地段資料，避免 SVG 攔截樹木點擊
     });
-    polygon.bindPopup(buildLotPopup_(p.attrs || {}));
-    fragment.addLayer(polygon);
+    polygon._lotCoords = p.coords || []; // 🔥 [修復] 存原始 [[lat,lng],...] 供 ray casting
+    polygon._lotAttrs = p.attrs || {};
+    polygon.addTo(state.lotLayer);
   });
-  fragment.addTo(state.lotLayer);
+}
+
+/* =========================================================
+ * 🔥 [修復] 點在多邊形內測試（ray casting，單一 ring）
+ * ring 格式：Array<[lat, lng]>
+ * ========================================================= */
+function pointInPolygon_(lat, lng, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    // 🔥 [修復] ring[i] = [緯度, 經度]
+    // ray casting 公式中：x = 經度（水平）、y = 緯度（垂直）
+    const lat_i = ring[i][0], lng_i = ring[i][1];
+    const lat_j = ring[j][0], lng_j = ring[j][1];
+    if (((lat_i > lat) !== (lat_j > lat)) &&
+        (lng < (lng_j - lng_i) * (lat - lat_i) / (lat_j - lat_i) + lng_i)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// 🔥 [修復] 點擊地圖空白位置時，查詢該點所在的地段並顯示 popup
+// （樹木 marker 命中時會 stopPropagation，不會走到這裡）
+function onLotMapClick(e) {
+  if (!state.lotLayerEnabled || !e.latlng) return;
+  const lat = e.latlng.lat;
+  const lng = e.latlng.lng;
+
+  const hits = [];
+  state.lotLayer.eachLayer((layer) => {
+    if (layer && layer._lotCoords && layer._lotCoords.length >= 3 &&
+        pointInPolygon_(lat, lng, layer._lotCoords)) {
+      hits.push(layer._lotAttrs);
+    }
+  });
+
+  if (hits.length) {
+    L.popup()
+      .setLatLng(e.latlng)
+      .setContent(buildLotPopup_(hits[0]))
+      .openOn(state.map);
+  }
 }
 
 function loadLots() {
@@ -255,10 +300,14 @@ export function toggleLotLayer() {
     state.lotLayer.addTo(state.map);
     loadLots();
     state.map.on('moveend', debouncedLoadLots);
+    // 🔥 [修復] 綁定 map click 查詢地段資料（樹木 marker 命中會 stopPropagation，不影響）
+    state.map.on('click', onLotMapClick);
     updateStatus('✅ 已開啟地段索引圖層');
   } else {
     state.map.removeLayer(state.lotLayer);
     state.map.off('moveend', debouncedLoadLots);
+    // 🔥 [修復] 解除 map click 查詢
+    state.map.off('click', onLotMapClick);
     state.lotLayer.clearLayers();
     updateStatus('✅ 已關閉地段索引圖層');
   }

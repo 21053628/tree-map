@@ -78,6 +78,13 @@ export function initMap() {
     aerialPane.style.zIndex = 250;
   }
 
+  // 🔥 [修復] 地段專用 pane：z-index 350 低於 overlayPane(400)，
+  // 確保樹木 Canvas（400）在上層可被點擊，地段 SVG 在下層不遮擋
+  if (!state.map.getPane('lotPane')) {
+    const lotPane = state.map.createPane('lotPane');
+    lotPane.style.zIndex = 350;
+  }
+
   state.baseLayers = {
     hk: L.layerGroup([
       L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png',
