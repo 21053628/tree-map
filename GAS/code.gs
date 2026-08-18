@@ -11,6 +11,7 @@ const SH_CHK   = 'checkins';
 const SH_PRJ   = 'projects';
 
 const TOKEN_EXPIRY_SECONDS = 21600; // Token 有效期 6 小時
+const CSRF_EXPIRY_SECONDS = 21600;  // CSRF Token 有效期 6 小時
 
 // 🔥 服務端快取設定
 const BOOTSTRAP_CACHE_KEY = 'bootstrap_data';
@@ -47,6 +48,29 @@ function createToken_(){
 function isValidToken_(token){
   if(!token) return false;
   return CacheService.getScriptCache().get('TOKEN_' + token) === '1';
+}
+
+/* ---------- CSRF Token 工具（同步器模式：後端發行、前端從 body 回傳） ---------- */
+function issueCsrfToken_(sessionToken){
+  const token = Utilities.getUuid().replace(/-/g,'') + Utilities.getUuid().replace(/-/g,'');
+  CacheService.getScriptCache().put('CSRF_' + token, String(sessionToken || ''), CSRF_EXPIRY_SECONDS);
+  return token;
+}
+
+function isValidCsrfToken_(csrfToken, sessionToken){
+  if(!csrfToken || !sessionToken) return false;
+  const cache = CacheService.getScriptCache();
+  return cache.get('CSRF_' + csrfToken) === String(sessionToken);
+}
+
+// Apps Script 無法讀取自訂 HTTP Header，故 CSRF Token 以 JSON body 為主、query 參數為輔
+function getCsrfTokenFromRequest_(e, d){
+  if(d && d.csrf_token) return String(d.csrf_token);
+  if(e && e.parameter){
+    if(e.parameter['X-CSRF-Token']) return String(e.parameter['X-CSRF-Token']);
+    if(e.parameter['csrf_token']) return String(e.parameter['csrf_token']);
+  }
+  return '';
 }
 
 /* ---------- 登入 rate-limit（防暴力破解） ---------- */
@@ -326,7 +350,9 @@ function doPost(e){
     }
     if(checkPassword_(d.password)){
       resetLoginFailures_();
-      return json_({ok:true, token: createToken_()});
+      const sessionToken = createToken_();
+      const csrfToken = issueCsrfToken_(sessionToken);
+      return json_({ok:true, token: sessionToken, csrf_token: csrfToken});
     }
     loginFailed_();
     return json_({ok:false, error:'密碼錯誤'});
@@ -334,6 +360,11 @@ function doPost(e){
 
   if(!isValidToken_(d.token)){
     return json_({ok:false, error:'UNAUTHORIZED'});
+  }
+
+  // 🔐 CSRF 驗證：非 login 的寫入請求必須攜帶合法 CSRF Token（login 本身除外）
+  if(!isValidCsrfToken_(getCsrfTokenFromRequest_(e, d), d.token)){
+    return json_({ok:false, error:'CSRF_TOKEN_INVALID'});
   }
 
   // 🔥 提取前端傳來的冪等性鍵值

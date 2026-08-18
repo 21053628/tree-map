@@ -6,7 +6,7 @@
  *   4. install 記錄預快取結果，方便排查漏檔
  *   5. 升版號強制清除舊快取
  */
-const VERSION = 'v2.6.0'; // 🔥 手機版 UI：同步按鈕移入抽屜 + FAB 獨立右下 + 縮放按鈕避開比例尺
+const VERSION = 'v2.6.1'; // 🔥 CSP inline script hash 修復：加入 sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE=
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -189,6 +189,11 @@ self.addEventListener('sync', function(e) {
 });
 
 self.addEventListener('message', function(e) {
+  // 驗證消息來源，僅允許同源消息
+  if (e.origin !== self.location.origin) {
+    console.warn('[SW] 拒絕非同源消息:', e.origin);
+    return;
+  }
   if (e.data && e.data.type === 'REGISTER_BG_SYNC') {
     if ('sync' in self.registration) {
       self.registration.sync.register('sync-outbox').catch(function() {});

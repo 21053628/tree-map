@@ -15,10 +15,10 @@
 
   const escapeHtml = window.TreeUtils.escapeHtml;
 
-  // DOMPurify 兜底（保留本頁 rely 的 inline onclick/onerror，其餘一律淨化）
+  // DOMPurify 嚴格模式：不允許任何 inline event handlers (onclick/onerror 等)
   function sanitizeHTML(html) {
     if (typeof DOMPurify !== 'undefined') {
-      return DOMPurify.sanitize(html, { ADD_ATTR: ['onclick', 'onerror'] });
+      return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
     }
     return html;
   }
@@ -109,7 +109,7 @@
 
   async function render(t){
     const hkPromise = toHK(t.lat, t.lng);
-    var html = '<a class="back" href="index.html?tree_id=' + encodeURIComponent(t.tree_id) + '&project_id=' + encodeURIComponent(t.project_id || '') + '&lat=' + encodeURIComponent(t.lat) + '&lng=' + encodeURIComponent(t.lng) + '" onclick="return goBackToMap(event)">⬅ 地圖</a>' +
+    var html = '<a class="back" id="backBtn" href="index.html?tree_id=' + encodeURIComponent(t.tree_id) + '&project_id=' + encodeURIComponent(t.project_id || '') + '&lat=' + encodeURIComponent(t.lat) + '&lng=' + encodeURIComponent(t.lng) + '">⬅ 地圖</a>' +
     '<div class="card">' +
       '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
       '<div style="margin-top:8px"><span class="badge" style="background:' + (COLORS[t.status]||'#757575') + '">Status: ' + escapeHtml(t.status) + '</span></div>';
@@ -128,7 +128,7 @@
       for(var i = 0; i < mainPhotos.length; i++){
         const isLCP = (i === 0);
         const loadingAttr = isLCP ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
-        html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" ' + loadingAttr + ' decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer" onclick="zoomImage(this.src)">';
+        html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" ' + loadingAttr + ' decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer">';
       }
     }
     html += '<div class="grid">' +
@@ -145,14 +145,45 @@
       '<div class="sub">WGS84：' + f5(t.lat) + ', ' + f5(t.lng) + '</div>' +
       '<div id="minimap"></div>' +
     '</div>' +
-    '<div class="card"><button class="sec" style="background:#00897b" onclick="goNFC()">📱 一鍵寫入 NFC tag</button></div>' +
-    '<div class="card" id="staffBox"><button class="sec" onclick="staffMode()">🔑 工作人員</button></div>' +
+    '<div class="card"><button class="sec" id="goNfcBtn" style="background:#00897b">📱 一鍵寫入 NFC tag</button></div>' +
+    '<div class="card" id="staffBox"><button class="sec" id="staffBtn">🔑 工作人員</button></div>' +
     '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>' +
-    '<div id="imgModal" class="modal" onclick="closeZoom()">' +
+    '<div id="imgModal" class="modal">' +
       '<span class="modal-close">&times;</span>' +
       '<img id="modalImg" src="" alt="放大圖片" crossorigin="anonymous" referrerpolicy="no-referrer">' +
     '</div>';
     $('#app').innerHTML = sanitizeHTML(html);
+
+    // 🔥 [CSP] 移除 inline onclick，改為 addEventListener / 事件委派
+    const backBtn = document.getElementById('backBtn');
+    if (backBtn) {
+      backBtn.addEventListener('click', function(e){ window.goBackToMap(e); });
+    }
+
+    const goNfcBtn = document.getElementById('goNfcBtn');
+    if (goNfcBtn) goNfcBtn.addEventListener('click', window.goNFC);
+
+    const staffBtn = document.getElementById('staffBtn');
+    if (staffBtn) staffBtn.addEventListener('click', function(){ staffMode(); });
+
+    // 相片放大 + modal 關閉：事件委派（只綁定一次）
+    if (!window._tPageDelegated) {
+      window._tPageDelegated = true;
+      $('#app').addEventListener('click', function(e){
+        const zoomImg = (e.target && e.target.closest) ? e.target.closest('.zoomable-img') : null;
+        if (zoomImg) {
+          e.stopPropagation();
+          window.zoomImage(zoomImg.src);
+          return;
+        }
+        const modal = document.getElementById('imgModal');
+        if (modal && modal.classList.contains('show')) {
+          if (e.target === modal || (e.target.classList && e.target.classList.contains('modal-close'))) {
+            window.closeZoom();
+          }
+        }
+      });
+    }
 
     const hk = await hkPromise;
     if(hk){
@@ -204,17 +235,17 @@
     if(!await staffOk()) return;
     const hk = await toHK(TREE.lat, TREE.lng);
     $('#staffBox').innerHTML =
-      '<button onclick="checkin()">✅ 簽到</button>' +
+      '<button id="checkinBtn">✅ 簽到</button>' +
       '<hr><div class="section-title">📝 巡查記錄（狀態會自動同步樹木資料）</div>' +
       '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
       '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
       '<input type="file" id="photo" accept="image/*" multiple style="display:none">' +
-      '<button onclick="document.getElementById(\'photo\').click()" style="margin-top:10px;background:#546e7a">📷 選擇相片（支援多張／相簿）</button>' +
+      '<button id="pickPhotoBtn" style="margin-top:10px;background:#546e7a">📷 選擇相片（支援多張／相簿）</button>' +
       '<div id="photoPreviewContainer" class="photo-preview-container" style="display:none">' +
         '<div class="photo-count">已選擇 <b id="photoCount">0</b> 張相片</div>' +
         '<div id="photoPreviewGrid" class="photo-preview-grid"></div>' +
       '</div>' +
-      '<button onclick="submitInspection()" style="margin-top:10px">📤 上傳巡查記錄</button>' +
+      '<button id="submitInspectionBtn" style="margin-top:10px">📤 上傳巡查記錄</button>' +
       '<hr><div class="section-title">✏️ 樹木資料（HK80 座標／Level／地盤）</div>' +
       '<div class="form-group"><label class="form-label">🌳 樹種</label><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
       '<datalist id="tree_list"></datalist>' +
@@ -227,7 +258,29 @@
       '<div class="row2"><div class="form-group"><label class="form-label">HK80 N (Northing)</label><input id="eN" placeholder="北座標" inputmode="decimal"></div><div class="form-group"><label class="form-label">HK80 E (Easting)</label><input id="eE" placeholder="東座標" inputmode="decimal"></div></div>' +
       '<div class="form-group"><label class="form-label">Level (m，高程)</label><input id="eLevel" placeholder="高程" inputmode="decimal"></div>' +
       '<div class="form-group"><label class="form-label">📄 簡介</label><textarea id="eDesc" rows="2" placeholder="樹木簡介"></textarea></div>' +
-      '<button onclick="saveTreeInfo()">💾 儲存樹木資料</button>';
+      '<button id="saveTreeInfoBtn">💾 儲存樹木資料</button>';
+
+    // 🔥 [CSP] 移除 inline onclick，改為 addEventListener
+    const checkinBtn = document.getElementById('checkinBtn');
+    if (checkinBtn) checkinBtn.addEventListener('click', function(){ checkin(); });
+
+    const pickPhotoBtn = document.getElementById('pickPhotoBtn');
+    if (pickPhotoBtn) {
+      pickPhotoBtn.addEventListener('click', function(){
+        const photoInput = document.getElementById('photo');
+        if (photoInput) photoInput.click();
+      });
+    }
+
+    const submitInspectionBtn = document.getElementById('submitInspectionBtn');
+    if (submitInspectionBtn) {
+      submitInspectionBtn.addEventListener('click', function(){ submitInspection(); });
+    }
+
+    const saveTreeInfoBtn = document.getElementById('saveTreeInfoBtn');
+    if (saveTreeInfoBtn) {
+      saveTreeInfoBtn.addEventListener('click', function(){ saveTreeInfo(); });
+    }
 
     initPhotoPreview();
 
