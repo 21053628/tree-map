@@ -10,7 +10,7 @@
 // 配置對象 - 應從外部配置文件或環境變數加載
 const Config = {
   // API 端點配置
-  API_ENDPOINT: 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec',
+  API_ENDPOINT: 'https://script.google.com/macros/s/AKfycbw1OQFETK6TelQCq2OL_eNHeF88LfcI6Zq9dk0Jb4GlTNUb3OY32cYASDuyL_QYu3_S/exec',
   
   // 認證配置
   AUTH: {
