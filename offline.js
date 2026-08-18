@@ -424,14 +424,10 @@
           continue;
         }
 
-        // 標記為同步中，並附加最新 token + CSRF token（同步器模式，後端會驗證）
+        // 標記為同步中，並附加最新 token
         await markSyncing(item.id);
         var tk = getCurrentToken();
         if (tk) item.payload.token = tk;
-        if (typeof AuthService !== 'undefined' && AuthService.getCsrfToken) {
-          var csrfTk = AuthService.getCsrfToken();
-          if (csrfTk) item.payload.csrf_token = csrfTk;
-        }
 
         try {
           var res = await fetch(API_URL, {
@@ -521,12 +517,10 @@
     return count;
   }
 
-  // 寫入 outbox 前移除 token + csrf_token，確保敏感憑證不會明文殘留在 IndexedDB
-  // （同步時 syncOutbox 會從 AuthService 重新補上兩者）
+  // 寫入 outbox 前移除 token，確保敏感憑證不會明文殘留在 IndexedDB
   function stripToken(payload) {
-    if (payload && typeof payload === 'object') {
-      if ('token' in payload) delete payload.token;
-      if ('csrf_token' in payload) delete payload.csrf_token;
+    if (payload && typeof payload === 'object' && 'token' in payload) {
+      delete payload.token;
     }
     return payload;
   }

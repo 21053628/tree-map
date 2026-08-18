@@ -191,9 +191,6 @@ const ApiService = (function() {
       if (!ok) return { ok: false, error: '未登入，操作已取消' };
       const token = AuthService.getToken();
       if (token) payload.token = token;
-      // 🔐 CSRF Token 附在 body（Apps Script 無法讀取自訂 Header，需由 body 回傳）
-      const csrf = AuthService.getCsrfToken();
-      if (csrf) payload.csrf_token = csrf;
     }
 
     // 🔐 Idempotency：寫入 payload 一律帶 client_id + client_created_at（重試時不變）
@@ -215,10 +212,6 @@ const ApiService = (function() {
       withRetry(() =>
         fetchWithTimeout(apiEndpoint, {
           method: 'POST',
-          // 🔥 [CORS 修正] 只保留 Content-Type（text/plain 為簡單請求）。
-          // 自訂 header（如 X-CSRF-Token）會觸發 preflight OPTIONS，
-          // 而 Apps Script 無法回應 OPTIONS，導致 CORS 阻擋所有寫入。
-          // CSRF token 已透過 body (payload.csrf_token) 傳遞，後端支援讀取。
           headers: {
             'Content-Type': 'text/plain;charset=utf-8'
           },
