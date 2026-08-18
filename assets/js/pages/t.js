@@ -15,10 +15,10 @@
 
   const escapeHtml = window.TreeUtils.escapeHtml;
 
-  // DOMPurify 兜底（保留本頁 rely 的 inline onclick/onerror，其餘一律淨化）
+  // DOMPurify 嚴格模式：不允許任何 inline event handlers (onclick/onerror 等)
   function sanitizeHTML(html) {
     if (typeof DOMPurify !== 'undefined') {
-      return DOMPurify.sanitize(html, { ADD_ATTR: ['onclick', 'onerror'] });
+      return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
     }
     return html;
   }

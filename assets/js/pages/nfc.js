@@ -46,6 +46,19 @@ window.addEventListener('DOMContentLoaded', function() {
   if (urlParam) {
     autoImportFromURL(urlParam);
   }
+
+  // 綁定事件監聽器（移除 inline onclick）
+  document.getElementById('generateBtn').addEventListener('click', generateURL);
+  document.getElementById('tabWeb').addEventListener('click', function() { switchTab('web'); });
+  document.getElementById('tabManual').addEventListener('click', function() { switchTab('manual'); });
+  document.getElementById('writeNfcBtn').addEventListener('click', writeNFC);
+  document.getElementById('cancelNfcBtn').addEventListener('click', cancelNFC);
+  document.getElementById('readNfcBtn').addEventListener('click', readNFC);
+  document.getElementById('copyBtn').addEventListener('click', copyURL);
+  document.getElementById('testJumpBtn').addEventListener('click', testJump);
+  document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
+  document.getElementById('tagType').addEventListener('change', updateCapacityHint);
+  document.getElementById('backBtn').addEventListener('click', goBack);
 });
 
 // 由 t.html 跳轉過來，自動填入樹木資訊

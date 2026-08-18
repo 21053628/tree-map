@@ -191,6 +191,9 @@ const ApiService = (function() {
       if (!ok) return { ok: false, error: '未登入，操作已取消' };
       const token = AuthService.getToken();
       if (token) payload.token = token;
+      // 🔐 CSRF Token 附在 body（Apps Script 無法讀取自訂 Header，需由 body 回傳）
+      const csrf = AuthService.getCsrfToken();
+      if (csrf) payload.csrf_token = csrf;
     }
 
     // 🔐 Idempotency：寫入 payload 一律帶 client_id + client_created_at（重試時不變）
@@ -212,9 +215,9 @@ const ApiService = (function() {
       withRetry(() =>
         fetchWithTimeout(apiEndpoint, {
           method: 'POST',
-          headers: {
+          headers: AuthService.addCsrfHeader({
             'Content-Type': 'text/plain;charset=utf-8'
-          },
+          }),
           body: JSON.stringify(payload)
         }, POST_TIMEOUT)
         .then(response => {

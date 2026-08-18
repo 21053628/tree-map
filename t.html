@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="樹木資訊管理系統 - 查看樹木詳細資料、巡查記錄">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self'; style-src 'self' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -95,9 +95,10 @@
 <!-- 🔥 [Tier1-B] 自托管第三方函式庫（同域、即時執行） -->
 <script src="assets/vendor/leaflet.js" defer></script>
 
-<!-- 🔥 [Phase6] 統一 services：config → api → auth，再由 pages/t.js 共用 -->
+<!-- 🔥 [Phase6] 統一 services：config → api-config → api → auth，再由 pages/t.js 共用 -->
 <!-- 註：t.html 保留原本 async 延遲載入 proj4 的座標轉換，以維持首屏效能，不改行為 -->
 <script src="assets/js/config.js"></script>
+<script src="assets/js/api-config.js"></script>
 <script src="assets/js/modules/audit-log.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#2e7d32">
@@ -137,7 +137,7 @@
 </head>
 <body>
 <div class="wrap">
-  <a href="#" class="back-btn" id="backBtn" onclick="return goBack(event)">⬅ 返回</a>
+  <a href="#" class="back-btn" id="backBtn">⬅ 返回</a>
 
   <h1>🌳 NFC 樹木標籤產生器</h1>
 
@@ -153,7 +153,7 @@
     <input type="text" id="treeId" placeholder="樹木編號（例如：A001 或 256C）" autocomplete="off">
     <input type="text" id="projectId" placeholder="地盤代碼（例如：ShingMunRiver，可留空）" autocomplete="off">
 
-    <button onclick="generateURL()">🔗 產生 NFC 網址</button>
+    <button id="generateBtn">🔗 產生 NFC 網址</button>
   </div>
 
   <!-- 步驟 2：結果 + 寫入 -->
@@ -170,8 +170,8 @@
 
     <!-- 寫入方式 tabs -->
     <div class="tabs">
-      <button id="tabWeb" class="active" onclick="switchTab('web')">📱 一鍵即寫</button>
-      <button id="tabManual" onclick="switchTab('manual')">📋 手動複製</button>
+      <button id="tabWeb" class="active">📱 一鍵即寫</button>
+      <button id="tabManual">📋 手動複製</button>
     </div>
 
     <!-- Tab 1: Web NFC 直寫 -->
@@ -180,7 +180,7 @@
 
       <div class="field">
         <label for="tagType">標籤類型</label>
-        <select id="tagType" onchange="updateCapacityHint()">
+        <select id="tagType">
           <option value="215" selected>NTAG215（504 bytes，推薦）</option>
           <option value="213">NTAG213（144 bytes）</option>
           <option value="216">NTAG216（888 bytes）</option>
@@ -188,12 +188,12 @@
         <div class="capacity-hint" id="capacityHint"></div>
       </div>
 
-      <button class="nfc-write" id="writeNfcBtn" onclick="writeNFC()" disabled>
+      <button class="nfc-write" id="writeNfcBtn" disabled>
         📡 按一下 → 手機靠近 NFC 標籤
       </button>
 
-      <button class="sec cancel" id="cancelNfcBtn" onclick="cancelNFC()" style="display:none">⏹ 取消寫入</button>
-      <button class="sec" id="readNfcBtn" onclick="readNFC()" disabled>🔍 讀取標籤內容</button>
+      <button class="sec cancel" id="cancelNfcBtn" style="display:none">⏹ 取消寫入</button>
+      <button class="sec" id="readNfcBtn" disabled>🔍 讀取標籤內容</button>
 
       <label class="lock-option">
         <input type="checkbox" id="lockTag"> 寫入後鎖定標籤（唯讀，不可逆）
@@ -212,10 +212,10 @@
 
       <div class="url-box">
         <span id="urlText"></span>
-        <button class="copy-btn" onclick="copyURL()">📋 複製</button>
+        <button class="copy-btn" id="copyBtn">📋 複製</button>
       </div>
 
-      <button class="sec" onclick="testJump()">🧪 在瀏覽器測試跳轉</button>
+      <button class="sec" id="testJumpBtn">🧪 在瀏覽器測試跳轉</button>
 
       <div class="info">
         💡 <strong>步驟：</strong>打開 NFC Tools → 選「寫入」→「新增記錄」→「URL」→ 貼上 → 「寫入」→ 手機靠近標籤
@@ -227,7 +227,7 @@
   <div class="card" id="historyCard" style="display:none">
     <h2>🕒 寫入歷史</h2>
     <ul id="historyList"></ul>
-    <button class="sec" onclick="clearHistory()">🗑 清除歷史</button>
+    <button class="sec" id="clearHistoryBtn">🗑 清除歷史</button>
   </div>
 
   <div class="card">
@@ -267,6 +267,7 @@
 
 <!-- 🔥 [Phase5] 依賴與頁面邏輯全部外置，內嵌 script 已移除 -->
 <script src="assets/js/config.js"></script>
+<script src="assets/js/api-config.js"></script>
 <script src="assets/js/core/global-utils.js"></script>
 <script src="assets/js/pages/nfc.js"></script>
 </body>
