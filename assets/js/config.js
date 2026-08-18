@@ -9,8 +9,8 @@
 
 // 配置對象 - 應從外部配置文件或環境變數加載
 const Config = {
-  // API 端點配置 - 從外部配置文件加載，避免硬編碼
-  API_ENDPOINT: null, // 必須在初始化時提供
+  // API 端點配置
+  API_ENDPOINT: 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec',
   
   // 認證配置
   AUTH: {
