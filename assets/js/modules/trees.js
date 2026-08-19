@@ -146,6 +146,30 @@ export function scheduleRefreshLabels(){
   _labelTimer = setTimeout(refreshLabels, 120);
 }
 
+/* 🔥 [修復] Popup 超出視窗時自動平移入視野（只喺有需要時 pan，避免抖動） */
+function ensurePopupInViewport(popup) {
+  const map = state.map;
+  const el = popup && popup.getElement ? popup.getElement() : null;
+  if (!map || !el || typeof map.getSize !== 'function') return;
+  const size = map.getSize();
+  if (!size || !size.x || !size.y) return;
+  const p = map.latLngToContainerPoint(popup.getLatLng());
+  const w = Math.min(el.offsetWidth || 320, size.x - 24);
+  const h = el.offsetHeight || 320;
+  const mX = Math.round(w / 2) + 12;   // 左右安全邊距
+  const topNeed = h + 16;              // popup 主體喺 marker 上方向上延伸
+  const bottomNeed = 48;               // marker 下方留 tip 空間
+  // 目標像素位置（clamp 入安全區）
+  let qx = p.x, qy = p.y;
+  if (qy < topNeed) qy = topNeed;
+  if (qy > size.y - bottomNeed) qy = size.y - bottomNeed;
+  if (qx < mX) qx = mX;
+  if (qx > size.x - mX) qx = size.x - mX;
+  const dx = qx - p.x, dy = qy - p.y;
+  if (!dx && !dy) return;              // 已完全可見 → 唔 pan（防抖動關鍵）
+  map.panBy([-dx, -dy], { animate: true, duration: 0.25 });
+}
+
 /* =========================================================
  * 樹木標記（v4.1 Canvas 版）
  * ========================================================= */
@@ -221,10 +245,11 @@ export function drawTrees(silent) {
         '<b>Ground Dia.:</b> ' + (t.ground_diameter || '-') + ' m | <b>Stem Length:</b> ' + (t.stem_length || '-') + ' m<br>' +
         '<b>Crown Area:</b> ' + (t.crown_area || '-') + ' ㎡ | <b>Crown Vol.:</b> ' + (t.crown_volume || '-') + ' m³<br>' +
         (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
-        ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:200px;object-fit:cover;display:block;margin:6px auto 0;border-radius:6px;"><br>' : '') +
+        ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;margin:6px auto 0;border-radius:6px;background:rgba(128,128,128,.12);"><br>' : '') +
         '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
 
       e.popup.setContent(DOMPurify.sanitize(popupHtml));
+      ensurePopupInViewport(e.popup);
 
       setTimeout(() => {
         try {
@@ -233,10 +258,11 @@ export function drawTrees(silent) {
             const img = el.querySelector('img.popup-img');
             if (img && !img.complete) {
               img.addEventListener('load', () => {
-                if (e.popup && e.popup._map) e.popup.update();
+                if (e.popup && e.popup._map) { e.popup.update(); ensurePopupInViewport(e.popup); }
               });
             } else if (e.popup && e.popup._map) {
               e.popup.update();
+              ensurePopupInViewport(e.popup);
             }
           }
         } catch (err) { }
