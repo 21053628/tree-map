@@ -7,7 +7,7 @@
  *   5. 升版號強制清除舊快取
  *   6. Phase 5：抽出快取處理函數，並加入 isApiRequest 預留公司 server 遷移
  */
-const VERSION = 'v2.10.0'; // 🔥 修正背景同步完成後不再強制重新載入頁面
+const VERSION = 'v2.11.0'; // 🔥 移除畫邊界工具（map.js / draw.js 更新）
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;

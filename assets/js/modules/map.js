@@ -10,17 +10,12 @@ import { hideSearch } from './search.js';
 import { toggleLotLayer } from './lots.js';
 import { toggleTreeLabels, scheduleRedraw } from './trees.js';
 import { toggleFilterPanel, closeFilterPanel } from './filters.js'; // 🔥 [v2.52]
-import { startMeasure, startDrawPolygon, cancelInteraction, clearAllDrawings, getMode as getDrawMode } from './draw.js'; // 🔥 [Phase1]
+import { startMeasure, cancelInteraction, clearAllDrawings, getMode as getDrawMode } from './draw.js'; // 🔥 [Phase1]
 import { toggleGeolocation, locateOnce } from './geolocate.js'; // 🔥 [Phase1]
 import { on } from '../core/event-bus.js'; // 🔥 [Phase4] 訂閱 project:selected 以觸發航拍圖刷新
 
 // 🔥 layers 圖示（filter 按鈕用，清楚表示「分層」）
 const LAYERS_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
-
-// 🔥 [Phase1] 邊界繪製完成後暫存（Phase2 接後端儲存）
-function onDrawBoundary(latlngs) {
-  state.drawBoundary = latlngs.map(function (ll) { return [ll.lat, ll.lng]; });
-}
 
 export function initMap() {
   if (!window.L) {
@@ -113,11 +108,6 @@ export function initMap() {
     if (getDrawMode() === 'area') { cancelInteraction(); return; }
     startMeasure('area');
   }
-  function toggleDrawBoundary() {
-    if (getDrawMode() === 'polygon') { cancelInteraction(); return; }
-    startDrawPolygon(onDrawBoundary);
-  }
-
   // 🔥 全螢幕＋三個 GIS 工具（電腦版 icon bar，垂直排列在縮放按鈕下面）
   const gisCtrl = L.control({ position: 'topleft' });
   gisCtrl.onAdd = function () {
@@ -145,7 +135,6 @@ export function initMap() {
     });
     addBtn('📏', '量度距離', '量度距離', toggleMeasureLine);
     addBtn('📐', '量度面積', '量度面積', toggleMeasureArea);
-    addBtn('🖍', '繪畫邊界', '繪畫邊界', toggleDrawBoundary);
     addBtn('✕', '清除所有量測／繪圖', '清除所有量測／繪圖', clearAllDrawings);
 
     return div;
@@ -173,7 +162,6 @@ export function initMap() {
         '<div class="drawer-sub" data-sub="tools">' +
           '<button data-act="measureLine">📏 距離</button>' +
           '<button data-act="measureArea">📐 面積</button>' +
-          '<button data-act="drawPolygon">🖍 邊界</button>' +
           '<button data-act="clearDrawings">✕ 清除</button>' +
         '</div>' +
         '<button class="drawer-cat" data-cat="layers">🗺️ 圖層</button>' +
@@ -195,7 +183,6 @@ export function initMap() {
         '<div class="drawer-sep sep-tools"></div>' +
         '<button data-act="measureLine">📏 距離</button>' +
         '<button data-act="measureArea">📐 面積</button>' +
-        '<button data-act="drawPolygon">🖍 邊界</button>' +
         '<button data-act="locate">📍 定位</button>' +
         '<button data-act="clearDrawings">✕ 清除</button>' +
         '<div class="drawer-sep"></div>' +
@@ -256,12 +243,6 @@ export function initMap() {
           closeDrawer();
           if (getDrawMode() === 'area') { cancelInteraction(); return; }
           startMeasure('area');
-          return;
-        }
-        if (b.dataset.act === 'drawPolygon') {
-          closeDrawer();
-          if (getDrawMode() === 'polygon') { cancelInteraction(); return; }
-          startDrawPolygon(onDrawBoundary);
           return;
         }
         if (b.dataset.act === 'locate') {
