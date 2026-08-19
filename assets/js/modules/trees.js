@@ -178,8 +178,15 @@ export function drawTrees(silent) {
 
   // 🔥 拖動地圖重繪前，記錄目前開啟中的樹木 popup 編號，等重繪完可以重新開啟
   let openTreeId = null;
+  let savedPopupScroll = 0;
   if (state.map && state.map._popup && state.map._popup.isOpen() && state.map._popup._source && state.map._popup._source._treeId != null) {
     openTreeId = String(state.map._popup._source._treeId);
+    // 🔥 [UX 修復] 記錄 popup 內容滾動位置，重繪重開後唔跳返最頂
+    try {
+      const pEl = state.map._popup.getElement();
+      const cEl = pEl && pEl.querySelector('.leaflet-popup-content');
+      if (cEl) savedPopupScroll = cEl.scrollTop || 0;
+    } catch (e) {}
   }
 
   state.treeLayer.clearLayers();
@@ -282,7 +289,22 @@ export function drawTrees(silent) {
   if (silent && openTreeId) {
     const key = state.curProject + '_' + openTreeId;
     const m = state.treesCache.get(key) || state.treesCache.get(openTreeId);
-    if (m) m.openPopup();
+    if (m) {
+      m.openPopup();
+      // 🔥 [UX 修復] 還原 popup 滾動位置（即時＋80ms 延遲各寫一次，對抗 50ms 嘅 update）
+      if (savedPopupScroll > 0) {
+        const restore = function () {
+          try {
+            const pop = m.getPopup();
+            const pEl = pop && pop.getElement();
+            const cEl = pEl && pEl.querySelector('.leaflet-popup-content');
+            if (cEl) cEl.scrollTop = savedPopupScroll;
+          } catch (e) {}
+        };
+        restore();
+        setTimeout(restore, 80);
+      }
+    }
   }
 
   state.perfMetrics.totalRenders++;

@@ -7,7 +7,7 @@
  *   5. 升版號強制清除舊快取
  *   6. Phase 5：抽出快取處理函數，並加入 isApiRequest 預留公司 server 遷移
  */
-const VERSION = 'v2.14.0'; // 🔥 [修復] Popup 超出視窗時自動平移入視野（ensurePopupInViewport 有需要先 pan）
+const VERSION = 'v2.15.0'; // 🔥 [UX 修復] 拖地圖後 popup 捲軸保持位置（保存/還原 scrollTop）
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
