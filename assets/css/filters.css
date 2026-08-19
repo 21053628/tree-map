@@ -61,3 +61,11 @@
 @media (max-width: 600px) {
   #filterBtn.filter-btn { display: none; }
 }
+/* [Phase12] 過濾 chip 互動強化 */
+.filter-chip:hover {
+  transform: scale(1.04);
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+.filter-chip.on {
+  box-shadow: inset 0 0 0 1.5px var(--c), 0 0 0 2px rgba(128,128,128,.08);
+}

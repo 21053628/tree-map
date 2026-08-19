@@ -5,31 +5,33 @@
 
 /* ================= 14. 深色模式覆蓋 ================= */
 @media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+  ::-webkit-scrollbar-thumb { background: var(--surface-3); }
   ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 
   #bar select, #panel input, #panel select, #panel textarea {
-    background: #2c332c; border-color: #444; color: #e0e0e0;
+    background: var(--surface-2); border-color: #444; color: #e0e0e0;
   }
   #bar select, #bar button, .search-wrap input {
-    background: rgba(30, 36, 30, 0.85);
+    background: var(--surface-1);
   }
+  #bar select { border-color: rgba(255,255,255,.12); }
   #panel input::placeholder, #panel textarea::placeholder { color: #777; }
 
   .layerbar, .legend {
-    background: rgba(30, 36, 30, 0.85); color: #e0e0e0;
+    background: var(--surface-2); color: #e0e0e0;
+    box-shadow: var(--shadow-2);
   }
   .layerbar button { color: #bbb; }
-  .layerbar button.on { background: var(--accent); color: #fff; }
+  .layerbar button.on { background: var(--grad-accent); color: #fff; }
 
   .layerbar button.drawer-action.act-project {
     background: rgba(33, 150, 243, 0.16);
-    color: #64b5f6;
+    color: var(--accent-bright);
     box-shadow: inset 0 0 0 1px rgba(100, 181, 246, 0.4);
   }
   .layerbar button.drawer-action.act-tree {
     background: rgba(129, 199, 132, 0.16);
-    color: #81c784;
+    color: var(--primary-bright);
     box-shadow: inset 0 0 0 1px rgba(129, 199, 132, 0.4);
   }
   .layerbar .drawer-sep { background: rgba(255,255,255,.15); }
@@ -38,11 +40,11 @@
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 
   #status {
-    background: rgba(30, 36, 30, 0.9);
+    background: var(--surface-2);
     color: #e0e0e0;
     border-color: #444;
   }
-  #status.success { color: #81c784; border-color: #81c784; }
+  #status.success { color: var(--primary-bright); border-color: var(--primary-bright); }
   #status.error { color: #ef9a9a; border-color: #ef9a9a; background: rgba(40, 20, 20, 0.9); }
 
   .leaflet-popup-close-button::before { background: rgba(255, 255, 255, 0.18); }
@@ -52,20 +54,20 @@
   .leaflet-popup-content::before { background: #555; }
 
   .search-wrap input {
-    background: rgba(30, 36, 30, 0.85);
+    background: var(--surface-1);
     border-color: #444; color: #e0e0e0;
   }
-  .search-wrap input:focus { background: rgba(30, 36, 30, 0.98); }
+  .search-wrap input:focus { background: var(--surface-2); }
   .search-wrap input::placeholder { color: #777; }
-  .search-results { background: #1e241e; border-color: rgba(255,255,255,.1); }
+  .search-results { background: var(--surface-3); border-color: rgba(255,255,255,.1); box-shadow: var(--shadow-2); }
 
   .sr-item { border-bottom-color: rgba(255,255,255,.08); }
   .sr-item:hover { background: rgba(129, 199, 132, 0.15); }
   .sr-id { color: #e0e0e0; }
   .sr-name { color: #9e9e9e; }
-  .sr-dot { border-color: #1e241e; }
+  .sr-dot { border-color: var(--surface-3); }
 
   /* 🔥 [v2.60] 深色模式 filter 面板 */
-  .filter-panel { background: #1e241e; }
+  .filter-panel { background: var(--surface-2); box-shadow: var(--shadow-2); }
   .filter-chip { color: #e0e0e0; border-color: rgba(255,255,255,.2); }
 }

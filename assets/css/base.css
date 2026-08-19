@@ -37,6 +37,15 @@ button { touch-action: manipulation; cursor: pointer; }
 ::selection { background: rgba(46, 125, 50, 0.2); }
 ::-moz-selection { background: rgba(46, 125, 50, 0.2); }
 
+/* [Phase12] 數字對齊（專業感） */
+.grid b, .sr-id, .ib-readout, #status { font-variant-numeric: tabular-nums; }
+
+/* [Phase12] 深色模式滾動條 */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb { background: var(--surface-3); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+}
+
 /* 焦點可見性（無障礙） */
 :focus-visible {
   outline: 2px solid var(--accent);

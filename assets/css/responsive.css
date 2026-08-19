@@ -162,8 +162,35 @@
     top: 2px !important; right: 2px !important;
   }
   .leaflet-popup-close-button::after { font-size: 24px; }
+/* [Phase12] 手機實色化（效能＋陽光可讀） */
+  #bar select, #bar button, .search-wrap input,
+  #filterBtn.filter-btn, .layerbar, .legend, .interact-bar,
+  .leaflet-popup-content-wrapper, #status, #panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  #bar select, .search-wrap input, #filterBtn.filter-btn {
+    background: rgba(255,255,255,.96);
+  }
+  #bar button {
+    background: var(--primary);
+  }
+  .layerbar { background: rgba(255,255,255,.96); }
+  .legend { background: rgba(255,255,255,.92); }
+  #status { background: rgba(255,255,255,.96); }
+  #panel { border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
+  .layerbar-fab { box-shadow: var(--shadow-3); }
+  @media (prefers-color-scheme: dark) {
+    #bar select, .search-wrap input, #filterBtn.filter-btn {
+      background: rgba(22,27,22,.96);
+    }
+    .layerbar { background: rgba(22,27,22,.96); }
+    .legend { background: rgba(22,27,22,.92); }
+    #status { background: rgba(22,27,22,.96); }
+    #panel { background: rgba(22,27,22,.97); }
+  }
 }
-
+ 
 /* 超窄屏極簡 */
 @media (max-width: 400px) {
   .layerbar { gap: 2px; padding: 3px; }

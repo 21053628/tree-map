@@ -76,3 +76,13 @@
   .interact-bar { background: rgba(30, 36, 30, .95); }
   .interact-bar .ib-cancel { background: rgba(255,255,255,.1); color: #e0e0e0; }
 }
+/* [Phase12] GIS 工具 hover/active 統一 */
+@media (prefers-color-scheme: dark) {
+  .leaflet-control .gis-btn { background: var(--surface-2); color: #e0e0e0; border-bottom-color: #444 !important; }
+  .leaflet-control .gis-btn:hover { background: #37403a; }
+  .interact-bar { background: rgba(30, 36, 30, .95); }
+  .interact-bar .ib-cancel { background: rgba(255,255,255,.1); color: #e0e0e0; }
+}
+/* [Phase12] 互動列加深陰影 */
+.interact-bar { box-shadow: var(--shadow-2); }
+.interact-bar .ib-done { background: var(--grad-primary); }

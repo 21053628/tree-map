@@ -63,3 +63,19 @@ button.is-loading::after {
     border: 2px solid #000;
   }
 }
+/* [Phase12] 按鈕 hover 浮起通用效果 */
+#bar button:hover,
+#panel button:hover,
+.layerbar button:hover,
+.leaflet-popup-content button:hover,
+.leaflet-popup-content a:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+#bar button:active,
+#panel button:active,
+.layerbar button:active,
+.leaflet-popup-content button:active,
+.leaflet-popup-content a:active {
+  transform: scale(0.97);
+}

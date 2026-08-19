@@ -19,3 +19,26 @@
   .sr-item:hover { background: transparent; }
   .leaflet-interactive:hover { fill-opacity: 0.2 !important; stroke-width: 2 !important; }
 }
+/* [Phase12] 新動畫元素 will-change */
+.sr-item, .filter-chip, .prjIcon, .legend span {
+  will-change: transform;
+}
+/* [Phase12] 觸控裝置移除新 hover 效果 */
+@media (hover: none) {
+  #bar button:hover, #panel button:hover, .layerbar button:hover,
+  .leaflet-popup-content button:hover, .leaflet-popup-content a:hover,
+  .filter-chip:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  .layerbar-fab { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+}
+/* [Phase12] 減 motion 停用新動畫 */
+@media (prefers-reduced-motion: reduce) {
+  .search-results .sr-item { animation: none !important; }
+  .filter-chip:hover { transform: none !important; }
+  #bar button:hover, #panel button:hover, .layerbar button:hover,
+  .leaflet-popup-content button:hover, .leaflet-popup-content a:hover {
+    transform: none !important;
+  }
+}
