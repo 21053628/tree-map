@@ -6,13 +6,51 @@ import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
 import { buildSelect } from './projects.js';
 import { drawProjects } from './projects.js';
-import { drawTrees, bringTreeToFront, ensurePopupFullyVisible } from './trees.js';
+import { drawTrees, bringTreeToFront } from './trees.js';
 import { emit } from '../core/event-bus.js'; // 🔥 [Phase4] 事件解耦，移除對 map.js 的直接依賴
 import { sanitizeId } from '../core/utils.js';
 
 export function saveViewState(treeId, lat, lng) {
   // 🔥 [v2.44] 移除 localStorage 儲存，F5 刷新時不再跳回上次位置
   // 保留函數殼避免其他模組 (如 projects.js) 呼叫時出錯
+}
+
+// 🔥 [修復] 輪詢等 marker 已 attach（_map 存在）先開 popup，剷除 cluster 排隊競態
+function openTreePopupWhenReady(treeId, pid, tries) {
+  const marker = state.treesCache.get(pid + '_' + treeId) ||
+    state.treesCache.get(treeId) ||
+    state.treesCache.get(String(treeId));
+  if (marker && marker._map) {
+    bringTreeToFront(marker);
+    marker.openPopup();
+    updateStatus('✅ 已定位到樹木：' + treeId);
+    // （安全網）確保 popup 完整入視野，唔好斬頂
+    try {
+      const map = state.map;
+      if (map && typeof map.panInside === 'function') {
+        setTimeout(function () {
+          try {
+            const pop = marker.getPopup();
+            if (!pop || !pop.isOpen()) return;
+            const el = pop.getElement();
+            const h = el ? (el.offsetHeight || 300) : 300;
+            map.panInside(marker.getLatLng(), {
+              paddingTopLeft: L.point(60, h + 20),
+              paddingBottomRight: L.point(60, 80),
+              animate: true,
+              duration: 0.25
+            });
+          } catch (e) {}
+        }, 150);
+      }
+    } catch (e) {}
+    return;
+  }
+  if (tries > 0) {
+    setTimeout(function () { openTreePopupWhenReady(treeId, pid, tries - 1); }, 250);
+  } else {
+    updateStatus('⚠️ 未能打開樹木資訊框：' + treeId);
+  }
 }
 
 export function locateTree(treeId, projectId, lat, lng) {
@@ -87,21 +125,26 @@ export function locateTree(treeId, projectId, lat, lng) {
     state.map.flyTo([targetLat, targetLng], tree ? Config.MAP.TREE_ZOOM : (state.map.getZoom() || Config.MAP.MAX_ZOOM), { duration: 1.2 });
 
     if (tree) {
+      // 🔥 [修復] 等 flyTo 完成（moveend）後輪詢 marker 已 attach 先開 popup，
+      // 剷除固定 1400ms 與重繪／cluster 排隊競態；刪除無意義的全量 bringToFront
+      const tid = String(tree.tree_id);
       const tryOpen = function (tries) {
-        const marker = state.treesCache.get(finalPid + '_' + tree.tree_id) ||
-          state.treesCache.get(tree.tree_id) ||
+        const marker = state.treesCache.get(finalPid + '_' + tid) ||
+          state.treesCache.get(tid) ||
           state.treesCache.get(String(treeId));
-        if (marker) {
-          state.treesCache.forEach((m) => { if (m && m.bringToFront) m.bringToFront(); });
+        if (marker && marker._map) {
           bringTreeToFront(marker);
           marker.openPopup();
-          ensurePopupFullyVisible(marker); // 🔥 NFC/URL 定位後確保 popup 完整入視野
           updateStatus('✅ 已定位到樹木：' + treeId);
-        } else if (tries > 0) {
-          setTimeout(function () { tryOpen(tries - 1); }, 250);
+          return;
         }
+        if (tries > 0) setTimeout(function () { tryOpen(tries - 1); }, 120);
       };
-      setTimeout(function () { tryOpen(8); }, 1200);
+      state.map.once('moveend', function () {
+        setTimeout(function () { tryOpen(15); }, 80);
+      });
+      // 安全網：若 flyTo 因故唔觸發 moveend（例如視圖已喺目標），1.6s 後仍嘗試
+      setTimeout(function () { tryOpen(10); }, 1600);
     }
   } else if (finalPid) {
     const p = state.PROJECTS.find((x) => String(x.project_id) === finalPid);

@@ -368,14 +368,20 @@ export function drawTrees(silent) {
     const _popupSource = state.map._popup && state.map._popup._source;
     const openTreeId = _popupSource && _popupSource._treeId ? String(_popupSource._treeId) : null;
     if (openTreeId) {
+      // 🔥 [修復] cluster addLayers 異步排隊，marker._map 未必即時 ready，輪詢重開
       const _k = state.curProject + '_' + openTreeId;
-      const _m = state.treesCache.get(_k) || state.treesCache.get(openTreeId);
-      if (_m) {
-        const container = state.map.getContainer();
-        container.classList.add('popup-silent-reopen');
-        _m.openPopup();
-        setTimeout(function () { container.classList.remove('popup-silent-reopen'); }, 400);
-      }
+      const reopen = function (tries) {
+        const _m = state.treesCache.get(_k) || state.treesCache.get(openTreeId);
+        if (_m && _m._map) {
+          const container = state.map.getContainer();
+          container.classList.add('popup-silent-reopen');
+          _m.openPopup();
+          setTimeout(function () { container.classList.remove('popup-silent-reopen'); }, 400);
+          return;
+        }
+        if (tries > 0) setTimeout(function () { reopen(tries - 1); }, 100);
+      };
+      reopen(10);
     }
   }
 
