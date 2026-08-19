@@ -6,8 +6,9 @@ function handleGetBootstrap_(){
   }
   const payload = {ok:true, data: { projects: rows_(SH_PRJ), trees: rows_(SH_TREES) }};
   const jsonStr = JSON.stringify(payload);
+  console.log('📦 bootstrap size:', jsonStr.length, 'bytes');
   try { cache.put(BOOTSTRAP_CACHE_KEY, jsonStr, BOOTSTRAP_CACHE_TTL); }
-  catch(e) { console.warn('⚠️ 快取太大，跳過'); }
+  catch(e) { console.warn('⚠️ 快取太大跳過（size=' + jsonStr.length + '）'); }
   return ContentService.createTextOutput(jsonStr).setMimeType(ContentService.MimeType.JSON);
 }
 

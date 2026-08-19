@@ -19,6 +19,7 @@ function getCachedRows_(sheetName, cacheKey, ttl) {
     try { return JSON.parse(cached); } catch(e) {}
   }
   const rows = rows_(sheetName);
-  try { cache.put(cacheKey, JSON.stringify(rows), ttl || CACHE_TTL); } catch(e) {}
+  const jsonStr = JSON.stringify(rows);
+  try { cache.put(cacheKey, jsonStr, ttl || CACHE_TTL); } catch(e) { console.warn('⚠️ 快取太大跳過（size=' + jsonStr.length + '）'); }
   return rows;
 }

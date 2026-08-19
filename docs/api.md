@@ -27,7 +27,7 @@ GET <API_ENDPOINT>?action=bootstrap
 { "ok": true, "data": { "projects": [], "trees": [] } }
 ```
 
-`projects` 及 `trees` 分別係 `projects`、`trees` Sheet 全部資料列。服務端使用 `CacheService` key `bootstrap_data` 快取 60 秒（`BOOTSTRAP_CACHE_TTL = 60`）。
+`projects` 及 `trees` 分別係 `projects`、`trees` Sheet 全部資料列。服務端使用 `CacheService` key `bootstrap_data` 快取 300 秒（`BOOTSTRAP_CACHE_TTL = 300`）。
 
 ### 2.2 `ping`
 
@@ -65,7 +65,7 @@ GET <API_ENDPOINT>?action=tree&id=T001&prj=PROJECT-A
 | `id` | 是（程式未顯式拒絕缺少值） | 樹木編號 `tree_id` |
 | `prj` | 否 | 按 `project_id` 再過濾 |
 
-返回：`{ "ok": true, "data": <巡查記錄陣列> }`；無記錄時係空陣列。服務端一般快取 TTL 為 60 秒。
+返回：`{ "ok": true, "data": <巡查記錄陣列> }`；無記錄時係空陣列。服務端一般快取 TTL 為 300 秒。
 
 ### 2.5 `projects`
 
@@ -73,7 +73,7 @@ GET <API_ENDPOINT>?action=tree&id=T001&prj=PROJECT-A
 GET <API_ENDPOINT>?action=projects
 ```
 
-返回：`{ "ok": true, "data": <地盤陣列> }`。服務端一般快取 TTL 為 60 秒。
+返回：`{ "ok": true, "data": <地盤陣列> }`。服務端一般快取 TTL 為 300 秒。
 
 ### 2.6 `trees`（預設 action）
 
@@ -82,7 +82,7 @@ GET <API_ENDPOINT>?action=projects
 | `action` | 否 | 缺少時預設 `trees`；未知 action 亦落入此分支 |
 | `project` | 否 | 按 `project_id` 過濾 |
 
-返回：`{ "ok": true, "data": <樹木陣列> }`。服務端一般快取 TTL 為 60 秒。
+返回：`{ "ok": true, "data": <樹木陣列> }`。服務端一般快取 TTL 為 300 秒。
 
 ## 3. POST 共通規則
 
