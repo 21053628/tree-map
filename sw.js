@@ -7,7 +7,7 @@
  *   5. 升版號強制清除舊快取
  *   6. Phase 5：抽出快取處理函數，並加入 isApiRequest 預留公司 server 遷移
  */
-const VERSION = 'v2.9.3'; // 🔥 [修復] NFC/搜尋定位 marker._map 輪詢：locate.js(moveend+120ms×15+1.6s安全網) + trees.js silent重開(100ms×10)
+const VERSION = 'v2.9.4'; // 🔥 [修復] 定位 popup 一次性開啟 + silent 重繪只重開原本已開 popup
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;

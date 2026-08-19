@@ -275,6 +275,12 @@ export function drawTrees(silent) {
   const startTime = performance.now();
   const key = drawKey();
   const zoom = state.map ? state.map.getZoom() : null;
+  // 🔥 [修復] 只記錄重繪開始時真正開啟的 popup；手動關閉後不會因重繪再開。
+  let openTreeId = null;
+  if (state.map && state.map._popup && state.map._popup.isOpen()) {
+    const popupSource = state.map._popup._source;
+    openTreeId = popupSource && popupSource._treeId ? String(popupSource._treeId) : null;
+  }
 
   // 🔥 [防閃爍 A] 視窗仍喺上次繪製範圍內＋zoom／key 不變 → silent 直接 skip
   if (silent && state.map && lastDrawBounds && key === lastDrawKey &&
@@ -362,27 +368,22 @@ export function drawTrees(silent) {
 
   _lastSilentKey = visKey;
 
-  // 🔥 拖圖後若 popup 真係關咗（樹木離開視窗），增量模式下通常唔會觸發；
-  // 🔥 [手機修復 B] 壓制入場動畫，防止重開閃爍（對應舊 clearLayers 重開路徑）
-  if (silent && state.map && state.map._popup && !state.map._popup.isOpen()) {
-    const _popupSource = state.map._popup && state.map._popup._source;
-    const openTreeId = _popupSource && _popupSource._treeId ? String(_popupSource._treeId) : null;
-    if (openTreeId) {
-      // 🔥 [修復] cluster addLayers 異步排隊，marker._map 未必即時 ready，輪詢重開
-      const _k = state.curProject + '_' + openTreeId;
-      const reopen = function (tries) {
-        const _m = state.treesCache.get(_k) || state.treesCache.get(openTreeId);
-        if (_m && _m._map) {
-          const container = state.map.getContainer();
-          container.classList.add('popup-silent-reopen');
-          _m.openPopup();
-          setTimeout(function () { container.classList.remove('popup-silent-reopen'); }, 400);
-          return;
-        }
-        if (tries > 0) setTimeout(function () { reopen(tries - 1); }, 100);
-      };
-      reopen(10);
-    }
+  // 🔥 [手機修復 B] 只為重繪開始時已開啟的 popup 重開；手動關閉的不會重開。
+  if (silent && openTreeId) {
+    // 🔥 cluster addLayers 異步排隊，marker._map 未必即時 ready，輪詢重開
+    const _k = state.curProject + '_' + openTreeId;
+    const reopen = function (tries) {
+      const _m = state.treesCache.get(_k) || state.treesCache.get(openTreeId);
+      if (_m && _m._map) {
+        const container = state.map.getContainer();
+        container.classList.add('popup-silent-reopen');
+        _m.openPopup();
+        setTimeout(function () { container.classList.remove('popup-silent-reopen'); }, 400);
+        return;
+      }
+      if (tries > 0) setTimeout(function () { reopen(tries - 1); }, 100);
+    };
+    reopen(10);
   }
 
   state.perfMetrics.totalRenders++;
