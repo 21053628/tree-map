@@ -7,7 +7,7 @@
  *   5. 升版號強制清除舊快取
  *   6. Phase 5：抽出快取處理函數，並加入 isApiRequest 預留公司 server 遷移
  */
-const VERSION = 'v2.9.0'; // 🔥 [防閃爍] trees.js 增量重繪 + 自動平移（panInside）
+const VERSION = 'v2.9.1'; // 🔥 [手機修復] popup 防閃爍＋NFC 定位完整入視野（trees.js/locate.js/map.css）
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;

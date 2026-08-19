@@ -6,7 +6,7 @@ import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';
 import { buildSelect } from './projects.js';
 import { drawProjects } from './projects.js';
-import { drawTrees, bringTreeToFront } from './trees.js';
+import { drawTrees, bringTreeToFront, ensurePopupFullyVisible } from './trees.js';
 import { emit } from '../core/event-bus.js'; // 🔥 [Phase4] 事件解耦，移除對 map.js 的直接依賴
 import { sanitizeId } from '../core/utils.js';
 
@@ -87,7 +87,7 @@ export function locateTree(treeId, projectId, lat, lng) {
     state.map.flyTo([targetLat, targetLng], tree ? Config.MAP.TREE_ZOOM : (state.map.getZoom() || Config.MAP.MAX_ZOOM), { duration: 1.2 });
 
     if (tree) {
-      setTimeout(function () {
+      const tryOpen = function (tries) {
         const marker = state.treesCache.get(finalPid + '_' + tree.tree_id) ||
           state.treesCache.get(tree.tree_id) ||
           state.treesCache.get(String(treeId));
@@ -95,9 +95,13 @@ export function locateTree(treeId, projectId, lat, lng) {
           state.treesCache.forEach((m) => { if (m && m.bringToFront) m.bringToFront(); });
           bringTreeToFront(marker);
           marker.openPopup();
+          ensurePopupFullyVisible(marker); // 🔥 NFC/URL 定位後確保 popup 完整入視野
           updateStatus('✅ 已定位到樹木：' + treeId);
+        } else if (tries > 0) {
+          setTimeout(function () { tryOpen(tries - 1); }, 250);
         }
-      }, 1400);
+      };
+      setTimeout(function () { tryOpen(8); }, 1200);
     }
   } else if (finalPid) {
     const p = state.PROJECTS.find((x) => String(x.project_id) === finalPid);

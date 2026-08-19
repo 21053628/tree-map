@@ -26,6 +26,7 @@ const BOUNDS_PADDING = 0.3;
 // 🔥 [Phase1] 單一渲染排程器（供 moveend 使用）：合併原先「重繪 + 標籤」兩個獨立 debounce，
 // 避免每次平移地圖觸發多輪全量重繪與 DOM 重建。
 let _redrawTimer = null;
+let _lastSilentKey = '';
 export function scheduleRedraw() {
   clearTimeout(_redrawTimer);
   _redrawTimer = setTimeout(() => drawTrees(true), 150);
@@ -158,7 +159,7 @@ function drawKey() {
     (statusFilter ? Array.from(statusFilter).slice().sort().join(',') : 'all');
 }
 
-// 🔥 [自動平移] 令 popup 完整進入視野（只平移，唔改 zoom）
+// 🔥 [自動平移] 令 popup 完整進入視野（只平移，唔改 zoom）- 舊版兼容保留
 function ensurePopupInViewport(popup) {
   const map = state.map;
   const el = popup && popup.getElement ? popup.getElement() : null;
@@ -173,6 +174,42 @@ function ensurePopupInViewport(popup) {
     animate: true,
     duration: 0.25
   });
+}
+
+// 🔥 [手機修復] popup 開啟後自動平移，確保完整入視野（唔出界）
+export function ensurePopupFullyVisible(marker) {
+  const map = state.map;
+  const popup = marker && marker.getPopup ? marker.getPopup() : null;
+  if (!map || !popup) return;
+  setTimeout(function () {
+    if (popup.isOpen && !popup.isOpen()) return;
+    const el = popup.getElement();
+    if (!el) return;
+    const wrap = el.querySelector('.leaflet-popup-content-wrapper') || el;
+    const h = wrap.offsetHeight || 300;
+    const w = wrap.offsetWidth || 300;
+    const ll = marker.getLatLng();
+    const sideNeed = Math.round(w / 2) + 16;
+    const topNeed = h + 24;
+    const bottomNeed = 64;
+    if (typeof map.panInside === 'function') {
+      map.panInside(ll, {
+        paddingTopLeft: L.point(sideNeed, topNeed),
+        paddingBottomRight: L.point(sideNeed, bottomNeed),
+        animate: true, duration: 0.25
+      });
+      return;
+    }
+    // fallback（舊 Leaflet）：手動 panBy
+    const pt = map.latLngToContainerPoint(ll);
+    const size = map.getSize();
+    let sx = 0, sy = 0;
+    if (pt.y < topNeed) sy = topNeed - pt.y;
+    else if (pt.y > size.y - bottomNeed) sy = (size.y - bottomNeed) - pt.y;
+    if (pt.x < sideNeed) sx = sideNeed - pt.x;
+    else if (pt.x > size.x - sideNeed) sx = (size.x - sideNeed) - pt.x;
+    if (sx || sy) map.panBy([-sx, -sy], { animate: true, duration: 0.25 });
+  }, 80);
 }
 
 function makeMarker(t) {
@@ -206,11 +243,11 @@ function makeMarker(t) {
       ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;margin:6px auto 0;border-radius:6px;background:rgba(128,128,128,.12);"><br>' : '') +
       '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
     e.popup.setContent(DOMPurify.sanitize(popupHtml));
-    if (!silentReopen) {
-      setTimeout(function () {
-        if (e.popup && e.popup._map) ensurePopupInViewport(e.popup);
-      }, 60);
+    // 🔥 [手機修復 C] 用戶主動開啟時，出界就自動 pan 入視野；silent 重開唔 pan
+    if (!state.map.getContainer().classList.contains('popup-silent-reopen')) {
+      ensurePopupFullyVisible(marker);
     }
+    // 圖片載入後再校正一次（同樣受 silent 壓制）
     setTimeout(() => {
       try {
         const el = e.popup.getElement();
@@ -218,11 +255,11 @@ function makeMarker(t) {
           const img = el.querySelector('img.popup-img');
           if (img && !img.complete) {
             img.addEventListener('load', () => {
-              if (e.popup && e.popup._map) { e.popup.update(); if (!silentReopen) ensurePopupInViewport(e.popup); }
+              if (e.popup && e.popup._map) { e.popup.update(); if (!state.map.getContainer().classList.contains('popup-silent-reopen')) ensurePopupFullyVisible(marker); }
             });
           } else if (e.popup && e.popup._map) {
             e.popup.update();
-            if (!silentReopen) ensurePopupInViewport(e.popup);
+            if (!state.map.getContainer().classList.contains('popup-silent-reopen')) ensurePopupFullyVisible(marker);
           }
         }
       } catch (err) { }
@@ -258,6 +295,20 @@ export function drawTrees(silent) {
   const list = currentTrees();
   let viewBounds = null;
   if (state.map) viewBounds = state.map.getBounds().pad(BOUNDS_PADDING);
+
+  // 🔥 [手機修復 A] 可見樹集合＋zoom 冇變 → silent 直接 skip，唔掂 layers/popup
+  const zNow = state.map ? state.map.getZoom() : null;
+  let visKey = '';
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i];
+    if (t.lat && t.lng && (!viewBounds || viewBounds.contains([t.lat, t.lng]))) {
+      visKey += t.tree_id + ',';
+    }
+  }
+  visKey = zNow + '|' + visKey;
+  if (silent && state.treesCache.size && visKey === _lastSilentKey) {
+    return;
+  }
 
   const visible = [];
   for (let i = 0; i < list.length; i++) {
@@ -309,10 +360,23 @@ export function drawTrees(silent) {
   lastDrawKey = key;
   lastDrawZoom = zoom;
 
-  // 🔥 拖圖後若 popup 真係關咗（樹木離開視窗），唔再強行重開；
+  _lastSilentKey = visKey;
+
+  // 🔥 拖圖後若 popup 真係關咗（樹木離開視窗），增量模式下通常唔會觸發；
+  // 🔥 [手機修復 B] 壓制入場動畫，防止重開閃爍（對應舊 clearLayers 重開路徑）
   if (silent && state.map && state.map._popup && !state.map._popup.isOpen()) {
-    const openTreeId = null;
-    void openTreeId;
+    const _popupSource = state.map._popup && state.map._popup._source;
+    const openTreeId = _popupSource && _popupSource._treeId ? String(_popupSource._treeId) : null;
+    if (openTreeId) {
+      const _k = state.curProject + '_' + openTreeId;
+      const _m = state.treesCache.get(_k) || state.treesCache.get(openTreeId);
+      if (_m) {
+        const container = state.map.getContainer();
+        container.classList.add('popup-silent-reopen');
+        _m.openPopup();
+        setTimeout(function () { container.classList.remove('popup-silent-reopen'); }, 400);
+      }
+    }
   }
 
   state.perfMetrics.totalRenders++;

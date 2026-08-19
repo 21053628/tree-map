@@ -179,3 +179,10 @@ button.drawer-action:active { transform: scale(0.95); }
   background: rgba(128,128,128,.12);
   box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
+
+/* 🔥 [手機修復] silent 重繪重開 popup 時壓制入場動畫，防閃爍 */
+.popup-silent-reopen .leaflet-popup-content-wrapper,
+.popup-silent-reopen .leaflet-popup-tip-container {
+  animation: none !important;
+  transition: none !important;
+}
