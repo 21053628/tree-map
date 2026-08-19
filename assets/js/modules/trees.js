@@ -4,6 +4,7 @@
  * v4.3 - 🔢 按鈕升級做三模式循環：智能(默認) → 恆常 → 關閉 → 智能…
  * v4.2 - 樹木編號標籤系統
  * v4.1 - L.circleMarker + Canvas 渲染
+ * v4.5 - 🔥 [防閃爍] silent 增量差量 + 自動平移 ensurePopupInViewport(panInside)
  */
 import { state } from './state.js';
 import { updateStatus, escapeHtml } from './dom.js';
@@ -146,28 +147,88 @@ export function scheduleRefreshLabels(){
   _labelTimer = setTimeout(refreshLabels, 120);
 }
 
-/* 🔥 [修復] Popup 超出視窗時自動平移入視野（只喺有需要時 pan，避免抖動） */
+// 🔥 [防閃爍] 記錄上次繪製範圍／key／zoom
+let lastDrawBounds = null;
+let lastDrawKey = '';
+let lastDrawZoom = null;
+let silentReopen = false;
+
+function drawKey() {
+  return String(state.curProject) + '|' +
+    (statusFilter ? Array.from(statusFilter).slice().sort().join(',') : 'all');
+}
+
+// 🔥 [自動平移] 令 popup 完整進入視野（只平移，唔改 zoom）
 function ensurePopupInViewport(popup) {
   const map = state.map;
   const el = popup && popup.getElement ? popup.getElement() : null;
-  if (!map || !el || typeof map.getSize !== 'function') return;
-  const size = map.getSize();
-  if (!size || !size.x || !size.y) return;
-  const p = map.latLngToContainerPoint(popup.getLatLng());
-  const w = Math.min(el.offsetWidth || 320, size.x - 24);
-  const h = el.offsetHeight || 320;
-  const mX = Math.round(w / 2) + 12;   // 左右安全邊距
-  const topNeed = h + 16;              // popup 主體喺 marker 上方向上延伸
-  const bottomNeed = 48;               // marker 下方留 tip 空間
-  // 目標像素位置（clamp 入安全區）
-  let qx = p.x, qy = p.y;
-  if (qy < topNeed) qy = topNeed;
-  if (qy > size.y - bottomNeed) qy = size.y - bottomNeed;
-  if (qx < mX) qx = mX;
-  if (qx > size.x - mX) qx = size.x - mX;
-  const dx = qx - p.x, dy = qy - p.y;
-  if (!dx && !dy) return;              // 已完全可見 → 唔 pan（防抖動關鍵）
-  map.panBy([-dx, -dy], { animate: true, duration: 0.25 });
+  if (!map || !el || typeof map.panInside !== 'function') return;
+  const wrap = el.querySelector('.leaflet-popup-content-wrapper') || el;
+  const w = wrap.offsetWidth || 320;
+  const h = wrap.offsetHeight || 320;
+  const half = Math.round(w / 2) + 12;
+  map.panInside(popup.getLatLng(), {
+    paddingTopLeft: L.point(half, h + 20),      // popup 喺 marker 上方向上延伸
+    paddingBottomRight: L.point(half, 48),      // marker 下方留 tip 空間
+    animate: true,
+    duration: 0.25
+  });
+}
+
+function makeMarker(t) {
+  const renderer = getCanvasRenderer();
+  const color = t._color || Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
+  const marker = L.circleMarker([+t.lat, +t.lng], {
+    radius: 7,
+    fillColor: color,
+    color: '#fff',
+    weight: 2.5,
+    opacity: 1,
+    fillOpacity: 1,
+    renderer: renderer
+  });
+  marker._originalPos = [+t.lat, +t.lng];
+  marker._treeId = String(t.tree_id);
+  marker.on('click', function () {
+    marker.bringToFront();
+  });
+  marker.bindPopup('<div style="text-align:center;padding:10px;color:#666;">載入中...</div>', { autoPan: false });
+  marker.on('popupopen', function (e) {
+    const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
+    const popupHtml =
+      '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
+      '<b>Status:</b> <span style="color:' + color + ';font-weight:bold;">' + t.status + '</span><br>' +
+      '<b>Tree Height:</b> ' + (t.tree_height || t.height || '-') + ' m | <b>DBH:</b> ' + (t.dbh || '-') + ' m<br>' +
+      '<b>Crown Width:</b> ' + (t.crown_width || t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
+      '<b>Ground Dia.:</b> ' + (t.ground_diameter || '-') + ' m | <b>Stem Length:</b> ' + (t.stem_length || '-') + ' m<br>' +
+      '<b>Crown Area:</b> ' + (t.crown_area || '-') + ' ㎡ | <b>Crown Vol.:</b> ' + (t.crown_volume || '-') + ' m³<br>' +
+      (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
+      ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;margin:6px auto 0;border-radius:6px;background:rgba(128,128,128,.12);"><br>' : '') +
+      '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
+    e.popup.setContent(DOMPurify.sanitize(popupHtml));
+    if (!silentReopen) {
+      setTimeout(function () {
+        if (e.popup && e.popup._map) ensurePopupInViewport(e.popup);
+      }, 60);
+    }
+    setTimeout(() => {
+      try {
+        const el = e.popup.getElement();
+        if (el) {
+          const img = el.querySelector('img.popup-img');
+          if (img && !img.complete) {
+            img.addEventListener('load', () => {
+              if (e.popup && e.popup._map) { e.popup.update(); if (!silentReopen) ensurePopupInViewport(e.popup); }
+            });
+          } else if (e.popup && e.popup._map) {
+            e.popup.update();
+            if (!silentReopen) ensurePopupInViewport(e.popup);
+          }
+        }
+      } catch (err) { }
+    }, 50);
+  });
+  return marker;
 }
 
 /* =========================================================
@@ -175,158 +236,101 @@ function ensurePopupInViewport(popup) {
  * ========================================================= */
 export function drawTrees(silent) {
   const startTime = performance.now();
+  const key = drawKey();
+  const zoom = state.map ? state.map.getZoom() : null;
 
-  // 🔥 拖動地圖重繪前，記錄目前開啟中的樹木 popup 編號，等重繪完可以重新開啟
-  let openTreeId = null;
-  let savedPopupScroll = 0;
-  if (state.map && state.map._popup && state.map._popup.isOpen() && state.map._popup._source && state.map._popup._source._treeId != null) {
-    openTreeId = String(state.map._popup._source._treeId);
-    // 🔥 [UX 修復] 記錄 popup 內容滾動位置，重繪重開後唔跳返最頂
-    try {
-      const pEl = state.map._popup.getElement();
-      const cEl = pEl && pEl.querySelector('.leaflet-popup-content');
-      if (cEl) savedPopupScroll = cEl.scrollTop || 0;
-    } catch (e) {}
+  // 🔥 [防閃爍 A] 視窗仍喺上次繪製範圍內＋zoom／key 不變 → silent 直接 skip
+  if (silent && state.map && lastDrawBounds && key === lastDrawKey &&
+      zoom === lastDrawZoom && lastDrawBounds.contains(state.map.getBounds())) {
+    return;
   }
 
-  state.treeLayer.clearLayers();
-  // 🔥 修正：每次重繪前清空 marker 快取，避免舊 marker 殘留造成記憶體累積與誤定位
-  state.treesCache.clear();
-
   if (!state.curProject) {
+    state.treeLayer.clearLayers();
+    state.treesCache.clear();
+    lastDrawBounds = null; lastDrawKey = key; lastDrawZoom = zoom;
     if (!silent) updateStatus('👉 請先選擇地盤，即可查看樹木');
     refreshLabels();
     return;
   }
 
   const allTrees = state.treeSearchIndex.get(state.curProject) || [];
-  const list = currentTrees(); // 🔥 [v4.4] 使用過濾後的樹木
-
-  // 🔥 [C1] 只渲染可視範圍內的樹（含邊距）
+  const list = currentTrees();
   let viewBounds = null;
-  if (state.map) {
-    viewBounds = state.map.getBounds().pad(BOUNDS_PADDING);
-  }
-  const renderer = getCanvasRenderer(); // 🔥 [C2] 共用 Canvas renderer
+  if (state.map) viewBounds = state.map.getBounds().pad(BOUNDS_PADDING);
 
-  const markers = [];
-
-  list.forEach((t) => {
-    const lat = t.lat;
-    const lng = t.lng;
-    if (!lat || !lng) return;
-
-    // 🔥 [C1] 可視範圍外（超過邊距）直接跳過，不建立 marker
-    if (viewBounds && !viewBounds.contains([lat, lng])) return;
-
-    // 🔥 [Phase1] 使用 applyData 預存的顏色（避免每幀重查色表）
-    const color = t._color || Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
-
-    const marker = L.circleMarker([lat, lng], {
-      radius: 7,
-      fillColor: color,
-      color: '#fff',
-      weight: 2.5,
-      opacity: 1,
-      fillOpacity: 1,
-      renderer: renderer // 🔥 [C2] 指定 Canvas renderer
-    });
-
-    marker._originalPos = [lat, lng];
-    marker._treeId = String(t.tree_id);
-
-    marker.on('click', function () {
-      marker.bringToFront();
-    });
-
-    marker.bindPopup('<div style="text-align:center;padding:10px;color:#666;">載入中...</div>', { autoPan: false });
-
-    marker.on('popupopen', function (e) {
-      const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
-      
-      const popupHtml =
-        '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
-        '<b>Status:</b> <span style="color:' + color + ';font-weight:bold;">' + t.status + '</span><br>' +
-        '<b>Tree Height:</b> ' + (t.tree_height || t.height || '-') + ' m | <b>DBH:</b> ' + (t.dbh || '-') + ' m<br>' +
-        '<b>Crown Width:</b> ' + (t.crown_width || t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
-        '<b>Ground Dia.:</b> ' + (t.ground_diameter || '-') + ' m | <b>Stem Length:</b> ' + (t.stem_length || '-') + ' m<br>' +
-        '<b>Crown Area:</b> ' + (t.crown_area || '-') + ' ㎡ | <b>Crown Vol.:</b> ' + (t.crown_volume || '-') + ' m³<br>' +
-        (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
-        ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;margin:6px auto 0;border-radius:6px;background:rgba(128,128,128,.12);"><br>' : '') +
-        '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
-
-      e.popup.setContent(DOMPurify.sanitize(popupHtml));
-      ensurePopupInViewport(e.popup);
-
-      setTimeout(() => {
-        try {
-          const el = e.popup.getElement();
-          if (el) {
-            const img = el.querySelector('img.popup-img');
-            if (img && !img.complete) {
-              img.addEventListener('load', () => {
-                if (e.popup && e.popup._map) { e.popup.update(); ensurePopupInViewport(e.popup); }
-              });
-            } else if (e.popup && e.popup._map) {
-              e.popup.update();
-              ensurePopupInViewport(e.popup);
-            }
-          }
-        } catch (err) { }
-      }, 50);
-    });
-
-    markers.push(marker);
-    state.treesCache.set(state.curProject + '_' + t.tree_id, marker);
-    state.treesCache.set(t.tree_id, marker);
-  });
-
-  if (markers.length > 0) {
-    state.treeLayer.addLayers(markers);
+  const visible = [];
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i];
+    if (!t.lat || !t.lng) continue;
+    if (viewBounds && !viewBounds.contains([+t.lat, +t.lng])) continue;
+    visible.push(t);
   }
 
-  // 🔥 拖動重繪後重新開啟先前開啟中的樹木 popup（保留「移動不關視窗」行為）
-  if (silent && openTreeId) {
-    const key = state.curProject + '_' + openTreeId;
-    const m = state.treesCache.get(key) || state.treesCache.get(openTreeId);
-    if (m) {
-      m.openPopup();
-      // 🔥 [UX 修復] 還原 popup 滾動位置（即時＋80ms 延遲各寫一次，對抗 50ms 嘅 update）
-      if (savedPopupScroll > 0) {
-        const restore = function () {
-          try {
-            const pop = m.getPopup();
-            const pEl = pop && pop.getElement();
-            const cEl = pEl && pEl.querySelector('.leaflet-popup-content');
-            if (cEl) cEl.scrollTop = savedPopupScroll;
-          } catch (e) {}
-        };
-        restore();
-        setTimeout(restore, 80);
+  if (silent) {
+    // 🔥 [防閃爍 B] 增量差量：只移除離開視窗嘅 marker、只加新入視窗嘅；
+    // 開住 popup 嘅 marker 只要仍喺視窗就完全唔郁 → 零閃爍
+    const desired = new Set(visible.map((t) => String(t.tree_id)));
+    const seen = new Set();
+    state.treesCache.forEach((m) => {
+      if (!m || seen.has(m)) return;
+      seen.add(m);
+      if (!desired.has(m._treeId)) {
+        state.treeLayer.removeLayer(m);
+        state.treesCache.delete(state.curProject + '_' + m._treeId);
+        state.treesCache.delete(m._treeId);
       }
-    }
+    });
+    const toAdd = [];
+    visible.forEach((t) => {
+      const id = String(t.tree_id);
+      if (!state.treesCache.has(state.curProject + '_' + id)) {
+        const m = makeMarker(t);
+        toAdd.push(m);
+        state.treesCache.set(state.curProject + '_' + id, m);
+        state.treesCache.set(id, m);
+      }
+    });
+    if (toAdd.length) state.treeLayer.addLayers(toAdd);
+  } else {
+    // 全量重繪（轉地盤／過濾／資料更新）：保留舊行為
+    state.treeLayer.clearLayers();
+    state.treesCache.clear();
+    const markers = visible.map((t) => {
+      const m = makeMarker(t);
+      state.treesCache.set(state.curProject + '_' + String(t.tree_id), m);
+      state.treesCache.set(String(t.tree_id), m);
+      return m;
+    });
+    if (markers.length) state.treeLayer.addLayers(markers);
+  }
+
+  lastDrawBounds = viewBounds;
+  lastDrawKey = key;
+  lastDrawZoom = zoom;
+
+  // 🔥 拖圖後若 popup 真係關咗（樹木離開視窗），唔再強行重開；
+  if (silent && state.map && state.map._popup && !state.map._popup.isOpen()) {
+    const openTreeId = null;
+    void openTreeId;
   }
 
   state.perfMetrics.totalRenders++;
   state.perfMetrics.renderTime = performance.now() - startTime;
 
-  // 🔥 [優化] 平移重繪（silent）不重建 label（Leaflet 會自動跟隨移動），
-  // 只有 zoom 變化（或非 silent 的全量重繪）才重建，避免重複 DOM 操作
   if (silent) {
     const z = state.map ? state.map.getZoom() : null;
     if (z !== _lastLabelZoom) refreshLabels();
   } else {
     refreshLabels();
   }
-  updateLabelBtn(); 
+  updateLabelBtn();
 
-  // 🔥 [Phase1] 平移地圖觸發的 silent 重繪不再刷狀態列（避免 MutationObserver 動畫與樣式切換）
   if (silent) {
-    if (console.debug) console.debug('🎨 重繪 ' + markers.length + '/' + allTrees.length + ' 棵（' + state.perfMetrics.renderTime.toFixed(1) + 'ms）');
+    if (console.debug) console.debug('🎨 增量重繪 ' + visible.length + '/' + allTrees.length + ' 棵（' + state.perfMetrics.renderTime.toFixed(1) + 'ms）');
     return;
   }
   const pname = (state.PROJECTS.find((x) => String(x.project_id) === String(state.curProject)) || {}).name;
-  // 🔥 [v4.4] 狀態列顯示過濾對比（例如：顯示 12/50 棵樹（已過濾））
   const filterText = statusFilter ? '（已過濾）' : '';
-  updateStatus('✅ 地盤：' + pname + '｜顯示 ' + markers.length + '/' + allTrees.length + ' 棵樹' + filterText);
+  updateStatus('✅ 地盤：' + pname + '｜顯示 ' + visible.length + '/' + allTrees.length + ' 棵樹' + filterText);
 }

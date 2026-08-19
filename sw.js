@@ -7,7 +7,7 @@
  *   5. 升版號強制清除舊快取
  *   6. Phase 5：抽出快取處理函數，並加入 isApiRequest 預留公司 server 遷移
  */
-const VERSION = 'v2.15.0'; // 🔥 [UX 修復] 拖地圖後 popup 捲軸保持位置（保存/還原 scrollTop）
+const VERSION = 'v2.9.0'; // 🔥 [防閃爍] trees.js 增量重繪 + 自動平移（panInside）
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
