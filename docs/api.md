@@ -179,6 +179,7 @@ Apps Script 無法依賴自訂 HTTP header，所以現行前端將 CSRF 放喺 J
 
 重複會同樣帶 `duplicate: true`，並盡量返回既有 `inspection_id` 及 `photo_urls`。
 
+> 生產已啟用兩階段上傳（Config.INSPECTION_SPLIT_PHOTOS = true）；離線時前端自動 fallback 單一 POST。
 ### 3.5 `inspection_photo`
 
 獨立上傳一張巡查相片。
