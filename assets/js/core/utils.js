@@ -1,5 +1,6 @@
 /**
  * 共用工具模組 [Phase0]（零業務依賴，可獨立測試）
+ * ES Module 版，與 core/global-utils.js 互為對應；兩處需同步維護
  * 統一 escapeHtml / debounce / throttle / format 等重複到各檔案的功能
  */
 
@@ -52,3 +53,15 @@ export function throttle(fn, limit) {
 // 數字格式化
 export function format1(n) { return Number(n).toFixed(1); }
 export function format5(n) { return Number(n).toFixed(5); }
+
+// 樹木健康狀態合法值（供 forms.js / t.js 共用）
+export const VALID_HEALTH = ['Normal', 'Fair', 'Poor', 'Very Poor', 'Dead'];
+
+// HK80 座標有效性驗證（N/E 必須喺香港合理範圍）
+export function isValidHK80(N, E) {
+  if (N === '' || N === null || N === undefined) return false;
+  if (E === '' || E === null || E === undefined) return false;
+  const n = Number(N), e = Number(E);
+  if (!isFinite(n) || !isFinite(e)) return false;
+  return n >= 800000 && n <= 850000 && e >= 800000 && e <= 870000;
+}

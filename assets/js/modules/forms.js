@@ -8,17 +8,9 @@ import { loadTreeSpecies, fillSpeciesDatalist } from './species.js';
 import { bringTreeToFront } from './trees.js';
 import { startPick } from './draw.js'; // 🔥 [Phase1]
 import { load } from './loader.js'; // 🔥 [Phase2] 直接 import，移除 setLoad 注入
+import { VALID_HEALTH, isValidHK80 } from '../core/utils.js';
 
 // ========== [Phase4] 提交前驗證 ==========
-const VALID_HEALTH = ['Normal', 'Fair', 'Poor', 'Very Poor', 'Dead'];
-
-function isValidHK80(N, E) {
-  if (N === '' || N === null || N === undefined) return false;
-  if (E === '' || E === null || E === undefined) return false;
-  const n = Number(N), e = Number(E);
-  if (!isFinite(n) || !isFinite(e)) return false;
-  return n >= 800000 && n <= 850000 && e >= 800000 && e <= 870000;
-}
 
 let _promptAuth = null;
 
@@ -96,7 +88,7 @@ export async function openTreeForm(preset) {
   showPanel(
     '<b>🌳 新增樹木</b>' +
     '<button class="pick-loc-btn" id="btnPickLocation">📍 在地圖按位置（自動填 N/E）</button>' +
-    '<input id="tId" placeholder="樹木編號（留空自動）">' +
+    '<input id="tId" placeholder="樹木編號（留空＝該地盤最大編號＋1）">' +
     '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）...">' +
     '<datalist id="tree_datalist"></datalist>' +
     '<select id="tStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
@@ -128,6 +120,18 @@ export function pickTreeLocation() {
 }
 
 export async function doCreateTree() {
+  // 🔥 [Phase8] 即時檢查：同地盤樹木編號唔可重複
+  const inputId = $('#tId').value.trim();
+  if (inputId) {
+    const dup = state.TREES.some((t) =>
+      String(t.tree_id).trim() === inputId &&
+      String(t.project_id) === String(state.curProject));
+    if (dup) {
+      alert('⚠️ 樹木編號 ' + inputId + ' 已存在於此地盤，請改用其他編號（或留空自動編號）');
+      return;
+    }
+  }
+
   const N = $('#tN').value;
   const E = $('#tE').value;
 

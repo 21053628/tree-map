@@ -1,18 +1,9 @@
-'use strict';
+import { escapeHtml, sanitizeId } from '../core/utils.js';
 
-// 依賴：config.js（Config）與 core/global-utils.js（window.TreeUtils）需先載入
+// 依賴：config.js（Config）維持 plain script 全域
 const API = (typeof Config !== 'undefined' && Config.API_ENDPOINT)
   ? Config.API_ENDPOINT
   : '';
-
-const escapeHtml = (window.TreeUtils && window.TreeUtils.escapeHtml)
-  || function (s) {
-    const A = '&';
-    return String(s).replace(/&/g, A + 'amp;').replace(/</g, A + 'lt;').replace(/>/g, A + 'gt;');
-  };
-
-const sanitizeId = (window.TreeUtils && window.TreeUtils.sanitizeId)
-  || function (s) { return String(s || '').replace(/[^A-Za-z0-9._-]/g, ''); };
 
 const TAG_CAPACITY = { '213': 144, '215': 504, '216': 888 };
 const TAG_LABELS = { '213': 'NTAG213', '215': 'NTAG215', '216': 'NTAG216' };

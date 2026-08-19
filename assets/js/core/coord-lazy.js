@@ -1,5 +1,6 @@
 /**
  * 座標轉換 service（lazy proj4 版）[Phase6]
+ * 供 t.html 使用，延遲載入 proj4 以保首屏效能；index.html 請用 assets/js/utils.js（CoordUtils）
  * - 保留按需延遲載入 proj4，避免阻塞首屏（與原 t.html 效能設計一致）
  * - 供 t.html 等 plain script 頁面共用，消除內嵌重複
  */

@@ -1,0 +1,21 @@
+/* =========================================================
+   performance.css — 效能與微互動（由 main.css Section 19 拆出）
+   不可單獨改動 cascade 順序
+========================================================= */
+
+/* ================= 🚀 效能與微互動 ================= */
+/* 減少佈局抖動，僅對需要動畫的元素使用 will-change */
+#panel, .leaflet-popup-content-wrapper, .layerbar-wrap, .filter-panel {
+  will-change: transform, opacity;
+}
+/* 針對 hover 裝置優化，觸控裝置避免 hover 影響 */
+@media (hover: hover) {
+  .leaflet-popup-close-button:hover::before { background: rgba(0,0,0,0.5); }
+  #bar button:hover { box-shadow: 0 4px 10px rgba(46,125,50,0.4); }
+  #bar button.blue:hover { box-shadow: 0 4px 10px rgba(21,101,192,0.4); }
+}
+/* 觸控裝置移除 hover 效果 */
+@media (hover: none) {
+  .sr-item:hover { background: transparent; }
+  .leaflet-interactive:hover { fill-opacity: 0.2 !important; stroke-width: 2 !important; }
+}

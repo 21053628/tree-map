@@ -33,7 +33,6 @@
   var _lastWarm = 0;
   var _lastSyncAttempt = 0;
   var _failToastShown = false;
-  var _reloading = false;
 
   // ========== 工具函式 ==========
   function pwaToast(msg, duration) {
@@ -496,11 +495,9 @@
       if (synced > 0) {
         pwaToast('☁️ 已同步 ' + synced + ' 筆離線記錄', 3000);
         _failToastShown = false;
+        // 背景同步完成後不要強制重新載入，避免瀏覽期間被中斷。
+        // 使用者可繼續操作；資料會在下一次正常讀取時更新。
         clearCache();
-        if (!_reloading) {
-          _reloading = true;
-          setTimeout(function() { location.reload(); }, 1500);
-        }
       }
     } catch (err) {
       console.error('🔄 [Sync] 同步流程發生錯誤:', err);

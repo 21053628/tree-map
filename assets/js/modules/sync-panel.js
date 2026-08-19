@@ -33,6 +33,9 @@
       '#' + PANEL_ID + '{position:fixed;right:12px;bottom:88px;z-index:99991;width:min(360px,calc(100vw - 24px));max-height:72vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;font-size:14px;color:#222;line-height:1.5;}',
       '#' + PANEL_ID + '.open{display:block;}',
       '#' + PANEL_ID + ' .sp-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee;font-weight:600;position:sticky;top:0;background:#fff;}',
+      '#' + PANEL_ID + ' .sp-head{gap:8px;}',
+      '#' + PANEL_ID + ' .sp-head span{white-space:nowrap;}',
+      '#' + PANEL_ID + ' .sp-close{flex-shrink:0;}',
       '#' + PANEL_ID + ' .sp-close{border:none;background:none;font-size:18px;cursor:pointer;color:#666;padding:0 4px;}',
       '#' + PANEL_ID + ' .sp-body{padding:12px 14px;}',
       '#' + PANEL_ID + ' .sp-row{display:flex;justify-content:space-between;margin:6px 0;font-size:13px;}',
@@ -58,7 +61,8 @@
       // [UI] 電腦版地圖頁：同步按鈕上移，避開右下角 Tree Status 圖例
       '@media (min-width: 601px){#' + BADGE_ID + ':not(.compact){bottom:96px;} #' + PANEL_ID + ':not(.compact-panel){bottom:156px;}}',
       // [UI] 電腦版（≥769px）地圖頁：同步按鈕獨立固定在右下、Tree Status 圖例正上方
-      '@media (min-width: 769px){#' + BADGE_ID + '.desktop-fixed{right:10px;bottom:96px;}}'
+      '@media (min-width: 769px){#' + BADGE_ID + '.desktop-fixed{right:10px;bottom:96px;}}',
+      '#' + BADGE_ID + '.zoom-hidden,#' + PANEL_ID + '.zoom-hidden{display:none !important;}'
     ].join('\n');
     var style = document.createElement('style');
     style.id = STYLE_ID;
@@ -334,6 +338,21 @@
 
   function init() {
     build();
+
+    // [Phase11] 相片放大時自動隱藏同步 UI（訂閱頁面事件，與 t.js 解耦）
+    function applyPhotoZoom(open) {
+      var badge = document.getElementById(BADGE_ID);
+      var panel = document.getElementById(PANEL_ID);
+      if (badge) badge.classList.toggle('zoom-hidden', !!open);
+      if (panel) {
+        if (open && panel.classList.contains('open')) close(); // 放大時若面板開住，先關閉
+        panel.classList.toggle('zoom-hidden', !!open);
+      }
+    }
+    window.addEventListener('treemap:photozoom', function (e) {
+      applyPhotoZoom(!!(e && e.detail && e.detail.open));
+    });
+
     refresh();
     window.addEventListener('online', refresh);
     window.addEventListener('offline', refresh);

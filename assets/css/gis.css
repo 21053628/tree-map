@@ -1,0 +1,78 @@
+/* =========================================================
+   gis.css — GIS 工具（由 main.css Section 18 拆出）
+   不可單獨改動 cascade 順序
+========================================================= */
+
+/* ================= 📍 [Phase1] GIS 工具（定位／量測／繪圖／全螢幕） ================= */
+/* 全螢幕＋工具 icon bar（電腦版，垂直排列在縮放按鈕下面） */
+.leaflet-control .gis-btn {
+  width: 34px; height: 34px; line-height: 34px;
+  font-size: 16px; text-align: center; color: #333;
+  text-decoration: none; display: block; background: #fff;
+  border-bottom: 1px solid #ccc !important;
+  transition: background 0.2s, transform 0.1s var(--ease-spring);
+}
+.leaflet-control .gis-btn:last-child { border-bottom: none !important; }
+.leaflet-control .gis-btn:hover { background: #f4f4f4; }
+.leaflet-control .gis-btn:active { transform: scale(0.95); }
+.leaflet-touch .leaflet-control .gis-btn { width: 40px; height: 40px; line-height: 40px; font-size: 18px; }
+/* 手機版：隱藏全螢幕＋工具 icon bar（工具已在箭頭抽屜內） */
+@media (max-width: 600px) {
+  .leaflet-top.leaflet-left .gis-tools { display: none; }
+}
+
+/* GPS 藍點（脈衝動畫） */
+.geo-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #1e88e5; border: 2.5px solid #fff;
+  box-shadow: 0 0 0 2px rgba(30,136,229,.35);
+  animation: geoPulse 2s ease-out infinite;
+}
+@keyframes geoPulse {
+  0% { box-shadow: 0 0 0 0 rgba(30,136,229,.45); }
+  70% { box-shadow: 0 0 0 16px rgba(30,136,229,0); }
+  100% { box-shadow: 0 0 0 0 rgba(30,136,229,0); }
+}
+
+/* 量測／落點十字游標 */
+.interact-mode { cursor: crosshair !important; }
+.interact-mode .leaflet-interactive { cursor: crosshair !important; }
+
+/* 量測互動列（完成／取消） */
+.interact-bar {
+  position: fixed; left: 50%; top: calc(12px + var(--safe-top)); transform: translateX(-50%);
+  z-index: 1003; display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,.95); border-radius: 999px; padding: 6px 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2); border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  transition: background 0.3s, border-color 0.3s;
+}
+.interact-bar .ib-readout { font-size: 13px; font-weight: 600; color: var(--accent); min-width: 130px; text-align: center; white-space: nowrap; }
+.interact-bar button { border: none; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; transition: transform 0.1s var(--ease-spring); }
+.interact-bar .ib-done { background: var(--primary); color: #fff; }
+.interact-bar .ib-cancel { background: rgba(0,0,0,.08); color: var(--text); }
+.interact-bar button:active { transform: scale(0.95); }
+
+/* 量測結果 tooltip */
+.measure-tip {
+  background: rgba(21,101,192,.92) !important; color: #fff !important;
+  border: none !important; border-radius: 8px !important; font-weight: 600; font-size: 12px;
+}
+.measure-tip::before { border-top-color: rgba(21,101,192,.92) !important; }
+
+/* 新增樹木表單「地圖落點」按鈕 */
+#panel .pick-loc-btn {
+  background: var(--accent); color: #fff; width: 100%; padding: 12px;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600; margin-top: 8px;
+  transition: background 0.2s, transform 0.08s var(--ease-spring);
+}
+#panel .pick-loc-btn:hover { background: var(--accent-dark); }
+#panel .pick-loc-btn:active { transform: scale(0.98); }
+
+/* 深色模式 */
+@media (prefers-color-scheme: dark) {
+  .leaflet-control .gis-btn { background: #2c332c; color: #e0e0e0; border-bottom-color: #444 !important; }
+  .leaflet-control .gis-btn:hover { background: #37403a; }
+  .interact-bar { background: rgba(30, 36, 30, .95); }
+  .interact-bar .ib-cancel { background: rgba(255,255,255,.1); color: #e0e0e0; }
+}

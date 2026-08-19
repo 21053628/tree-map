@@ -1,0 +1,48 @@
+/* =========================================================
+   base.css — 基礎（由 main.css Section 2 拆出）
+   不可單獨改動 cascade 順序
+========================================================= */
+
+/* ================= 2. 基礎 ================= */
+html, body {
+  margin: 0; height: 100%;
+  font-family: system-ui, -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input, textarea, select, .leaflet-popup-content, #panel, .sr-item, .log, .legend {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
+
+#map { height: 100%; width: 100%; }
+button { touch-action: manipulation; cursor: pointer; }
+
+/* 文字選取樣式 */
+::selection { background: rgba(46, 125, 50, 0.2); }
+::-moz-selection { background: rgba(46, 125, 50, 0.2); }
+
+/* 焦點可見性（無障礙） */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

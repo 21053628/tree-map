@@ -1,0 +1,181 @@
+/* =========================================================
+   responsive.css — 手機版與平板／細視窗桌面（由 main.css Sections 12–13 拆出）
+   不可單獨改動 cascade 順序
+========================================================= */
+
+/* ================= 12. 手機版整合佈局 ================= */
+@media (max-width: 600px) {
+  #bar { left: 8px; right: 8px; top: 8px; width: auto; flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+  #bar select { width: 100%; flex: none; min-width: 0; font-size: 16px; padding: 10px 8px; }
+  .search-wrap { width: 100%; flex: none; order: 0; min-width: 0; }
+  .search-wrap input { font-size: 16px; padding: 10px; }
+  .search-wrap input:focus { background: rgba(255,255,255,0.98); }
+
+  .search-results {
+    position: absolute !important;
+    top: calc(100% + 6px) !important;
+    bottom: auto !important;
+    left: 0 !important; right: 0 !important;
+    max-height: 45vh !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25) !important;
+    margin-bottom: 0 !important;
+    border: 1px solid rgba(0,0,0,.1) !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .search-results .sr-item { padding: 14px 16px; font-size: 15px; }
+
+  .leaflet-top.leaflet-left {
+    top: auto;
+    bottom: calc(45px + var(--safe-bottom));
+    left: 10px;
+  }
+  .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
+
+  .leaflet-top.leaflet-left .geo-locate-bar { margin-bottom: 4px; }
+  .geo-locate-bar a {
+    display: flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; line-height: 40px;
+    color: #333; background: #fff; font-size: 20px;
+  }
+
+  .leaflet-bottom.leaflet-right {
+    bottom: calc(10px + var(--safe-bottom));
+    right: 16px;
+    max-width: calc(100vw - 12px);
+  }
+
+  .legend { display: none; }
+  body.panel-open .layerbar { display: none; }
+
+  #status {
+    font-size: 12px;
+    top: calc(116px + var(--safe-top, 0px));
+    bottom: auto !important;
+    max-width: 92%;
+  }
+
+  .layerbar-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 18px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    transition: transform .2s var(--ease-spring), background .2s;
+  }
+  .layerbar-fab:active { transform: scale(.92); }
+  .layerbar-wrap.open .layerbar-fab { background: #37474f; }
+
+  .layerbar-wrap {
+    flex-direction: column-reverse;   /* FAB 固定在底部，抽屜向上彈 */
+    margin-bottom: 24px;              /* [UI] FAB 獨立在右下，不再堆疊其他按鈕 */
+  }
+  .layerbar {
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px;
+    min-width: 160px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    max-height: calc(100vh - 150px);
+    max-height: calc(100dvh - 150px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .layerbar-wrap.open .layerbar {
+    display: flex;
+    animation: sheetUp .22s var(--ease-out);
+  }
+  .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
+  .drawer-sep { width: auto; height: 1px; align-self: auto; margin: 4px 2px; }
+
+  /* 🔥 分類按鈕（測量工具／圖層）：可展開／收起 */
+  .layerbar .drawer-cat {
+    justify-content: space-between;
+    font-weight: 600;
+  }
+  .layerbar .drawer-cat::after {
+    content: '▸';
+    font-size: 12px;
+    color: var(--muted);
+    transition: transform .15s var(--ease-in-out);
+  }
+  .layerbar .drawer-cat.open::after { content: '▾'; }
+  .layerbar .drawer-sub {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    margin-left: 12px;
+    padding-left: 10px;
+    border-left: 2px solid rgba(128,128,128,.3);
+  }
+  .layerbar .drawer-sub.open { display: flex; }
+
+  #panel {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0;
+    width: auto; max-height: 85vh;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 16px calc(16px + var(--safe-bottom));
+    box-shadow: 0 -4px 30px rgba(0,0,0,.2);
+    z-index: 1300;
+    transform: translateY(100%);
+  }
+  #panel[style*="display: block"] { transform: translateY(0); }
+  #panel::before {
+    content: ''; display: block; width: 40px; height: 4px;
+    background: #ccc; border-radius: 2px; margin: 0 auto 12px;
+  }
+  #panel input, #panel select { font-size: 16px; padding: 12px; }
+  #panel button { padding: 14px; font-size: 16px; }
+
+  .leaflet-popup-content-wrapper {
+    border-radius: 18px !important;
+    padding: 0 !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,.3) !important;
+    animation: sheetUp .25s var(--ease-out);
+  }
+  .leaflet-popup-content {
+    margin: 12px 16px 14px !important;
+    font-size: 15px; line-height: 1.6;
+    max-height: 42vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .leaflet-popup-content::before {
+    content: '';
+    display: block;
+    width: 40px; height: 4px;
+    background: #ccc; border-radius: 2px;
+    margin: 0 auto 10px;
+  }
+  .leaflet-popup-tip-container { display: none !important; }
+  .leaflet-popup-close-button {
+    width: 48px !important; height: 48px !important;
+    top: 2px !important; right: 2px !important;
+  }
+  .leaflet-popup-close-button::after { font-size: 24px; }
+}
+
+/* 超窄屏極簡 */
+@media (max-width: 400px) {
+  .layerbar { gap: 2px; padding: 3px; }
+  .layerbar button { padding: 10px 9px; font-size: 12px; }
+  #status { font-size: 11px; }
+}
+
+/* ================= 13. 平板／細視窗桌面 ================= */
+@media (min-width: 601px) and (max-width: 1024px) {
+  /* 🔥 [v2.60] left: auto 杜絕「left 贏晒」bug，bar 永遠靠右 */
+  #bar { left: auto; right: 12px; top: calc(10px + var(--safe-top)); width: 320px; }
+  #bar select { font-size: 16px; padding: 11px; }
+  #panel { width: 360px; }
+  .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
+}

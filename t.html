@@ -51,7 +51,7 @@
   hr{border:none;border-top:1px dashed #ccc;margin:14px 0}#minimap{height:200px;border-radius:10px;margin-top:10px;border:1px solid #e0e0e0;}
   .loading{display:flex;align-items:center;justify-content:center;min-height:60vh;color:var(--muted)}.error{background:#ffebee;color:#c62828;padding:14px;border-radius:8px;margin:14px 0}
   .zoomable-img{cursor:zoom-in;transition:transform .2s}.zoomable-img:hover{transform:scale(1.02)}
-  .modal{display:none;position:fixed;z-index:9999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.9);align-items:center;justify-content:center}
+  .modal{display:none;position:fixed;z-index:99992;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.9);align-items:center;justify-content:center}
   .modal.show{display:flex}.modal img{max-width:95%;max-height:95%;object-fit:contain;cursor:zoom-out}.modal-close{position:absolute;top:20px;right:30px;color:#fff;font-size:40px;cursor:pointer}
   .inspection-photo-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(80px, 1fr));gap:8px;margin-top:8px}
   
@@ -95,22 +95,21 @@
 <!-- 🔥 [Tier1-B] 自托管第三方函式庫（同域、即時執行） -->
 <script src="assets/vendor/leaflet.js" defer></script>
 
-<!-- 🔥 [Phase6] 統一 services：config → api-config → api → auth，再由 pages/t.js 共用 -->
-<!-- 註：t.html 保留原本 async 延遲載入 proj4 的座標轉換，以維持首屏效能，不改行為 -->
+<!-- 🔥 [Phase6] 統一 services：config → api-config → audit-log → api → auth -->
+<!-- 註：coord-lazy.js 維持 plain script，首次轉換座標時才延遲載入 proj4。 -->
 <script src="assets/js/config.js"></script>
 <script src="assets/js/api-config.js"></script>
 <script src="assets/js/modules/audit-log.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/vendor/purify.min.js"></script>
-<script src="assets/js/core/global-utils.js"></script>
 <script src="assets/js/core/coord-lazy.js"></script>
 
-<script src="assets/js/pages/t.js"></script>
-
-<!-- 🔥 PWA 離線佇列（會 hook ApiService）與 Service Worker 註冊 -->
+<!-- 🔥 PWA 離線佇列必須先於 t.js module 執行，確保 ApiService hook 已建立。 -->
 <script src="offline.js"></script>
 <script src="assets/js/modules/sync-panel.js"></script>
+<script type="module" src="assets/js/pages/t.js"></script>
+
 <script defer src="assets/js/sw-register.js"></script>
 </body>
 </html>

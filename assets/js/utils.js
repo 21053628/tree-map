@@ -1,5 +1,6 @@
 /**
  * 樹木管理系統 - 座標轉換工具模組（極致性能優化版 v2.0）
+ * 供 index.html 使用，proj4 已由 vendor 同步載入；t.html 請用 core/coord-lazy.js
  * 
  * 🚀 優化重點：
  * 1. [殺手級優化] 重構 LRU 快取：利用 Map 原生順序特性，將 get/set 複雜度由 O(N) 降至 O(1)

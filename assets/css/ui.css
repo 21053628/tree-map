@@ -1,0 +1,65 @@
+/* =========================================================
+   ui.css — 按鈕 Loading、通用觸控與無障礙（由 main.css Sections 10–11 拆出）
+   不可單獨改動 cascade 順序
+========================================================= */
+
+/* ================= 10. 按鈕 Loading ================= */
+button.is-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+button.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 16px; height: 16px;
+  top: 50%; left: 50%;
+  margin-left: -8px; margin-top: -8px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ================= 11. 通用觸控與無障礙 ================= */
+.leaflet-touch .leaflet-bar { border-radius: 10px; overflow: hidden; }
+.leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
+.leaflet-container { touch-action: none; }
+
+@media (pointer: coarse) {
+  #bar button, #bar select, .layerbar button, #panel button, .leaflet-popup-content button, .leaflet-popup-content a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* 觸控裝置增加點擊面積 */
+  .leaflet-popup-close-button { width: 48px !important; height: 48px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 高對比模式 */
+@media (prefers-contrast: more) {
+  :root {
+    --text: #000;
+    --muted: #333;
+    --glass-border: rgba(0, 0, 0, 0.4);
+  }
+  #bar select, .search-wrap input, #bar button {
+    background: #fff;
+    border: 2px solid #000;
+  }
+  #panel input, #panel select, #panel textarea {
+    background: #fff;
+    border: 2px solid #000;
+  }
+}

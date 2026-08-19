@@ -13,7 +13,7 @@
 
 const API_CONFIG = {
   // Google Apps Script 執行端點
-  ENDPOINT: 'https://script.google.com/macros/s/AKfycby5Wby6nj8MPOdw5io10CakB877gY8qf3HKeckPz5MVb-to8QxUYfEH3pN_y-6hHvXj/exec'
+  ENDPOINT: 'https://script.google.com/macros/s/AKfycbzNvSomlr1LmAvfA3rByDii9TISFs-HooX2iD5yJkK3QWI59sGhKYpqQyan2HRwgPwC/exec'
 };
 
 // 自動初始化 Config（如果已加載）
