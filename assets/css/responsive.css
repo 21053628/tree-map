@@ -72,11 +72,26 @@
   .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 
   .layerbar-wrap {
-    flex-direction: column-reverse;   /* FAB 固定在底部，抽屜向上彈 */
-    margin-bottom: 24px;              /* [UI] FAB 獨立在右下，不再堆疊其他按鈕 */
+    flex-direction: row;              /* 主要動作與 FAB 同列，避免左下控制列過高 */
+    align-items: flex-end;
+    gap: 8px;
+    margin-bottom: 0;
+  }
+  .layer-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .layer-actions .drawer-action {
+    white-space: nowrap;
+    padding: 11px 12px;
+    font-size: 13px;
   }
   .layerbar {
     display: none;
+    position: absolute;
+    right: 0;
+    bottom: calc(52px + 10px);
     flex-direction: column;
     align-items: stretch;
     gap: 2px;

@@ -1,5 +1,6 @@
 /**
  * 地圖初始化模組
+ * v2.62 - 整理手機版底圖控制：政府／官航／地段／航拍統一收納於 Layer FAB
  * v2.52 - 加入 🎚 狀態過濾按鈕（配合 filters.js）
  * v2.51 - 抽屜加入「建立地盤／新增樹木」動作按鈕
  * v2.50 - 手機版 layer bar 變身 FAB 抽屜
@@ -151,12 +152,16 @@ export function initMap() {
 
     const fab = L.DomUtil.create('button', 'layerbar-fab', layerWrap);
     fab.type = 'button';
-    fab.innerHTML = '▲';
-    fab.title = '圖層與功能';
+    fab.innerHTML = LAYERS_ICON;
+    fab.title = '開啟圖層與功能';
+    fab.setAttribute('aria-label', '開啟圖層與功能');
+    fab.setAttribute('aria-expanded', 'false');
+    fab.setAttribute('aria-controls', 'map-layer-drawer');
 
     const div = L.DomUtil.create('div', 'layerbar', layerWrap);
+    div.id = 'map-layer-drawer';
     if (isMobile) {
-      // 🔥 手機版：兩大分類（測量工具／圖層）+ 4 個直接按鈕
+      // 手機版：底圖切換直接收納在 Layer FAB，避免再點擊一層「圖層」分類。
       div.innerHTML =
         '<button class="drawer-cat" data-cat="tools">📏 測量工具</button>' +
         '<div class="drawer-sub" data-sub="tools">' +
@@ -164,13 +169,11 @@ export function initMap() {
           '<button data-act="measureArea">📐 面積</button>' +
           '<button data-act="clearDrawings">✕ 清除</button>' +
         '</div>' +
-        '<button class="drawer-cat" data-cat="layers">🗺️ 圖層</button>' +
-        '<div class="drawer-sub" data-sub="layers">' +
-          '<button data-l="hk" class="on">政府</button>' +
-          '<button data-l="sat">官航</button>' +
-          '<button data-l="lot">🗺️ 地段</button>' +
-          '<button data-l="aerial">🛰 航拍</button>' +
-        '</div>' +
+        '<div class="drawer-sep"></div>' +
+        '<button data-l="hk" class="on">政府</button>' +
+        '<button data-l="sat">官航</button>' +
+        '<button data-l="lot">🗺️ 地段</button>' +
+        '<button data-l="aerial">🛰 航拍</button>' +
         '<div class="drawer-sep"></div>' +
         '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +
         '<button data-l="labels">🔢 樹木數字顯示</button>' +
@@ -205,16 +208,18 @@ export function initMap() {
 
     function closeDrawer() {
       layerWrap.classList.remove('open');
-      fab.innerHTML = '▲';
+      fab.innerHTML = LAYERS_ICON;
+      fab.setAttribute('aria-expanded', 'false');
     }
     closeDrawerFn = closeDrawer;
 
     fab.addEventListener('click', function () {
       const open = layerWrap.classList.toggle('open');
-      fab.innerHTML = open ? '✕' : '▲';
+      fab.innerHTML = open ? '✕' : LAYERS_ICON;
+      fab.setAttribute('aria-expanded', String(open));
     });
 
-    div.querySelectorAll('button').forEach((b) => {
+    layerWrap.querySelectorAll('.layerbar button, .layer-actions button').forEach((b) => {
       b.onclick = function () {
         if (b.dataset.cat) {
           const sub = div.querySelector('.drawer-sub[data-sub="' + b.dataset.cat + '"]');
@@ -267,10 +272,13 @@ export function initMap() {
         const layerType = b.dataset.l;
         if (layerType === 'lot') {
           toggleLotLayer();
+          if (isMobile) closeDrawer();
         } else if (layerType === 'aerial') {
           toggleAerial();
+          if (isMobile) closeDrawer();
         } else if (layerType === 'labels') {
           toggleTreeLabels();
+          if (isMobile) closeDrawer();
         } else if (layerType === 'filter') {
           // 🔥 [v2.52] 按 filter 按鈕：收起抽屜，彈出 filter 面板
           if (layerWrap && layerWrap.classList.contains('open')) closeDrawer();
@@ -281,6 +289,7 @@ export function initMap() {
           state.currentBaseLayer.addTo(state.map);
           div.querySelectorAll('button[data-l="hk"], button[data-l="sat"]')
             .forEach((x) => { x.classList.toggle('on', x.dataset.l === layerType); });
+          if (isMobile) closeDrawer();
         }
       };
       if (isTouch) {
