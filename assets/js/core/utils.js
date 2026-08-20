@@ -57,11 +57,18 @@ export function format5(n) { return Number(n).toFixed(5); }
 // 樹木健康狀態合法值（供 forms.js / t.js 共用）
 export const VALID_HEALTH = ['Normal', 'Fair', 'Poor', 'Very Poor', 'Dead'];
 
-// HK80 座標有效性驗證（N/E 必須喺香港合理範圍）
+/**
+ * HK80 座標有效性驗證。
+ * HK80 輸入位置必須落在香港範圍：N 800000–850000、E 800000–870000。
+ * 只回傳 boolean，方便新增及編輯流程共用同一套規則。
+ */
 export function isValidHK80(N, E) {
   if (N === '' || N === null || N === undefined) return false;
   if (E === '' || E === null || E === undefined) return false;
-  const n = Number(N), e = Number(E);
-  if (!isFinite(n) || !isFinite(e)) return false;
+
+  const n = Number(N);
+  const e = Number(E);
+  if (!Number.isFinite(n) || !Number.isFinite(e)) return false;
+
   return n >= 800000 && n <= 850000 && e >= 800000 && e <= 870000;
 }

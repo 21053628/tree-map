@@ -587,7 +587,7 @@ import * as TDLogs from './tree-detail/td-logs.js';
     const N = $('#eN').value, E = $('#eE').value;
     if(N || E){
       if (!TDUtils.isValidHK80(N, E)) {
-        alert('⚠️ HK80 座標 N/E 必須是有效數字，並在香港範圍內（N≈800000-850000, E≈800000-870000）');
+        alert('⚠️ HK80 位置錯誤：請輸入香港範圍內的 HK80 N/E 座標。');
         return;
       }
       const w = await toWGS(N, E);

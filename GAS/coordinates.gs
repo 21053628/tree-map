@@ -94,3 +94,53 @@ function hk80ToWgs84_(Nn, Ee){
   const geo=xyz2geo_(xw, yw, zw, WGS_A_, WGS_F_);
   return { lat: rad2deg_(geo[0]), lng: rad2deg_(geo[1]) };
 }
+
+/**
+ * HK80 輸入範圍：沿用前端新增／編輯表單的香港合理範圍。
+ * N 800000–850000、E 800000–870000。
+ */
+function isValidHK80Range_(N, E){
+  if(N === '' || E === '' || N == null || E == null) return false;
+  const n = +N, e = +E;
+  if(!isFinite(n) || !isFinite(e)) return false;
+  return n >= 800000 && n <= 850000 && e >= 800000 && e <= 870000;
+}
+
+function isValidWgs84HongKong_(lat, lng){
+  if(lat === '' || lng === '' || lat == null || lng == null) return false;
+  const la = +lat, ln = +lng;
+  if(!isFinite(la) || !isFinite(ln)) return false;
+  return la >= 22.15 && la <= 22.55 && ln >= 113.85 && ln <= 114.45;
+}
+
+function hk80LocationError_(){
+  return 'HK80 位置錯誤：請輸入香港範圍內的 HK80 座標。';
+}
+
+/**
+ * 驗證寫入請求的位置。若只修改其他欄位，allowEmpty 為 true；
+ * 新增資料則必須提供位置。接受 HK80 N/E 或 WGS84 lat/lng。
+ */
+function validateLocationForWrite_(d, allowEmpty){
+  const hasN = d.hk80_n !== undefined && d.hk80_n !== '';
+  const hasE = d.hk80_e !== undefined && d.hk80_e !== '';
+  const hasLat = d.lat !== undefined && d.lat !== '';
+  const hasLng = d.lng !== undefined && d.lng !== '';
+
+  if(hasN !== hasE || hasLat !== hasLng) return false;
+  if(!hasN && !hasLat) return !!allowEmpty;
+
+  if(hasN){
+    if(!isValidHK80Range_(d.hk80_n, d.hk80_e)) return false;
+    const w = hk80ToWgs84_(d.hk80_n, d.hk80_e);
+    if(!w || !isValidWgs84HongKong_(w.lat, w.lng)) return false;
+  }
+
+  if(hasLat){
+    if(!isValidWgs84HongKong_(d.lat, d.lng)) return false;
+    const hk = wgs84ToHk80_(d.lat, d.lng);
+    if(!hk || !isValidHK80Range_(hk.N, hk.E)) return false;
+  }
+
+  return true;
+}

@@ -55,6 +55,14 @@ function doPost(e){
   const clientId = d.client_id || '';
   const clientCreatedAt = d.client_created_at || '';
 
+  // 📍 新增／編輯位置必須位於香港範圍；在相片上傳及寫入試算表前先攔截
+  if (d.type === 'create_tree' || d.type === 'create_project' || d.type === 'update_tree') {
+    const requireLocation = d.type === 'create_tree' || d.type === 'create_project';
+    if (!validateLocationForWrite_(d, !requireLocation)) {
+      return json_({ok:false, error:hk80LocationError_()});
+    }
+  }
+
   // 2️⃣ 防重預檢 + 相片上傳（在鎖外執行，縮短佔鎖時間，避免其他寫入 timeout）
   let prePhotoUrls = [];
   let prePhotoUrl = '';

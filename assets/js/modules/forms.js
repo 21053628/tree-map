@@ -42,7 +42,10 @@ export async function doCreateProject() {
 
   if (!name || !N || !E) { alert('請填寫完整'); return; }
 
-  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須是有效數字，並在香港範圍內'); return; }
+  if (!isValidHK80(N, E)) {
+    alert('⚠️ HK80 位置錯誤：請輸入香港範圍內的 HK80 N/E 座標。');
+    return;
+  }
 
   const w = CoordUtils.toWGS84(N, E);
   if (!w) { alert('HK80 座標轉換失敗'); return; }
@@ -137,7 +140,10 @@ export async function doCreateTree() {
 
   if (!N || !E) { alert('請填寫 HK80 座標 N/E'); return; }
 
-  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須是有效數字，並在香港範圍內'); return; }
+  if (!isValidHK80(N, E)) {
+    alert('⚠️ HK80 位置錯誤：請輸入香港範圍內的 HK80 N/E 座標。');
+    return;
+  }
   if (VALID_HEALTH.indexOf($('#tStatus').value) === -1) { alert('樹木狀態不合法：' + $('#tStatus').value); return; }
 
   const w = CoordUtils.toWGS84(N, E);
