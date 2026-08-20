@@ -206,18 +206,55 @@ export function initMap() {
 
     L.DomEvent.disableClickPropagation(layerWrap);
 
+    function setDrawerOpen(open) {
+      layerWrap.classList.toggle('open', open);
+      fab.innerHTML = open ? '✕' : LAYERS_ICON;
+      fab.setAttribute('aria-expanded', String(open));
+    }
+
     function closeDrawer() {
-      layerWrap.classList.remove('open');
-      fab.innerHTML = LAYERS_ICON;
-      fab.setAttribute('aria-expanded', 'false');
+      setDrawerOpen(false);
     }
     closeDrawerFn = closeDrawer;
 
-    fab.addEventListener('click', function () {
-      const open = layerWrap.classList.toggle('open');
-      fab.innerHTML = open ? '✕' : LAYERS_ICON;
-      fab.setAttribute('aria-expanded', String(open));
-    });
+    // FAB 同時位於 Leaflet 控制列及可觸控地圖上方；使用 pointerup
+    // 處理觸控，並抑制瀏覽器隨後合成的 click，避免一次點擊被開關兩次。
+    let suppressFabClickUntil = 0;
+    function toggleDrawer(event) {
+      if (event) {
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+      }
+      setDrawerOpen(!layerWrap.classList.contains('open'));
+    }
+
+    function handleFabPointerUp(event) {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      suppressFabClickUntil = Date.now() + 500;
+      toggleDrawer(event);
+    }
+
+    function handleFabTouchEnd(event) {
+      suppressFabClickUntil = Date.now() + 500;
+      toggleDrawer(event);
+    }
+
+    function handleFabClick(event) {
+      if (Date.now() < suppressFabClickUntil) {
+        suppressFabClickUntil = 0;
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      toggleDrawer(event);
+    }
+
+    if (window.PointerEvent) {
+      fab.addEventListener('pointerup', handleFabPointerUp);
+    } else {
+      fab.addEventListener('touchend', handleFabTouchEnd, { passive: false });
+    }
+    fab.addEventListener('click', handleFabClick);
 
     layerWrap.querySelectorAll('.layerbar button, .layer-actions button').forEach((b) => {
       b.onclick = function () {

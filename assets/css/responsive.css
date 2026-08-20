@@ -66,6 +66,10 @@
     color: var(--color-accent-on);
     font-size: 18px;
     box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
     transition: transform .2s var(--ease-spring), background .2s;
   }
   .layerbar-fab:active { transform: scale(.92); }
