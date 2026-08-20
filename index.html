@@ -58,19 +58,22 @@
 </head>
 <body>
 <div id="bar">
-  <select id="projSel"></select>
-  <button class="blue" id="addProjectBtn">＋ 建立地盤</button>
-  <button id="addTreeBtn" class="ghost-hidden">🌳 新增樹木</button>
+  <select id="projSel" aria-label="選擇地盤"></select>
 
   <!-- 🔥 樹木搜尋框 -->
   <div class="search-wrap">
-    <input type="text" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off">
+    <input type="search" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off" aria-label="搜尋當前地盤樹木">
     <div id="searchResults" class="search-results"></div>
   </div>
 
+  <div class="primary-actions" aria-label="主要操作">
+    <button class="blue" id="addProjectBtn" type="button">＋ 建立地盤</button>
+    <button id="addTreeBtn" class="ghost-hidden" type="button">🌳 新增樹木</button>
+  </div>
+
   <!-- 🔥 桌面過濾（圖層）按鈕：放在搜尋框下方 -->
-  <button id="filterBtn" class="filter-btn" type="button" title="過濾樹木狀態">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>
+  <button id="filterBtn" class="filter-btn" type="button" title="過濾樹木狀態" aria-label="過濾樹木狀態">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7-1.63 1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7-1.63 1.27L12 16z"/></svg>
     <span>篩選</span>
   </button>
 </div>

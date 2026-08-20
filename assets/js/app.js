@@ -61,6 +61,7 @@ function focusTree(treeId) {
 function init() {
   DOM.statusEl = document.getElementById('status');
   DOM.projSel = document.getElementById('projSel');
+  DOM.addProjectBtn = document.getElementById('addProjectBtn');
   DOM.addTreeBtn = document.getElementById('addTreeBtn');
   DOM.panel = document.getElementById('panel');
   DOM.panelContent = document.getElementById('panelContent');
@@ -80,9 +81,8 @@ function init() {
     mo.observe(DOM.statusEl, { childList: true, characterData: true, subtree: true });
   }
 
-  const addProjectBtn = document.getElementById('addProjectBtn');
-  if (addProjectBtn) {
-    addProjectBtn.addEventListener('click', () => openProjectForm());
+  if (DOM.addProjectBtn) {
+    DOM.addProjectBtn.addEventListener('click', () => openProjectForm());
   }
   if (DOM.addTreeBtn) {
     DOM.addTreeBtn.addEventListener('click', () => openTreeForm());

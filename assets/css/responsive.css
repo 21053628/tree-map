@@ -1,96 +1,338 @@
 /* =========================================================
-   responsive.css — 手機版與平板／細視窗桌面（由 main.css Sections 12–13 拆出）
-   不可單獨改動 cascade 順序
-========================================================= */
+   responsive.css — 手機版與平板／細視窗桌面
+   ========================================================= */
 
-/* ================= 12. 手機版整合佈局 ================= */
+/* ================= 12. Mobile-first phone UI ================= */
 @media (max-width: 600px) {
-  #bar { left: 8px; right: 8px; top: 8px; width: auto; flex-direction: column; flex-wrap: nowrap; gap: 8px; }
-  #bar select { width: 100%; flex: none; min-width: 0; font-size: 16px; padding: 10px 8px; }
-  .search-wrap { width: 100%; flex: none; order: 0; min-width: 0; }
-  .search-wrap input { font-size: 16px; padding: 10px; }
-  .search-wrap input:focus { background: rgba(255,255,255,0.98); }
+  :root {
+    --mobile-control-height: 44px;
+    --mobile-card-radius: 16px;
+  }
 
+  html,
+  body,
+  #map {
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+  }
+
+  #map {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    touch-action: pan-x pan-y;
+  }
+
+  /* Top Control Command Center */
+  #bar {
+    position: absolute;
+    top: calc(8px + var(--safe-top));
+    left: 8px;
+    right: 8px;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: auto;
+    padding: 10px;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, .72);
+    border-radius: var(--mobile-card-radius);
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
+    pointer-events: none;
+  }
+
+  #bar select,
+  #bar input,
+  #bar button {
+    box-sizing: border-box;
+    min-height: var(--mobile-control-height);
+    font-size: 16px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #bar select {
+    width: 100%;
+    min-width: 0;
+    flex: none;
+    padding: 8px 12px;
+  }
+
+  #bar .search-wrap {
+    width: 100%;
+    min-width: 0;
+    flex: none;
+    order: 0;
+  }
+
+  .search-wrap input {
+    width: 100%;
+    min-height: var(--mobile-control-height);
+    padding: 9px 12px;
+    font-size: 16px;
+  }
+
+  .search-wrap input:focus {
+    background: rgba(255, 255, 255, .98);
+  }
+
+  /* The wrapper is a row on phones and remains display: contents on desktop. */
+  #bar .primary-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    order: 1;
+    pointer-events: auto;
+  }
+
+  #bar .primary-actions > button {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 0;
+    width: 50%;
+    min-width: 0;
+    min-height: var(--mobile-control-height);
+    margin: 0;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  /* layout.css hides these controls for desktop; explicitly restore them on mobile. */
+  #bar #addProjectBtn,
+  #bar #addTreeBtn {
+    display: flex !important;
+  }
+
+  #bar #addProjectBtn {
+    background: var(--color-primary);
+    color: var(--color-primary-on);
+    border-color: var(--color-primary);
+  }
+
+  /* No project: keep the CTA available as an explanatory ghost action. */
+  #bar #addTreeBtn.ghost-hidden {
+    visibility: visible !important;
+    pointer-events: auto !important;
+    background: transparent;
+    color: var(--color-primary);
+    border: 1px dashed var(--color-primary);
+    box-shadow: none;
+    opacity: .82;
+  }
+
+  #bar #addTreeBtn:not(.ghost-hidden) {
+    visibility: visible !important;
+    pointer-events: auto !important;
+    background: var(--color-primary);
+    color: var(--color-primary-on);
+    border-color: var(--color-primary);
+    box-shadow: 0 2px 8px var(--color-primary-shadow);
+    opacity: 1;
+  }
+
+  /* The filter control is available inside the Layer FAB on phones. */
+  #bar > #filterBtn {
+    display: none !important;
+  }
+
+  /* Search results: every result row is a WCAG-sized touch target. */
   .search-results {
     position: absolute !important;
     top: calc(100% + 6px) !important;
     bottom: auto !important;
-    left: 0 !important; right: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1002;
     max-height: 45vh !important;
+    margin: 0 !important;
     border-radius: 12px !important;
-    box-shadow: 0 8px 24px rgba(0,0,0,.25) !important;
-    margin-bottom: 0 !important;
-    border: 1px solid rgba(0,0,0,.1) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .25) !important;
+    border: 1px solid rgba(0, 0, 0, .1) !important;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
-  .search-results .sr-item { padding: 14px 16px; font-size: 15px; }
 
+  .search-results .sr-item {
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    font-size: 15px;
+  }
+
+  /* Floating status cloud / transient toast */
+  #status {
+    position: fixed;
+    top: calc(175px + var(--safe-top));
+    bottom: auto !important;
+    left: 50%;
+    z-index: 1001;
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+    padding: 9px 16px;
+    border-radius: 22px;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: nowrap;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-50%) translateY(-4px);
+    transition:
+      opacity .25s ease,
+      visibility 0s linear .25s,
+      transform .25s var(--ease-out),
+      background .2s ease,
+      border-color .2s ease,
+      color .2s ease;
+  }
+
+  #status.status-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+    transition:
+      opacity .25s ease,
+      visibility 0s linear 0s,
+      transform .25s var(--ease-out),
+      background .2s ease,
+      border-color .2s ease,
+      color .2s ease;
+  }
+
+  #status.status-front {
+    z-index: 1001;
+    transform: translateX(-50%) scale(1.03);
+  }
+
+  #status.success {
+    border-color: #2e7d32;
+    color: #1b5e20;
+    background: rgba(232, 245, 233, .98);
+  }
+
+  #status.processing {
+    border-color: #1976d2;
+    color: #0d47a1;
+    background: rgba(227, 242, 253, .98);
+  }
+
+  #status.warning,
+  #status.offline {
+    border-color: #ef6c00;
+    color: #e65100;
+    background: rgba(255, 243, 224, .98);
+  }
+
+  #status.error {
+    border-color: #c62828;
+    color: #b71c1c;
+    background: rgba(255, 235, 238, .98);
+  }
+
+  body:has(.filter-panel) #status {
+    opacity: 0 !important;
+    visibility: hidden;
+  }
+
+  /* Hide the status legend and its Leaflet wrapper on phones. */
+  .legend,
+  .leaflet-control:has(> .legend) {
+    display: none !important;
+    pointer-events: none !important;
+  }
+
+  /* Bottom-left map navigation controls */
   .leaflet-top.leaflet-left {
     top: auto;
-    bottom: calc(45px + var(--safe-bottom));
+    bottom: calc(16px + var(--safe-bottom));
     left: 10px;
   }
-  .leaflet-control-zoom a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
 
-  .leaflet-top.leaflet-left .geo-locate-bar { margin-bottom: 4px; }
+  .leaflet-control-zoom a,
   .geo-locate-bar a {
-    display: flex; align-items: center; justify-content: center;
-    width: 40px; height: 40px; line-height: 40px;
-    color: #333; background: #fff; font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    line-height: 44px;
+    font-size: 22px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
+  .leaflet-top.leaflet-left .geo-locate-bar {
+    margin-bottom: 4px;
+  }
+
+  .geo-locate-bar a {
+    color: #333;
+    background: #fff;
+    font-size: 20px;
+  }
+
+  /* Measurement controls are available from the Layer FAB on phones. */
+  .leaflet-top.leaflet-left .gis-tools {
+    display: none;
+  }
+
+  /* Bottom-right Layer FAB drawer */
   .leaflet-bottom.leaflet-right {
-    bottom: calc(10px + var(--safe-bottom));
+    bottom: calc(16px + var(--safe-bottom));
     right: 16px;
-    max-width: calc(100vw - 12px);
+    max-width: calc(100vw - 32px);
   }
 
-  .legend { display: none; }
-  body.panel-open .layerbar { display: none; }
-
-  #status {
-    font-size: 12px;
-    top: calc(116px + var(--safe-top, 0px));
-    bottom: auto !important;
-    max-width: 92%;
+  .layerbar-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    margin: 0;
   }
 
   .layerbar-fab {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 52px; height: 52px;
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    min-height: 52px;
+    padding: 0;
+    border: 0;
     border-radius: 50%;
-    border: none;
     background: var(--color-accent);
     color: var(--color-accent-on);
     font-size: 18px;
-    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    box-shadow: var(--shadow-3);
     touch-action: manipulation;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
-    transition: transform .2s var(--ease-spring), background .2s;
+    transition: transform .2s var(--ease-spring), background .2s ease;
   }
-  .layerbar-fab:active { transform: scale(.92); }
-  .layerbar-wrap.open .layerbar-fab { background: #37474f; }
 
-  .layerbar-wrap {
-    flex-direction: row;              /* 主要動作與 FAB 同列，避免左下控制列過高 */
-    align-items: flex-end;
-    gap: 8px;
-    margin-bottom: 0;
+  .layerbar-fab:active {
+    transform: scale(.96);
+    transition: transform .1s ease;
   }
-  .layer-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+
+  .layerbar-wrap.open .layerbar-fab {
+    background: #37474f;
   }
-  .layer-actions .drawer-action {
-    white-space: nowrap;
-    padding: 11px 12px;
-    font-size: 13px;
-  }
+
   .layerbar {
     display: none;
     position: absolute;
@@ -99,129 +341,306 @@
     flex-direction: column;
     align-items: stretch;
     gap: 2px;
+    width: min(250px, calc(100vw - 32px));
+    min-width: 220px;
+    max-height: min(70vh, calc(100dvh - 180px));
     padding: 6px;
-    min-width: 160px;
-    box-shadow: 0 8px 30px rgba(0,0,0,.25);
-    max-height: calc(100vh - 150px);
-    max-height: calc(100dvh - 150px);
+    box-sizing: border-box;
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .25);
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
+
   .layerbar-wrap.open .layerbar {
     display: flex;
     animation: sheetUp .22s var(--ease-out);
   }
-  .layerbar button { padding: 13px 16px; font-size: 14px; text-align: left; }
-  .drawer-sep { width: auto; height: 1px; align-self: auto; margin: 4px 2px; }
 
-  /* 🔥 分類按鈕（測量工具／圖層）：可展開／收起 */
+  .layerbar button {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.3;
+    text-align: left;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .layerbar button:active {
+    transform: scale(.96);
+    transition: transform .1s ease;
+  }
+
   .layerbar .drawer-cat {
     justify-content: space-between;
-    font-weight: 600;
+    font-weight: 700;
   }
+
   .layerbar .drawer-cat::after {
     content: '▸';
-    font-size: 12px;
     color: var(--muted);
-    transition: transform .15s var(--ease-in-out);
+    font-size: 12px;
   }
-  .layerbar .drawer-cat.open::after { content: '▾'; }
+
+  .layerbar .drawer-cat.open::after {
+    content: '▾';
+  }
+
   .layerbar .drawer-sub {
     display: none;
     flex-direction: column;
     gap: 2px;
-    margin-left: 12px;
-    padding-left: 10px;
-    border-left: 2px solid rgba(128,128,128,.3);
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 2px solid rgba(128, 128, 128, .3);
   }
-  .layerbar .drawer-sub.open { display: flex; }
 
+  .layerbar .drawer-sub.open {
+    display: flex;
+  }
+
+  .layerbar .drawer-sub button {
+    min-height: 44px;
+    padding-left: 12px;
+    font-size: 13px;
+  }
+
+  .layerbar .drawer-sep {
+    width: auto;
+    height: 1px;
+    min-height: 1px;
+    align-self: auto;
+    margin: 4px 2px;
+    background: rgba(128, 128, 128, .3);
+  }
+
+  .drawer-sync-badge {
+    margin-left: auto;
+    color: #2e7d32;
+    font-size: 11px;
+  }
+
+  /* Modal sheet */
   #panel {
-    position: fixed; top: auto; bottom: 0; left: 0; right: 0;
-    width: auto; max-height: 85vh;
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 85vh;
+    box-sizing: border-box;
     border-radius: 20px 20px 0 0;
     padding: 12px 16px calc(16px + var(--safe-bottom));
-    box-shadow: 0 -4px 30px rgba(0,0,0,.2);
+    box-shadow: 0 -4px 30px rgba(0, 0, 0, .2);
     z-index: 1300;
     transform: translateY(100%);
   }
-  #panel[style*="display: block"] { transform: translateY(0); }
-  #panel::before {
-    content: ''; display: block; width: 40px; height: 4px;
-    background: #ccc; border-radius: 2px; margin: 0 auto 12px;
-  }
-  #panel input, #panel select { font-size: 16px; padding: 12px; }
-  #panel button { padding: 14px; font-size: 16px; }
 
+  #panel[style*="display: block"] {
+    transform: translateY(0);
+  }
+
+  #panel::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 0 auto 12px;
+    background: #ccc;
+    border-radius: 2px;
+  }
+
+  #panel input,
+  #panel select,
+  #panel textarea,
+  #panel button {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  #panel button {
+    padding: 12px;
+  }
+
+  /* Mobile popups */
   .leaflet-popup-content-wrapper {
     border-radius: 18px !important;
     padding: 0 !important;
-    box-shadow: 0 12px 40px rgba(0,0,0,.3) !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .3) !important;
     animation: sheetUp .25s var(--ease-out);
   }
+
   .leaflet-popup-content {
     margin: 12px 16px 14px !important;
-    font-size: 15px; line-height: 1.6;
     max-height: 42vh;
     overflow-y: auto;
+    font-size: 15px;
+    line-height: 1.6;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
+
   .leaflet-popup-content::before {
     content: '';
     display: block;
-    width: 40px; height: 4px;
-    background: #ccc; border-radius: 2px;
+    width: 40px;
+    height: 4px;
     margin: 0 auto 10px;
+    background: #ccc;
+    border-radius: 2px;
   }
-  .leaflet-popup-tip-container { display: none !important; }
+
+  .leaflet-popup-content button,
+  .leaflet-popup-content a {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .leaflet-popup-tip-container {
+    display: none !important;
+  }
+
   .leaflet-popup-close-button {
-    width: 48px !important; height: 48px !important;
-    top: 2px !important; right: 2px !important;
+    width: 48px !important;
+    height: 48px !important;
+    top: 2px !important;
+    right: 2px !important;
   }
-  .leaflet-popup-close-button::after { font-size: 24px; }
-/* [Phase12] 手機實色化（效能＋陽光可讀） */
-  #bar select, #bar button, .search-wrap input,
-  #filterBtn.filter-btn, .layerbar, .legend, .interact-bar,
-  .leaflet-popup-content-wrapper, #status, #panel {
+
+  /* Solid mobile surfaces improve readability in bright outdoor conditions. */
+  #bar select,
+  #bar button,
+  .search-wrap input,
+  .layerbar,
+  .leaflet-popup-content-wrapper,
+  #status,
+  #panel {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  #bar select, .search-wrap input, #filterBtn.filter-btn {
-    background: rgba(255,255,255,.96);
+
+  #bar select,
+  .search-wrap input {
+    background: rgba(255, 255, 255, .96);
   }
-  #bar button {
-    background: var(--color-primary);
+
+  .layerbar {
+    background: rgba(255, 255, 255, .98);
   }
-  .layerbar { background: rgba(255,255,255,.96); }
-  .legend { background: rgba(255,255,255,.92); }
-  #status { background: rgba(255,255,255,.96); }
-  #panel { border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
-  .layerbar-fab { box-shadow: var(--shadow-3); }
+
+  #panel {
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
+  /* Consistent press feedback for all mobile interactive controls. */
+  button:active,
+  select:active,
+  input[type="button"]:active,
+  input[type="submit"]:active {
+    transform: scale(.96);
+    transition: transform .1s ease;
+  }
+
   @media (prefers-color-scheme: dark) {
-    #bar select, .search-wrap input, #filterBtn.filter-btn {
-      background: rgba(22,27,22,.96);
+    #bar {
+      background: rgba(22, 27, 22, .96);
+      border-color: rgba(255, 255, 255, .12);
     }
-    .layerbar { background: rgba(22,27,22,.96); }
-    .legend { background: rgba(22,27,22,.92); }
-    #status { background: rgba(22,27,22,.96); }
-    #panel { background: rgba(22,27,22,.97); }
+
+    #bar select,
+    .search-wrap input {
+      background: rgba(22, 27, 22, .96);
+    }
+
+    #bar #addTreeBtn.ghost-hidden {
+      color: #a5d6a7;
+      border-color: #81c784;
+    }
+
+    .layerbar {
+      background: rgba(22, 27, 22, .98);
+    }
+
+    #status {
+      background: rgba(22, 27, 22, .96);
+    }
+
+    #panel {
+      background: rgba(22, 27, 22, .97);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
- 
-/* 超窄屏極簡 */
+
+/* 超窄屏 */
 @media (max-width: 400px) {
-  .layerbar { gap: 2px; padding: 3px; }
-  .layerbar button { padding: 10px 9px; font-size: 12px; }
-  #status { font-size: 11px; }
+  #bar {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  #bar .primary-actions {
+    gap: 6px;
+  }
+
+  #bar .primary-actions > button {
+    padding-left: 6px;
+    padding-right: 6px;
+    font-size: 14px;
+  }
+
+  .layerbar {
+    min-width: 210px;
+  }
+
+  #status {
+    font-size: 12px;
+  }
 }
 
 /* ================= 13. 平板／細視窗桌面 ================= */
 @media (min-width: 601px) and (max-width: 1024px) {
-  /* 🔥 [v2.60] left: auto 杜絕「left 贏晒」bug，bar 永遠靠右 */
-  #bar { left: auto; right: 12px; top: calc(10px + var(--safe-top)); width: 320px; }
-  #bar select { font-size: 16px; padding: 11px; }
-  #panel { width: 360px; }
-  .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; font-size: 22px; }
+  #bar {
+    left: auto;
+    right: 12px;
+    top: calc(10px + var(--safe-top));
+    width: 320px;
+  }
+
+  #bar select {
+    font-size: 16px;
+    padding: 11px;
+  }
+
+  #panel {
+    width: 360px;
+  }
+
+  .leaflet-control-zoom a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+    font-size: 22px;
+  }
 }

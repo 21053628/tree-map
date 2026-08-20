@@ -6,6 +6,7 @@ import { escapeHtml, debounce, throttle } from '../core/utils.js';
 export const DOM = {
   statusEl: null,
   projSel: null,
+  addProjectBtn: null,
   addTreeBtn: null,
   panel: null,
   panelContent: null,
@@ -24,17 +25,48 @@ export function updateStatus(message) {
     console.log('[Status]', message);
     return;
   }
-  DOM.statusEl.textContent = message;
-  DOM.statusEl.classList.remove('success', 'error');
-  if (message.indexOf('✅') !== -1 || message.indexOf('成功') !== -1) {
-    DOM.statusEl.classList.add('success');
-  } else if (message.indexOf('❌') !== -1 || message.indexOf('失敗') !== -1 || message.indexOf('錯誤') !== -1) {
-    DOM.statusEl.classList.add('error');
+
+  const text = String(message);
+  const statusEl = DOM.statusEl;
+  statusEl.textContent = text;
+  statusEl.classList.remove(
+    'success',
+    'processing',
+    'warning',
+    'offline',
+    'error'
+  );
+
+  if (text.indexOf('✅') !== -1 || text.indexOf('成功') !== -1 || text.indexOf('已更新') !== -1) {
+    statusEl.classList.add('success');
+  } else if (
+    text.indexOf('❌') !== -1 ||
+    text.indexOf('失敗') !== -1 ||
+    text.indexOf('錯誤') !== -1
+  ) {
+    statusEl.classList.add('error');
+  } else if (
+    text.indexOf('📴') !== -1 ||
+    text.indexOf('離線') !== -1 ||
+    text.indexOf('未能連線') !== -1
+  ) {
+    statusEl.classList.add('offline');
+  } else if (text.indexOf('⚠️') !== -1 || text.indexOf('警告') !== -1) {
+    statusEl.classList.add('warning');
+  } else if (
+    text.indexOf('🗺️') !== -1 ||
+    text.indexOf('載入') !== -1 ||
+    text.indexOf('定位中') !== -1 ||
+    text.indexOf('📡') !== -1
+  ) {
+    statusEl.classList.add('processing');
   }
-  clearTimeout(DOM.statusEl._hideTimer);
-  DOM.statusEl._hideTimer = setTimeout(() => {
-    DOM.statusEl.classList.remove('success', 'error');
-  }, 5000);
+
+  statusEl.classList.add('status-visible');
+  clearTimeout(statusEl._hideTimer);
+  statusEl._hideTimer = setTimeout(() => {
+    statusEl.classList.remove('status-visible');
+  }, 3000);
 }
 
 // 顯示側邊面板

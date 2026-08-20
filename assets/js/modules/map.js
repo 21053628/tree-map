@@ -24,7 +24,8 @@ export function initMap() {
     return false;
   }
 
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isMobile = window.matchMedia('(max-width: 600px)').matches ||
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
   const mapOptions = {
@@ -152,7 +153,7 @@ export function initMap() {
 
     const fab = L.DomUtil.create('button', 'layerbar-fab', layerWrap);
     fab.type = 'button';
-    fab.innerHTML = LAYERS_ICON;
+    fab.innerHTML = '▲';
     fab.title = '開啟圖層與功能';
     fab.setAttribute('aria-label', '開啟圖層與功能');
     fab.setAttribute('aria-expanded', 'false');
@@ -163,22 +164,24 @@ export function initMap() {
     if (isMobile) {
       // 手機版：底圖切換直接收納在 Layer FAB，避免再點擊一層「圖層」分類。
       div.innerHTML =
-        '<button class="drawer-cat" data-cat="tools">📏 測量工具</button>' +
+        '<button class="drawer-cat" data-cat="tools" aria-expanded="false">📏 測量工具</button>' +
         '<div class="drawer-sub" data-sub="tools">' +
           '<button data-act="measureLine">📏 距離</button>' +
           '<button data-act="measureArea">📐 面積</button>' +
           '<button data-act="clearDrawings">✕ 清除</button>' +
         '</div>' +
         '<div class="drawer-sep"></div>' +
-        '<button data-l="hk" class="on">政府</button>' +
-        '<button data-l="sat">官航</button>' +
-        '<button data-l="lot">🗺️ 地段</button>' +
-        '<button data-l="aerial">🛰 航拍</button>' +
+        '<button class="drawer-cat" data-cat="layers" aria-expanded="false">🗺️ 圖層</button>' +
+        '<div class="drawer-sub" data-sub="layers">' +
+          '<button data-l="hk" class="on">🏛️ 政府</button>' +
+          '<button data-l="sat">🛰️ 衛星</button>' +
+          '<button data-l="lot">🗺️ 地段索引</button>' +
+          '<button data-l="aerial">📷 航拍</button>' +
+        '</div>' +
         '<div class="drawer-sep"></div>' +
         '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +
         '<button data-l="labels">🔢 樹木數字顯示</button>' +
-        '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
-        '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>';
+        '<button data-act="sync">☁️ 同步 <span class="drawer-sync-badge" aria-hidden="true">●</span></button>';
     } else {
       div.innerHTML =
         '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
@@ -197,18 +200,11 @@ export function initMap() {
         '<button data-l="aerial">🛰 航拍</button>';
     }
 
-    // 手機版：主要動作固定留在底欄，底圖切換集中於 Layer FAB Drawer。
-    if (isMobile) {
-      const actionBar = L.DomUtil.create('div', 'layer-actions', layerWrap);
-      div.querySelectorAll('.drawer-action').forEach((button) => actionBar.appendChild(button));
-      layerWrap.insertBefore(actionBar, fab);
-    }
-
     L.DomEvent.disableClickPropagation(layerWrap);
 
     function setDrawerOpen(open) {
       layerWrap.classList.toggle('open', open);
-      fab.innerHTML = open ? '✕' : LAYERS_ICON;
+      fab.innerHTML = open ? '✕' : '▲';
       fab.setAttribute('aria-expanded', String(open));
     }
 
@@ -256,13 +252,14 @@ export function initMap() {
     }
     fab.addEventListener('click', handleFabClick);
 
-    layerWrap.querySelectorAll('.layerbar button, .layer-actions button').forEach((b) => {
+    layerWrap.querySelectorAll('.layerbar button').forEach((b) => {
       b.onclick = function () {
         if (b.dataset.cat) {
           const sub = div.querySelector('.drawer-sub[data-sub="' + b.dataset.cat + '"]');
           if (sub) {
             const open = sub.classList.toggle('open');
             b.classList.toggle('open', open);
+            b.setAttribute('aria-expanded', String(open));
           }
           return;
         }
@@ -283,6 +280,16 @@ export function initMap() {
           return;
         }
 
+        if (b.dataset.act === 'sync') {
+          closeDrawer();
+          const syncBadge = document.getElementById('syncBadge');
+          if (syncBadge) {
+            syncBadge.click();
+          } else {
+            updateStatus('☁️ 同步中心尚未就緒');
+          }
+          return;
+        }
         if (b.dataset.act === 'measureLine') {
           closeDrawer();
           if (getDrawMode() === 'line') { cancelInteraction(); return; }
@@ -386,6 +393,13 @@ export function initMap() {
       closePanel();
     }
     hideSearch();
+  });
+
+  // Marker、地段及其他 popup 開啟時，避免抽屜遮擋 popup。
+  state.map.on('popupopen', function () {
+    if (closeDrawerFn && layerWrap && layerWrap.classList.contains('open')) {
+      closeDrawerFn();
+    }
   });
 
   // 🔥 [v2.61] 桌面 filter 按鈕（#bar 搜尋框下方）
