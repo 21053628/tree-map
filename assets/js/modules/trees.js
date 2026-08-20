@@ -3,22 +3,17 @@
  * v4.4 - 加入狀態過濾（配合 filters.js）
  * v4.3 - 🔢 按鈕升級做三模式循環：智能(默認) → 恆常 → 關閉 → 智能…
  * v4.2 - 樹木編號標籤系統
- * v4.1 - L.circleMarker + Canvas 渲染
+ * v4.1 - 固定尺寸狀態 marker，配合 MarkerCluster 穩定縮放渲染
  * v4.5 - 🔥 [防閃爍] silent 增量差量 + 自動平移 ensurePopupInViewport(panInside)
  */
 import { state } from './state.js';
 import { updateStatus, escapeHtml } from './dom.js';
 
 /* =========================================================
- * 🔥 [C2] 共用 Canvas renderer（全 App 只建立一次，所有 circleMarker 共用）
+ * 樹木狀態點使用固定尺寸 DivIcon。
+ * MarkerCluster 的縮放動畫只配合 L.Marker，避免把 Path/Canvas
+ * 混入 cluster 後在 NFC flyTo 高倍 zoom 時產生放大殘影。
  * ========================================================= */
-let canvasRenderer = null;
-function getCanvasRenderer() {
-  if (!canvasRenderer) {
-    canvasRenderer = L.canvas({ padding: 0.5, tolerance: 3 });
-  }
-  return canvasRenderer;
-}
 
 // 🔥 [C1] 可視範圍邊距（0.3 個視窗，避免拖動邊緣樹突然出現/消失）
 const BOUNDS_PADDING = 0.3;
@@ -213,16 +208,20 @@ export function ensurePopupFullyVisible(marker) {
 }
 
 function makeMarker(t) {
-  const renderer = getCanvasRenderer();
   const color = t._color || Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown;
-  const marker = L.circleMarker([+t.lat, +t.lng], {
-    radius: 7,
-    fillColor: color,
-    color: '#fff',
-    weight: 2.5,
-    opacity: 1,
-    fillOpacity: 1,
-    renderer: renderer
+
+  // MarkerCluster 的 zoom 動畫只處理 L.Marker icon；使用固定尺寸 DivIcon，
+  // 避免 L.CircleMarker 的 Canvas／Path 在 NFC flyTo 高倍 zoom 時產生放大殘影。
+  const marker = L.marker([+t.lat, +t.lng], {
+    icon: L.divIcon({
+      className: 'tree-status-marker',
+      html: '<span class="tree-status-dot" style="background-color:' + color + ';" aria-hidden="true"></span>',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9],
+      popupAnchor: [0, -9]
+    }),
+    keyboard: false,
+    title: String(t.tree_id)
   });
   marker._originalPos = [+t.lat, +t.lng];
   marker._treeId = String(t.tree_id);
@@ -269,7 +268,7 @@ function makeMarker(t) {
 }
 
 /* =========================================================
- * 樹木標記（v4.1 Canvas 版）
+ * 樹木標記（固定尺寸 Marker 版）
  * ========================================================= */
 export function drawTrees(silent) {
   const startTime = performance.now();

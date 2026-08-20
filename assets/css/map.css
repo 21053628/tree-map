@@ -17,6 +17,27 @@
 .leaflet-marker-icon { transition: transform 0.15s var(--ease-spring); }
 .leaflet-marker-dragging { transition: transform 0.12s var(--ease-spring); }
 
+/* 樹木狀態點由固定尺寸 DivIcon 繪製，避免 Canvas／Path 在 MarkerCluster zoom 動畫中殘留 */
+.tree-status-marker {
+  width: 18px !important;
+  height: 18px !important;
+  margin: -9px 0 0 -9px !important;
+  transition: none !important;
+  transform-origin: center center;
+  pointer-events: auto;
+}
+.tree-status-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 2px;
+  box-sizing: border-box;
+  border: 2.5px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  pointer-events: none;
+}
+
 .leaflet-interactive {
   transition: fill-opacity 0.2s ease, stroke-width 0.2s ease, stroke 0.2s ease;
 }
