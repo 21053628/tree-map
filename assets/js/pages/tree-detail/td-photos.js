@@ -4,11 +4,21 @@ export function initPhotoPreview() {
   const fileInput = $('#photo');
   if (!fileInput) return;
 
+  // 動態表單重新建立時，避免同一個 input 被重複綁定 change 事件。
+  if (fileInput.dataset.photoPreviewBound === 'true') return;
+  fileInput.dataset.photoPreviewBound = 'true';
+
   fileInput.addEventListener('change', function (e) {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || [])
+      .filter(function (file) {
+        return file && (!file.type || file.type.indexOf('image/') === 0);
+      });
+
     for (let i = 0; i < files.length; i++) {
       window.TD.selectedPhotos.push(files[i]);
     }
+
+    // 清空 value 令手機可以再次選取同一張相片。
     fileInput.value = '';
     updatePhotoPreview();
   });

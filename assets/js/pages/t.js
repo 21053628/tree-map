@@ -336,8 +336,8 @@ import * as TDLogs from './tree-detail/td-logs.js';
         '<hr><div class="section-title">📝 巡查記錄（狀態會自動同步樹木資料）</div>' +
         '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
         '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
-        '<input type="file" id="photo" accept="image/*" multiple style="display:none">' +
-        '<button class="btn-neutral" id="pickPhotoBtn" style="margin-top:10px">📷 選擇相片（支援多張／相簿）</button>' +
+        '<input type="file" id="photo" class="photo-file-input" accept="image/*" multiple>' +
+        '<label class="btn-neutral photo-picker-btn" for="photo" style="margin-top:10px">📷 選擇相片（支援多張／相簿）</label>' +
         '<div id="photoPreviewContainer" class="photo-preview-container" style="display:none">' +
           '<div class="photo-count">已選擇 <b id="photoCount">0</b> 張相片</div>' +
           '<div id="photoPreviewGrid" class="photo-preview-grid"></div>' +
@@ -363,14 +363,6 @@ import * as TDLogs from './tree-detail/td-logs.js';
       // 🔥 [CSP] 移除 inline onclick，改為 addEventListener
       const checkinBtn = document.getElementById('checkinBtn');
       if (checkinBtn) checkinBtn.addEventListener('click', function(){ checkin(); });
-
-      const pickPhotoBtn = document.getElementById('pickPhotoBtn');
-      if (pickPhotoBtn) {
-        pickPhotoBtn.addEventListener('click', function(){
-          const photoInput = document.getElementById('photo');
-          if (photoInput) photoInput.click();
-        });
-      }
 
       const submitInspectionBtn = document.getElementById('submitInspectionBtn');
       if (submitInspectionBtn) {
