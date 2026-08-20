@@ -188,7 +188,7 @@ export async function doCreateTree() {
           setTimeout(function () {
             const m = state.treesCache.get(state.curProject + '_' + newId) || state.treesCache.get(newId);
             if (m) {
-              state.treesCache.forEach((otherM) => { if (otherM && otherM.bringToFront) otherM.bringToFront(); });
+              state.treesCache.forEach((otherM) => { bringTreeToFront(otherM); });
               bringTreeToFront(m);
               m.openPopup();
             }

@@ -37,9 +37,14 @@ export function setStatusFilter(set) {
   drawTrees();
 }
 
-// 🔥 修正：不再覆寫 Leaflet 原生 setZIndexOffset，改用獨立的 bringToFront helper
+ // 🔥 修正：兼容 L.Marker 與 Path 圖層，避免直接呼叫不存在的 bringToFront
 export function bringTreeToFront(marker) {
-  if (marker && marker.bringToFront) marker.bringToFront();
+  if (!marker) return;
+  if (typeof marker.bringToFront === 'function') {
+    marker.bringToFront();
+  } else if (typeof marker.setZIndexOffset === 'function') {
+    marker.setZIndexOffset(1000);
+  }
 }
 
 export function getStatusFilter() { return statusFilter; }
@@ -226,7 +231,7 @@ function makeMarker(t) {
   marker._originalPos = [+t.lat, +t.lng];
   marker._treeId = String(t.tree_id);
   marker.on('click', function () {
-    marker.bringToFront();
+    bringTreeToFront(marker);
   });
   marker.bindPopup('<div style="text-align:center;padding:10px;color:#666;">載入中...</div>', { autoPan: false });
   marker.on('popupopen', function (e) {
