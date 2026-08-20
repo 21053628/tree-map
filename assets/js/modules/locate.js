@@ -51,26 +51,7 @@ export function locateTree(treeId, projectId, lat, lng) {
   if (finalPid && String(state.curProject) !== finalPid) {
     state.curProject = finalPid;
 
-    const sel = DOM.projSel;
-    if (sel) {
-      const inlineOnChange = sel.getAttribute('onchange');
-      sel.removeAttribute('onchange');
-      sel.onchange = null;
-
-      let hasOption = false;
-      for (let i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].value === finalPid) { hasOption = true; break; }
-      }
-      if (hasOption) {
-        sel.value = finalPid;
-      } else {
-        buildSelect();
-      }
-
-      if (inlineOnChange) sel.setAttribute('onchange', inlineOnChange);
-      else sel.onchange = function () { window.App.selectProject(this.value); };
-    }
-    DOM.addTreeBtn.classList.toggle('ghost-hidden', !state.curProject);
+    buildSelect();
 
     state.treesCache.clear();
     state.spatialIndexCache = null;

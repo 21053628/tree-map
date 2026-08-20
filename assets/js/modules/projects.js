@@ -8,6 +8,25 @@ import { hideSearch } from './search.js';
 import { drawTrees } from './trees.js';
 import { emit } from '../core/event-bus.js'; // 🔥 [Phase4] 事件解耦，移除對 map.js 的直接依賴
 
+function syncTreeActionState() {
+  const hasProject = Boolean(String(state.curProject || '').trim());
+  const addTreeBtn = DOM.addTreeBtn;
+
+  if (addTreeBtn) {
+    addTreeBtn.classList.toggle('ghost-hidden', !hasProject);
+    addTreeBtn.classList.toggle('is-project-selected', hasProject);
+    addTreeBtn.setAttribute('aria-disabled', String(!hasProject));
+    addTreeBtn.title = hasProject ? '在目前地盤新增樹木' : '請先選擇地盤';
+  }
+
+  document.querySelectorAll('.layerbar button[data-act="addTree"]').forEach((button) => {
+    button.classList.toggle('is-project-selected', hasProject);
+    button.disabled = !hasProject;
+    button.setAttribute('aria-disabled', String(!hasProject));
+    button.title = hasProject ? '在目前地盤新增樹木' : '請先選擇地盤';
+  });
+}
+
 export function buildSelect() {
   const sel = DOM.projSel;
   if (!sel) return;
@@ -19,7 +38,7 @@ export function buildSelect() {
   sel.innerHTML = '<option value="">🗂️ 全部地盤</option>' +
     state.PROJECTS.map((p) => '<option value="' + p.project_id + '">🚩 ' + p.name + '</option>').join('');
   sel.value = state.curProject;
-  DOM.addTreeBtn.classList.toggle('ghost-hidden', !state.curProject);
+  syncTreeActionState();
 
   if (inlineOnChange) {
     sel.setAttribute('onchange', inlineOnChange);

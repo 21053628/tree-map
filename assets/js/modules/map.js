@@ -272,7 +272,7 @@ export function initMap() {
         if (b.dataset.act === 'addTree') {
           closeDrawer();
           const rt = document.getElementById('addTreeBtn');
-          if (rt && rt.classList.contains('ghost-hidden')) {
+          if (!state.curProject) {
             updateStatus('👉 請先選擇地盤，先可以新增樹木');
           } else if (rt) {
             rt.click();
