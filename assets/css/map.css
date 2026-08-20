@@ -5,7 +5,7 @@
 
 /* ================= 7. 地圖標記動畫 ================= */
 .prjIcon {
-  background: var(--accent); color: #fff; border-radius: 6px;
+  background: var(--color-accent); color: var(--color-accent-on); border-radius: 6px;
   padding: 3px 8px; font-size: 13px; font-weight: 600; border: 2px solid #fff;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,.3));
   box-shadow: var(--shadow-1);
@@ -58,14 +58,14 @@ button.drawer-action {
   transition: all 0.15s var(--ease-in-out);
 }
 button.drawer-action.act-project {
-  background: rgba(21, 101, 192, 0.12);
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1px rgba(21, 101, 192, 0.4);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent-ring);
 }
 button.drawer-action.act-tree {
-  background: rgba(46, 125, 50, 0.12);
-  color: var(--primary);
-  box-shadow: inset 0 0 0 1px rgba(46, 125, 50, 0.4);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary-ring);
 }
 button.drawer-action:hover { filter: brightness(1.05); }
 button.drawer-action:active { transform: scale(0.95); }

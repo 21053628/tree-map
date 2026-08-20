@@ -51,8 +51,8 @@
 }
 #filterBtn.filter-btn svg { flex-shrink: 0; }
 #filterBtn.filter-btn.on {
-  background: var(--accent); color: #fff; border-color: var(--accent);
-  box-shadow: 0 2px 6px rgba(21,101,192,.3);
+  background: var(--color-accent); color: var(--color-accent-on); border-color: var(--color-accent);
+  box-shadow: 0 2px 6px var(--color-accent-shadow);
 }
 @media (prefers-color-scheme: dark) {
   #filterBtn.filter-btn { background: rgba(30,36,30,.85); border-color: #444; color: #e0e0e0; }

@@ -492,10 +492,10 @@ function showCopySuccess() {
   const btn = document.querySelector('.copy-btn');
   const orig = btn.textContent;
   btn.textContent = '✅ 已複製';
-  btn.style.background = '#2e7d32';
+  btn.classList.add('is-success');
   setTimeout(() => {
     btn.textContent = orig;
-    btn.style.background = '';
+    btn.classList.remove('is-success');
   }, 1500);
 }
 

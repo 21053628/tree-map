@@ -193,6 +193,14 @@ export function initMap() {
         '<button data-l="lot">🗺️ 地段</button>' +
         '<button data-l="aerial">🛰 航拍</button>';
     }
+
+    // 手機版：主要動作固定留在底欄，底圖切換集中於 Layer FAB Drawer。
+    if (isMobile) {
+      const actionBar = L.DomUtil.create('div', 'layer-actions', layerWrap);
+      div.querySelectorAll('.drawer-action').forEach((button) => actionBar.appendChild(button));
+      layerWrap.insertBefore(actionBar, fab);
+    }
+
     L.DomEvent.disableClickPropagation(layerWrap);
 
     function closeDrawer() {

@@ -88,9 +88,15 @@ import * as TDLogs from './tree-detail/td-logs.js';
   async function render(t){
     const hkPromise = toHK(t.lat, t.lng);
     var html = '<a class="back" id="backBtn" href="index.html?tree_id=' + encodeURIComponent(t.tree_id) + '&project_id=' + encodeURIComponent(t.project_id || '') + '&lat=' + encodeURIComponent(t.lat) + '&lng=' + encodeURIComponent(t.lng) + '">⬅ 地圖</a>' +
-    '<div class="card">' +
-      '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
-      '<div style="margin-top:8px"><span class="badge" style="background:' + (TDUtils.COLORS[t.status]||'#757575') + '">Status: ' + escapeHtml(t.status) + '</span></div>';
+    '<div class="tree-tabs" role="tablist" aria-label="樹木資料分頁">' +
+      '<button type="button" class="tree-tab" id="overviewTab" role="tab" aria-selected="true" aria-controls="overviewPanel" tabindex="0">📋 樹木概覽</button>' +
+      '<button type="button" class="tree-tab" id="inspectionTab" role="tab" aria-selected="false" aria-controls="inspectionPanel" tabindex="-1">📝 巡查簽到</button>' +
+      '<button type="button" class="tree-tab" id="editTab" role="tab" aria-selected="false" aria-controls="editPanel" tabindex="-1">✏️ 編輯資產</button>' +
+    '</div>' +
+    '<section class="tab-panel" id="overviewPanel" role="tabpanel" aria-labelledby="overviewTab">' +
+      '<div class="card">' +
+        '<h1>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</h1>' +
+        '<div style="margin-top:8px"><span class="badge" style="background:' + (TDUtils.COLORS[t.status]||'#757575') + '">Status: ' + escapeHtml(t.status) + '</span></div>';
     if(t.project_id){
       html += '<div style="margin-top:6px"><span class="badge" style="background:#1976d2">🚩 地盤：<b>' + escapeHtml(t.project_id) + '</b></span> <span style="font-size:12px;color:#666;margin-left:6px">(NFC 用)</span></div>';
     }
@@ -106,31 +112,43 @@ import * as TDLogs from './tree-detail/td-logs.js';
       for(var i = 0; i < mainPhotos.length; i++){
         const isLCP = (i === 0);
         const loadingAttr = isLCP ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
-        html += '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" ' + loadingAttr + ' decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer">';
+        html += '<div class="image-shell is-loading">' +
+          '<div class="image-skeleton sk" aria-hidden="true"></div>' +
+          '<img class="tree zoomable-img" src="' + escapeHtml(mainPhotos[i]) + '" alt="' + escapeHtml(t.name) + '" ' + loadingAttr + ' decoding="async" crossorigin="anonymous" referrerpolicy="no-referrer">' +
+          '<div class="image-fallback" role="status">圖片暫時無法載入</div>' +
+          '</div>';
       }
     }
     html += '<div class="grid">' +
-        '<div>Tree Height<b>' + (t.tree_height||t.height||'-') + ' m</b></div>' +
-        '<div>Crown Width<b>' + (t.crown_width||t.spread||'-') + ' m</b></div>' +
-        '<div>DBH<b>' + (t.dbh||'-') + ' m</b></div>' +
-        '<div>Ground Dia.<b>' + (t.ground_diameter||'-') + ' m</b></div>' +
-        '<div>Stem Length<b>' + (t.stem_length||'-') + ' m</b></div>' +
-        '<div>Crown Area<b>' + (t.crown_area||'-') + ' ㎡</b></div>' +
-        '<div>Crown Vol.<b>' + (t.crown_volume||'-') + ' m³</b></div>' +
+          '<div>Tree Height<b class="numeric">' + (t.tree_height||t.height||'-') + ' m</b></div>' +
+          '<div>Crown Width<b class="numeric">' + (t.crown_width||t.spread||'-') + ' m</b></div>' +
+          '<div>DBH<b class="numeric">' + (t.dbh||'-') + ' m</b></div>' +
+          '<div>Ground Dia.<b class="numeric">' + (t.ground_diameter||'-') + ' m</b></div>' +
+          '<div>Stem Length<b class="numeric">' + (t.stem_length||'-') + ' m</b></div>' +
+          '<div>Crown Area<b class="numeric">' + (t.crown_area||'-') + ' ㎡</b></div>' +
+          '<div>Crown Vol.<b class="numeric">' + (t.crown_volume||'-') + ' m³</b></div>' +
+        '</div>' +
+        '<div class="sub" style="margin-top:8px">' + escapeHtml(t.description||'') + '</div>' +
+        '<div class="sub" style="margin-top:6px">📍 <b>HK80：</b>N <span id="hk80N" class="numeric">—</span> ／ E <span id="hk80E" class="numeric">—</span> ｜ <b>Level：</b><span class="numeric">' + (t.level||'-') + '</span> m</div>' +
+        '<div class="sub">WGS84：<span class="numeric">' + f5(t.lat) + ', ' + f5(t.lng) + '</span></div>' +
+        '<div id="minimap"></div>' +
       '</div>' +
-      '<div class="sub" style="margin-top:8px">' + escapeHtml(t.description||'') + '</div>' +
-      '<div class="sub" style="margin-top:6px">📍 <b>HK80：</b>N <span id="hk80N">—</span> ／ E <span id="hk80E">—</span> ｜ <b>Level：</b>' + (t.level||'-') + ' m</div>' +
-      '<div class="sub">WGS84：' + f5(t.lat) + ', ' + f5(t.lng) + '</div>' +
-      '<div id="minimap"></div>' +
-    '</div>' +
-    '<div class="card"><button class="sec" id="goNfcBtn" style="background:#00897b">📱 一鍵寫入 NFC tag</button></div>' +
-    '<div class="card" id="staffBox"><button class="sec" id="staffBtn">🔑 工作人員</button></div>' +
-    '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>' +
+      '<div class="card"><button class="btn-accent" id="goNfcBtn">📱 一鍵寫入 NFC tag</button></div>' +
+      '<div class="card"><b>📋 巡查歷史</b><div id="logs"><div class="log">載入中…</div></div></div>' +
+    '</section>' +
+    '<section class="tab-panel" id="inspectionPanel" role="tabpanel" aria-labelledby="inspectionTab" hidden>' +
+      '<div class="card" id="inspectionContent"><div class="staff-placeholder">需要工作人員驗證才能使用巡查簽到</div></div>' +
+    '</section>' +
+    '<section class="tab-panel" id="editPanel" role="tabpanel" aria-labelledby="editTab" hidden>' +
+      '<div class="card" id="editContent"><div class="staff-placeholder">需要工作人員驗證才能編輯樹木資料</div></div>' +
+    '</section>' +
     '<div id="imgModal" class="modal">' +
       '<span class="modal-close">&times;</span>' +
       '<img id="modalImg" src="" alt="放大圖片" crossorigin="anonymous" referrerpolicy="no-referrer">' +
     '</div>';
     $('#app').innerHTML = TDUtils.sanitizeHTML(html);
+    setupImageLoadingStates($('#app'));
+    setupTabs();
 
     // 🔥 [CSP] 移除 inline onclick，改為 addEventListener / 事件委派
     const backBtn = document.getElementById('backBtn');
@@ -140,9 +158,6 @@ import * as TDLogs from './tree-detail/td-logs.js';
 
     const goNfcBtn = document.getElementById('goNfcBtn');
     if (goNfcBtn) goNfcBtn.addEventListener('click', window.goNFC);
-
-    const staffBtn = document.getElementById('staffBtn');
-    if (staffBtn) staffBtn.addEventListener('click', function(){ staffMode(); });
 
     // 相片放大 + modal 關閉：事件委派（只綁定一次）
     if (!window._tPageDelegated) {
@@ -176,6 +191,92 @@ import * as TDLogs from './tree-detail/td-logs.js';
       if(elN) elN.textContent = f1(hk.N);
       if(elE) elE.textContent = f1(hk.E);
     }
+  }
+
+  function setupImageLoadingStates(root){
+    if (!root) return;
+    root.querySelectorAll('.image-shell').forEach(function(shell){
+      const img = shell.querySelector('img');
+      if (!img) return;
+
+      function markLoaded(){
+        shell.classList.remove('is-loading', 'is-error');
+      }
+
+      function markError(){
+        shell.classList.remove('is-loading');
+        shell.classList.add('is-error');
+      }
+
+      img.addEventListener('load', markLoaded, { once: true });
+      img.addEventListener('error', markError, { once: true });
+
+      if (img.complete) {
+        if (img.naturalWidth > 0) markLoaded();
+        else markError();
+      }
+    });
+  }
+
+  function setupTabs(){
+    const tabs = Array.from(document.querySelectorAll('.tree-tab'));
+    if (!tabs.length) return;
+
+    let activeTab = tabs[0];
+
+    function setActive(tab){
+      const panelId = tab.getAttribute('aria-controls');
+      tabs.forEach(function(item){
+        const selected = item === tab;
+        item.setAttribute('aria-selected', selected ? 'true' : 'false');
+        item.setAttribute('tabindex', selected ? '0' : '-1');
+      });
+      document.querySelectorAll('.tab-panel').forEach(function(panel){
+        panel.hidden = panel.id !== panelId;
+      });
+      activeTab = tab;
+    }
+
+    async function selectTab(tab, shouldFocus){
+      if (!tab || tab === activeTab) {
+        if (shouldFocus && tab) tab.focus();
+        return;
+      }
+
+      const panelId = tab.getAttribute('aria-controls');
+      if (panelId !== 'overviewPanel' && !staffInitialized) {
+        const authorized = await staffMode();
+        if (!authorized) {
+          if (shouldFocus) activeTab.focus();
+          return;
+        }
+      }
+
+      setActive(tab);
+      if (shouldFocus) tab.focus();
+    }
+
+    tabs.forEach(function(tab, index){
+      tab.addEventListener('click', function(){ selectTab(tab, false); });
+      tab.addEventListener('keydown', function(e){
+        let nextIndex = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          nextIndex = (index + 1) % tabs.length;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          nextIndex = (index - 1 + tabs.length) % tabs.length;
+        } else if (e.key === 'Home') {
+          nextIndex = 0;
+        } else if (e.key === 'End') {
+          nextIndex = tabs.length - 1;
+        }
+        if (nextIndex !== -1) {
+          e.preventDefault();
+          selectTab(tabs[nextIndex], true);
+        }
+      });
+    });
+
+    setActive(tabs[0]);
   }
 
   function initMiniMap(t){
@@ -215,95 +316,120 @@ import * as TDLogs from './tree-detail/td-logs.js';
     tryInit();
   }
 
+  let staffInitialized = false;
+  let staffInitPromise = null;
+
   async function staffMode(){
-    if(!await staffOk()) return;
-    const hk = await toHK(TD.TREE.lat, TD.TREE.lng);
-    $('#staffBox').innerHTML =
-      '<button id="checkinBtn">✅ 簽到</button>' +
-      '<hr><div class="section-title">📝 巡查記錄（狀態會自動同步樹木資料）</div>' +
-      '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
-      '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
-      '<input type="file" id="photo" accept="image/*" multiple style="display:none">' +
-      '<button id="pickPhotoBtn" style="margin-top:10px;background:#546e7a">📷 選擇相片（支援多張／相簿）</button>' +
-      '<div id="photoPreviewContainer" class="photo-preview-container" style="display:none">' +
-        '<div class="photo-count">已選擇 <b id="photoCount">0</b> 張相片</div>' +
-        '<div id="photoPreviewGrid" class="photo-preview-grid"></div>' +
-      '</div>' +
-      '<button id="submitInspectionBtn" style="margin-top:10px">📤 上傳巡查記錄</button>' +
-      '<hr><div class="section-title">✏️ 樹木資料（HK80 座標／Level／地盤）</div>' +
-      '<div class="form-group"><label class="form-label">🆔 樹木編號</label><input id="eTreeId" value="' + escapeHtml(TD.TREE.tree_id) + '"></div>' +
-      '<div class="form-group"><label class="form-label">🌳 樹種</label><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
-      '<datalist id="tree_list"></datalist>' +
-      '<div class="form-group"><label class="form-label">📊 健康狀況</label><select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
-      '<div class="form-group"><label class="form-label">🚩 所屬地盤</label><select id="eProject"></select></div>' +
-      '<div class="row2"><div class="form-group"><label class="form-label">Tree Height (m)</label><input id="eHeight" placeholder="樹高" inputmode="decimal"></div><div class="form-group"><label class="form-label">Crown Width (m)</label><input id="eSpread" placeholder="冠寬" inputmode="decimal"></div></div>' +
-      '<div class="row2"><div class="form-group"><label class="form-label">DBH (m)</label><input id="eDbh" placeholder="胸徑" inputmode="decimal"></div><div class="form-group"><label class="form-label">Ground Dia. (m)</label><input id="eGroundDia" placeholder="地徑" inputmode="decimal"></div></div>' +
-      '<div class="row2"><div class="form-group"><label class="form-label">Stem Length (m)</label><input id="eStemLen" placeholder="幹長" inputmode="decimal"></div><div class="form-group"><label class="form-label">Crown Area (㎡)</label><input id="eCrownArea" placeholder="投影面積" inputmode="decimal"></div></div>' +
-      '<div class="form-group"><label class="form-label">Crown Volume (m³)</label><input id="eCrownVol" placeholder="冠幅體積" inputmode="decimal"></div>' +
-      '<div class="row2"><div class="form-group"><label class="form-label">HK80 N (Northing)</label><input id="eN" placeholder="北座標" inputmode="decimal"></div><div class="form-group"><label class="form-label">HK80 E (Easting)</label><input id="eE" placeholder="東座標" inputmode="decimal"></div></div>' +
-      '<div class="form-group"><label class="form-label">Level (m，高程)</label><input id="eLevel" placeholder="高程" inputmode="decimal"></div>' +
-      '<div class="form-group"><label class="form-label">📄 簡介</label><textarea id="eDesc" rows="2" placeholder="樹木簡介"></textarea></div>' +
-      '<button id="saveTreeInfoBtn">💾 儲存樹木資料</button>';
+    if (staffInitialized) return true;
+    if (staffInitPromise) return staffInitPromise;
 
-    // 🔥 [CSP] 移除 inline onclick，改為 addEventListener
-    const checkinBtn = document.getElementById('checkinBtn');
-    if (checkinBtn) checkinBtn.addEventListener('click', function(){ checkin(); });
+    staffInitPromise = (async function(){
+      if(!await staffOk()) return false;
 
-    const pickPhotoBtn = document.getElementById('pickPhotoBtn');
-    if (pickPhotoBtn) {
-      pickPhotoBtn.addEventListener('click', function(){
-        const photoInput = document.getElementById('photo');
-        if (photoInput) photoInput.click();
+      const inspectionContent = document.getElementById('inspectionContent');
+      const editContent = document.getElementById('editContent');
+      if (!inspectionContent || !editContent) return false;
+
+      const hk = await toHK(TD.TREE.lat, TD.TREE.lng);
+      inspectionContent.innerHTML =
+        '<button id="checkinBtn">✅ 簽到</button>' +
+        '<hr><div class="section-title">📝 巡查記錄（狀態會自動同步樹木資料）</div>' +
+        '<select id="health"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
+        '<textarea id="note" rows="2" placeholder="備註"></textarea>' +
+        '<input type="file" id="photo" accept="image/*" multiple style="display:none">' +
+        '<button class="btn-neutral" id="pickPhotoBtn" style="margin-top:10px">📷 選擇相片（支援多張／相簿）</button>' +
+        '<div id="photoPreviewContainer" class="photo-preview-container" style="display:none">' +
+          '<div class="photo-count">已選擇 <b id="photoCount">0</b> 張相片</div>' +
+          '<div id="photoPreviewGrid" class="photo-preview-grid"></div>' +
+        '</div>' +
+        '<button id="submitInspectionBtn" style="margin-top:10px">📤 上傳巡查記錄</button>';
+
+      editContent.innerHTML =
+        '<div class="section-title">✏️ 樹木資料（HK80 座標／Level／地盤）</div>' +
+        '<div class="form-group"><label class="form-label">🆔 樹木編號</label><input id="eTreeId" value="' + escapeHtml(TD.TREE.tree_id) + '"></div>' +
+        '<div class="form-group"><label class="form-label">🌳 樹種</label><input id="eName" list="tree_list" placeholder="選擇樹種（輸入關鍵字搜尋）..."></div>' +
+        '<datalist id="tree_list"></datalist>' +
+        '<div class="form-group"><label class="form-label">📊 健康狀況</label><select id="eStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select></div>' +
+        '<div class="form-group"><label class="form-label">🚩 所屬地盤</label><select id="eProject"></select></div>' +
+        '<div class="row2"><div class="form-group"><label class="form-label">Tree Height (m)</label><input id="eHeight" placeholder="樹高" inputmode="decimal"></div><div class="form-group"><label class="form-label">Crown Width (m)</label><input id="eSpread" placeholder="冠寬" inputmode="decimal"></div></div>' +
+        '<div class="row2"><div class="form-group"><label class="form-label">DBH (m)</label><input id="eDbh" placeholder="胸徑" inputmode="decimal"></div><div class="form-group"><label class="form-label">Ground Dia. (m)</label><input id="eGroundDia" placeholder="地徑" inputmode="decimal"></div></div>' +
+        '<div class="row2"><div class="form-group"><label class="form-label">Stem Length (m)</label><input id="eStemLen" placeholder="幹長" inputmode="decimal"></div><div class="form-group"><label class="form-label">Crown Area (㎡)</label><input id="eCrownArea" placeholder="投影面積" inputmode="decimal"></div></div>' +
+        '<div class="form-group"><label class="form-label">Crown Volume (m³)</label><input id="eCrownVol" placeholder="冠幅體積" inputmode="decimal"></div>' +
+        '<div class="row2"><div class="form-group"><label class="form-label">HK80 N (Northing)</label><input id="eN" placeholder="北座標" inputmode="decimal"></div><div class="form-group"><label class="form-label">HK80 E (Easting)</label><input id="eE" placeholder="東座標" inputmode="decimal"></div></div>' +
+        '<div class="form-group"><label class="form-label">Level (m，高程)</label><input id="eLevel" placeholder="高程" inputmode="decimal"></div>' +
+        '<div class="form-group"><label class="form-label">📄 簡介</label><textarea id="eDesc" rows="2" placeholder="樹木簡介"></textarea></div>' +
+        '<button id="saveTreeInfoBtn">💾 儲存樹木資料</button>';
+
+      // 🔥 [CSP] 移除 inline onclick，改為 addEventListener
+      const checkinBtn = document.getElementById('checkinBtn');
+      if (checkinBtn) checkinBtn.addEventListener('click', function(){ checkin(); });
+
+      const pickPhotoBtn = document.getElementById('pickPhotoBtn');
+      if (pickPhotoBtn) {
+        pickPhotoBtn.addEventListener('click', function(){
+          const photoInput = document.getElementById('photo');
+          if (photoInput) photoInput.click();
+        });
+      }
+
+      const submitInspectionBtn = document.getElementById('submitInspectionBtn');
+      if (submitInspectionBtn) {
+        submitInspectionBtn.addEventListener('click', function(){ submitInspection(); });
+      }
+
+      const saveTreeInfoBtn = document.getElementById('saveTreeInfoBtn');
+      if (saveTreeInfoBtn) {
+        saveTreeInfoBtn.addEventListener('click', function(){ saveTreeInfo(); });
+      }
+
+      TDPhotos.initPhotoPreview();
+
+      $('#eStatus').value = TD.TREE.status || 'Normal';
+      $('#eName').value = TD.TREE.name || '';
+      $('#eHeight').value = TD.TREE.tree_height || TD.TREE.height || '';
+      $('#eSpread').value = TD.TREE.crown_width || TD.TREE.spread || '';
+      $('#eDbh').value = TD.TREE.dbh || '';
+      $('#eGroundDia').value = TD.TREE.ground_diameter || '';
+      $('#eStemLen').value = TD.TREE.stem_length || '';
+      $('#eCrownArea').value = TD.TREE.crown_area || '';
+      $('#eCrownVol').value = TD.TREE.crown_volume || '';
+      $('#eN').value = hk ? f1(hk.N) : '';
+      $('#eE').value = hk ? f1(hk.E) : '';
+      $('#eLevel').value = TD.TREE.level || '';
+      $('#eDesc').value = TD.TREE.description || '';
+
+      fetch(API + '?action=projects').then(function(r){ return r.json(); }).then(function(res){
+        const opts = (res.data || []).map(function(p){
+          return '<option value="' + escapeHtml(p.project_id) + '">🚩 ' + escapeHtml(p.name) + '</option>';
+        }).join('');
+        $('#eProject').innerHTML = '<option value="">（不屬任何地盤）</option>' + opts;
+        $('#eProject').value = TD.TREE.project_id || '';
       });
-    }
 
-    const submitInspectionBtn = document.getElementById('submitInspectionBtn');
-    if (submitInspectionBtn) {
-      submitInspectionBtn.addEventListener('click', function(){ submitInspection(); });
-    }
+      if(!window.allTreesLoaded){
+        fetch('data/trees_data.json')
+          .then(function(r){ return r.json(); })
+          .then(function(trees){
+            const dataList = document.getElementById('tree_list');
+            if (!dataList) return;
+            trees.forEach(function(tree){
+              const option = document.createElement('option');
+              option.value = tree.name;
+              dataList.appendChild(option);
+            });
+            window.allTreesLoaded = true;
+          })
+          .catch(function(err){ console.error('載入樹木資料失敗:', err); });
+      }
 
-    const saveTreeInfoBtn = document.getElementById('saveTreeInfoBtn');
-    if (saveTreeInfoBtn) {
-      saveTreeInfoBtn.addEventListener('click', function(){ saveTreeInfo(); });
-    }
+      staffInitialized = true;
+      return true;
+    })();
 
-    TDPhotos.initPhotoPreview();
-
-    $('#eStatus').value = TD.TREE.status || 'Normal';
-    $('#eName').value = TD.TREE.name || '';
-    $('#eHeight').value = TD.TREE.tree_height || TD.TREE.height || '';
-    $('#eSpread').value = TD.TREE.crown_width || TD.TREE.spread || '';
-    $('#eDbh').value = TD.TREE.dbh || '';
-    $('#eGroundDia').value = TD.TREE.ground_diameter || '';
-    $('#eStemLen').value = TD.TREE.stem_length || '';
-    $('#eCrownArea').value = TD.TREE.crown_area || '';
-    $('#eCrownVol').value = TD.TREE.crown_volume || '';
-    $('#eN').value = hk ? f1(hk.N) : '';
-    $('#eE').value = hk ? f1(hk.E) : '';
-    $('#eLevel').value = TD.TREE.level || '';
-    $('#eDesc').value = TD.TREE.description || '';
-
-    fetch(API + '?action=projects').then(function(r){ return r.json(); }).then(function(res){
-      const opts = (res.data || []).map(function(p){
-        return '<option value="' + p.project_id + '">🚩 ' + p.name + '</option>';
-      }).join('');
-      $('#eProject').innerHTML = '<option value="">（不屬任何地盤）</option>' + opts;
-      $('#eProject').value = TD.TREE.project_id || '';
-    });
-
-    if(!window.allTreesLoaded){
-      fetch('data/trees_data.json')
-        .then(function(r){ return r.json(); })
-        .then(function(trees){
-          const dataList = document.getElementById('tree_list');
-          trees.forEach(function(tree){
-            const option = document.createElement('option');
-            option.value = tree.name;
-            dataList.appendChild(option);
-          });
-          window.allTreesLoaded = true;
-        })
-        .catch(function(err){ console.error('載入樹木資料失敗:', err); });
+    try {
+      return await staffInitPromise;
+    } finally {
+      if (!staffInitialized) staffInitPromise = null;
     }
   }
 

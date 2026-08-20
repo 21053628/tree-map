@@ -31,7 +31,17 @@ export function updatePhotoPreview() {
     const reader = new FileReader();
     reader.onload = function (e) {
       const item = document.createElement('div');
-      item.className = 'photo-preview-item';
+      item.className = 'photo-preview-item is-loading';
+
+      const skeleton = document.createElement('div');
+      skeleton.className = 'photo-preview-skeleton sk';
+      skeleton.setAttribute('aria-hidden', 'true');
+
+      const fallback = document.createElement('div');
+      fallback.className = 'photo-preview-fallback';
+      fallback.setAttribute('role', 'status');
+      fallback.textContent = '圖片無法預覽';
+
       const removeBtn = document.createElement('button');
       removeBtn.className = 'photo-preview-remove';
       removeBtn.textContent = '×';
@@ -40,13 +50,24 @@ export function updatePhotoPreview() {
         event.stopPropagation();
         removePhoto(index);
       };
+
       const img = document.createElement('img');
       img.className = 'photo-preview-thumb';
-      img.src = e.target.result;
       img.loading = 'lazy';
+      img.addEventListener('load', function () {
+        item.classList.remove('is-loading', 'is-error');
+      }, { once: true });
+      img.addEventListener('error', function () {
+        item.classList.remove('is-loading');
+        item.classList.add('is-error');
+      }, { once: true });
+
+      item.appendChild(skeleton);
       item.appendChild(img);
+      item.appendChild(fallback);
       item.appendChild(removeBtn);
       previewGrid.appendChild(item);
+      img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   });
