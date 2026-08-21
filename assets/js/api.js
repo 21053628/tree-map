@@ -302,18 +302,38 @@ const ApiService = (function() {
     if (payload.type) invalidateCache(payload.type);
 
     return enqueuePost(async () => {
-      const send = () => withRetry(() =>
-        fetchWithTimeout(apiEndpoint, {
-          method: 'POST',
-          // 🔥 [CORS 修正] 只保留 Content-Type（text/plain 為簡單請求）。
-          // 認證資料放在 body，避免 Apps Script 觸發 OPTIONS preflight。
-          headers: {
-            'Content-Type': 'text/plain;charset=utf-8'
-          },
-          body: JSON.stringify(payload)
-        }, POST_TIMEOUT)
-          .then(response => parseApiResponse(response, 'POST ' + (payload.type || 'request')))
-      );
+      // POST 可能在佇列中等待；真正發送前重新讀取認證資料，
+      // 避免沿用排隊前已失效或已被另一個請求更新的 token。
+      const attachCurrentAuth = () => {
+        if (!isWrite || typeof AuthService === 'undefined') return true;
+
+        const token = AuthService.getToken();
+        const csrf = AuthService.getCsrfToken();
+        if (!token || !csrf) return false;
+
+        payload.token = token;
+        payload.csrf_token = csrf;
+        return true;
+      };
+
+      const send = () => {
+        if (!attachCurrentAuth()) {
+          return Promise.resolve({ ok: false, error: 'UNAUTHORIZED' });
+        }
+
+        return withRetry(() =>
+          fetchWithTimeout(apiEndpoint, {
+            method: 'POST',
+            // 🔥 [CORS 修正] 只保留 Content-Type（text/plain 為簡單請求）。
+            // 認證資料放在 body，避免 Apps Script 觸發 OPTIONS preflight。
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify(payload)
+          }, POST_TIMEOUT)
+            .then(response => parseApiResponse(response, 'POST ' + (payload.type || 'request')))
+        );
+      };
 
       let data = await send();
       let authRetried = false;

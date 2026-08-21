@@ -7,7 +7,7 @@
  *   5. 升版號強制清除舊快取
  *   6. Phase 5：抽出快取處理函數，並加入 isApiRequest 預留公司 server 遷移
  */
-const VERSION = 'v2.9.7'; // 🔐 [修復] 登入失效時重新驗證並重試寫入
+const VERSION = 'v2.9.8'; // 🔐 [修復] 登入失效時重新驗證並重試寫入；同步最新認證流程
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;

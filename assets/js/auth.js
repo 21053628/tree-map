@@ -57,7 +57,9 @@ const AuthService = (function() {
   }
 
   function isAuthenticated() {
-    return !!getToken();
+    // GAS 寫入請求同時需要 session token 及後端發出的 CSRF token。
+    // 只存在 session token 時不可視為已登入，否則提交時會被後端拒絕。
+    return !!getToken() && !!getCsrfToken();
   }
 
   /* 將密碼送去後端驗證，成功就存 Token 和 CSRF Token */
@@ -80,18 +82,18 @@ const AuthService = (function() {
               throw new Error('登入回應不是有效 JSON，請確認 GAS 使用正式 /exec 部署網址。');
             }
           });
-      if (res && res.ok && res.token) {
+      if (res && res.ok && res.token && res.csrf_token) {
         const store = getStore();
         if (store) {
+          // 🔐 token 與 CSRF 必須成對保存；CSRF 必須由 GAS 發行，
+          // 不能用本地 fallback，否則一定無法通過後端 CacheService 驗證。
           store.setItem(TOKEN_KEY, JSON.stringify({
             token: res.token,
             until: Date.now() + SESSION_DURATION
           }));
-          // 🔐 優先使用後端發行的 CSRF Token（同步器模式）
-          const csrfToken = res.csrf_token || generateCsrfToken();
-          store.setItem(CSRF_KEY, csrfToken);
+          store.setItem(CSRF_KEY, String(res.csrf_token));
+          return true;
         }
-        return true;
       }
       return false;
     } catch (e) {
