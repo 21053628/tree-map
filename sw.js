@@ -7,7 +7,7 @@
  *   5. 升版號強制清除舊快取
  *   6. Phase 5：抽出快取處理函數，並加入 isApiRequest 預留公司 server 遷移
  */
-const VERSION = 'v2.9.4'; // 🔥 [修復] 定位 popup 一次性開啟 + silent 重繪只重開原本已開 popup
+const VERSION = 'v2.9.5'; // 🔥 [修復] 定位 popup 一次性開啟 + silent 重繪只重開原本已開 popup
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -41,6 +41,7 @@ const PRECACHE = [
   './assets/css/performance.css',
   // 自家全域腳本
   './assets/js/config.js',
+  './assets/js/api-config.js',
   './assets/js/utils.js',
   './assets/js/api.js',
   './assets/js/auth.js',

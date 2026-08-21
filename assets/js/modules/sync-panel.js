@@ -57,6 +57,11 @@
       '.sync-topbar a.back{margin-bottom:0;}',
       '#' + BADGE_ID + '.compact{position:static;right:auto;bottom:auto;display:inline-flex;width:auto;margin:0;padding:6px 12px;font-size:13px;box-shadow:none;vertical-align:middle;white-space:nowrap;flex-shrink:0;}',
       '#' + BADGE_ID + '.in-drawer{position:static;right:auto;bottom:auto;display:flex;width:100%;justify-content:center;margin:0;padding:8px 12px;font-size:13px;border-radius:8px;box-shadow:none;}',
+      '#' + BADGE_ID + '.in-drawer{display:none !important;}',
+      '#' + BADGE_ID + '.drawer-controller{display:none !important;}',
+      '.drawer-sync-badge.ok{color:var(--color-primary);}',
+      '.drawer-sync-badge.warn{color:#ffb300;}',
+      '.drawer-sync-badge.err{color:#e53935;}',
       '#' + PANEL_ID + '.compact-panel{bottom:auto;top:56px;}',
       // [UI] 電腦版地圖頁：同步按鈕上移，避開右下角 Tree Status 圖例
       '@media (min-width: 601px){#' + BADGE_ID + ':not(.compact){bottom:96px;} #' + PANEL_ID + ':not(.compact-panel){bottom:156px;}}',
@@ -97,6 +102,13 @@
       var bar = document.querySelector('.layerbar');
       if (bar && !done) {
         done = true;
+        var existingSync = bar.querySelector('button[data-act="sync"]');
+        if (existingSync) {
+          badge.classList.add('drawer-controller');
+          document.body.appendChild(badge);
+          mo.disconnect();
+          return;
+        }
         var addTree = bar.querySelector('button[data-act="addTree"]');
         if (addTree) {
           addTree.parentNode.insertBefore(badge, addTree.nextSibling);
@@ -153,8 +165,14 @@
         badge.classList.add('desktop-fixed');
         document.body.appendChild(badge);
       } else {
-        badge.classList.add('in-drawer');
-        mountDrawerBadge(badge);
+        var existingSync = document.querySelector('.layerbar button[data-act="sync"]');
+        if (existingSync) {
+          badge.classList.add('drawer-controller');
+          document.body.appendChild(badge);
+        } else {
+          badge.classList.add('in-drawer');
+          mountDrawerBadge(badge);
+        }
       }
     }
 
@@ -205,6 +223,21 @@
       if (failed > 0) { _els.bubble.textContent = failed; _els.bubble.classList.add('err'); }
       else if (pending > 0) { _els.bubble.textContent = pending; _els.bubble.classList.add('warn'); }
       else { _els.bubble.textContent = '✓'; _els.bubble.classList.add('ok'); }
+    }
+
+    var db = document.querySelector('.drawer-sync-badge');
+    if (db) {
+      db.className = 'drawer-sync-badge';
+      if (failed > 0) {
+        db.textContent = failed;
+        db.classList.add('err');
+      } else if (pending > 0) {
+        db.textContent = pending;
+        db.classList.add('warn');
+      } else {
+        db.textContent = '✓';
+        db.classList.add('ok');
+      }
     }
 
     if (_els.status) _els.status.textContent = navigator.onLine ? '🟢 線上' : '🔴 離線';

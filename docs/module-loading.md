@@ -43,6 +43,8 @@ handling, or offline hook is changed by the module conversion.
 | `assets/js/modules/*.js` | Existing application modules | Follow each module's current contract | `assets/js/app.js` |
 | `assets/vendor/*.js` | Plain vendor scripts | Vendor globals such as `L`, `proj4`, and `DOMPurify` | Pages and shared scripts |
 
+`draw.js` 已移除 polygon 模式，量測只保留 line／area。
+
 `assets/js/core/global-utils.js` was removed in Phase 6.4. Full repository
 search found no remaining `window.TreeUtils` runtime consumers; only old
 documentation and a source comment still mention the former filename. Module
