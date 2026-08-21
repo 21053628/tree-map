@@ -11,6 +11,7 @@ const AuthService = (function() {
     ? Config.AUTH.STORAGE_KEY
     : 'tree_staff_token';
   const CSRF_KEY = 'tree_csrf_token';
+  let lastAuthError = null;
   // 🔥 [更新] 統一由 Config.AUTH.SESSION_DURATION 管理，預設縮短至 4 小時
   const SESSION_DURATION = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.SESSION_DURATION)
     ? Config.AUTH.SESSION_DURATION
@@ -61,6 +62,7 @@ const AuthService = (function() {
 
   /* 將密碼送去後端驗證，成功就存 Token 和 CSRF Token */
   async function authenticate(password) {
+    lastAuthError = null;
     try {
       const response = await fetch(Config.API_ENDPOINT, {
         method: 'POST',
@@ -69,7 +71,15 @@ const AuthService = (function() {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ type: 'login', password: password })
       });
-      const res = await response.json();
+      const res = (typeof ApiService !== 'undefined' && ApiService.parseResponse)
+        ? await ApiService.parseResponse(response, 'POST login')
+        : await response.text().then(function(body) {
+            try {
+              return body ? JSON.parse(body) : null;
+            } catch (parseError) {
+              throw new Error('登入回應不是有效 JSON，請確認 GAS 使用正式 /exec 部署網址。');
+            }
+          });
       if (res && res.ok && res.token) {
         const store = getStore();
         if (store) {
@@ -85,6 +95,7 @@ const AuthService = (function() {
       }
       return false;
     } catch (e) {
+      lastAuthError = e;
       console.error('登入請求失敗:', e);
       return false;
     }
@@ -114,6 +125,10 @@ const AuthService = (function() {
       const password = prompt(message || '🔒 請輸入工作人員密碼：');
       if (password === null) return false;
       if (await authenticate(password)) return true;
+      if (lastAuthError) {
+        alert('❌ ' + lastAuthError.message);
+        return false;
+      }
       alert('❌ 密碼錯誤');
     }
   }

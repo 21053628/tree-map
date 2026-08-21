@@ -110,6 +110,75 @@ const ApiService = (function() {
       });
   }
 
+  /**
+   * 安全解析 GAS 回應。
+   * GAS 部署失效、權限不足或網址錯誤時，Google 可能回傳 HTML；
+   * 先讀取文字再 JSON.parse，避免直接 response.json() 產生
+   * `Unexpected token '<'`，並提供可操作的錯誤資訊。
+   */
+  function createApiResponseError(response, body, context, parseError) {
+    const status = response && response.status;
+    const isHtml = /^\s*</.test(body || '') || /text\/html/i.test(
+      response && response.headers ? response.headers.get('content-type') || '' : ''
+    );
+    let message;
+
+    if (status === 404) {
+      message = 'GAS API 回應 HTTP 404：找不到部署端點。請確認使用仍存在的正式 /exec 網址。';
+    } else if (status === 401 || status === 403) {
+      message = 'GAS API 回應 HTTP ' + status + '：沒有存取權限。請確認部署的「誰有權限存取」設定為「所有人」。';
+    } else if (status >= 500) {
+      message = 'GAS API 回應 HTTP ' + status + '：伺服器暫時無法使用，請稍後再試。';
+    } else if (isHtml) {
+      message = 'GAS API 回傳 HTML 而非 JSON：部署網址可能已失效，或存取權限要求登入。請確認使用正式 /exec 網址及「所有人」存取權限。';
+    } else if (parseError) {
+      message = 'GAS API 回傳的資料不是有效 JSON。請檢查 doGet/doPost 是否使用 ContentService 回傳 JSON。';
+    } else {
+      message = 'GAS API 回應格式錯誤。';
+    }
+
+    const error = new Error(message);
+    error.name = 'ApiResponseError';
+    error.code = status === 404 ? 'API_NOT_FOUND'
+      : (status === 401 || status === 403) ? 'API_FORBIDDEN'
+      : (status >= 500) ? 'API_SERVER_ERROR'
+      : isHtml ? 'API_HTML_RESPONSE' : 'API_INVALID_JSON';
+    error.status = status || 0;
+    error.context = context || '';
+    error.isHtml = isHtml;
+    error.noRetry = error.code === 'API_NOT_FOUND' ||
+      error.code === 'API_FORBIDDEN' ||
+      error.code === 'API_HTML_RESPONSE' ||
+      error.code === 'API_INVALID_JSON';
+    error.bodyPreview = String(body || '').slice(0, 200);
+    return error;
+  }
+
+  async function parseApiResponse(response, context) {
+    const body = await response.text();
+    let data = null;
+
+    try {
+      data = body ? JSON.parse(body) : null;
+    } catch (parseError) {
+      throw createApiResponseError(response, body, context, parseError);
+    }
+
+    if (!response.ok) {
+      const error = createApiResponseError(response, body, context);
+      if (data && typeof data === 'object' && data.error) {
+        error.backendError = data.error;
+      }
+      throw error;
+    }
+
+    if (data === null || typeof data !== 'object') {
+      throw createApiResponseError(response, body, context);
+    }
+
+    return data;
+  }
+
   // 🔥 [v2.3] 只有 POST 才排隊，避免寫入衝突
   function processPostQueue() {
     while (activePosts < MAX_CONCURRENT_POST && pendingPosts.length > 0) {
@@ -138,8 +207,9 @@ const ApiService = (function() {
       return await requestFn();
     } catch (error) {
       errorCount++;
-      // 離線、超時 直接放棄，不再空等
-      if (retries > 0 && error.message !== 'OFFLINE' && error.message !== 'TIMEOUT') {
+      // 離線、超時及部署/格式錯誤直接放棄，不再空等
+      if (retries > 0 && !error.noRetry &&
+          error.message !== 'OFFLINE' && error.message !== 'TIMEOUT') {
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
         return withRetry(requestFn, retries - 1, attempt + 1);
       }
@@ -168,10 +238,7 @@ const ApiService = (function() {
     // 直接 fetch，不需經 enqueueRequest
     return withRetry(() =>
       fetchWithTimeout(url, { method: 'GET' }, timeout)
-        .then(response => {
-          if (!response.ok) throw new Error('HTTP ' + response.status);
-          return response.json();
-        })
+        .then(response => parseApiResponse(response, 'GET ' + action))
         .then(data => { 
           setCache(cacheKey, data); 
           return data; 
@@ -179,21 +246,44 @@ const ApiService = (function() {
     );
   }
 
+  function isAuthFailure(data) {
+    return !!(data && data.ok === false &&
+      (data.error === 'UNAUTHORIZED' || data.error === 'CSRF_TOKEN_INVALID'));
+  }
+
+  async function applyAuth(payload, forcePrompt) {
+    if (typeof AuthService === 'undefined') return true;
+
+    if (forcePrompt && AuthService.logout) {
+      AuthService.logout();
+    }
+
+    const ok = await AuthService.promptAuth(forcePrompt
+      ? '🔐 登入狀態已失效，請重新輸入工作人員密碼：'
+      : undefined);
+    if (!ok) return false;
+
+    const token = AuthService.getToken();
+    const csrf = AuthService.getCsrfToken();
+    if (!token || !csrf) return false;
+
+    payload.token = token;
+    payload.csrf_token = csrf;
+    return true;
+  }
+
   /* POST：寫入 (保持排隊，確保寫入順序同並發控制) */
   async function post(payload) {
     if (!apiEndpoint) throw new Error('API 服務未初始化');
     requestCount++;
 
+    // 不直接修改呼叫端的 payload，避免重試時保留失效認證資料。
+    payload = Object.assign({}, payload);
     var isWrite = WRITE_TYPES.indexOf(payload.type) !== -1;
 
     if (isWrite && typeof AuthService !== 'undefined') {
-      const ok = await AuthService.promptAuth();
+      const ok = await applyAuth(payload, false);
       if (!ok) return { ok: false, error: '未登入，操作已取消' };
-      const token = AuthService.getToken();
-      if (token) payload.token = token;
-      // 🔐 CSRF Token 附在 body（Apps Script 無法讀取自訂 Header，需由 body 回傳）
-      const csrf = AuthService.getCsrfToken();
-      if (csrf) payload.csrf_token = csrf;
     }
 
     // 🔐 Idempotency：寫入 payload 一律帶 client_id + client_created_at（重試時不變）
@@ -211,39 +301,50 @@ const ApiService = (function() {
 
     if (payload.type) invalidateCache(payload.type);
 
-    return enqueuePost(() =>
-      withRetry(() =>
+    return enqueuePost(async () => {
+      const send = () => withRetry(() =>
         fetchWithTimeout(apiEndpoint, {
           method: 'POST',
           // 🔥 [CORS 修正] 只保留 Content-Type（text/plain 為簡單請求）。
-          // 自訂 header（如 X-CSRF-Token）會觸發 preflight OPTIONS，
-          // 而 Apps Script 無法回應 OPTIONS，導致 CORS 阻擋所有寫入。
-          // CSRF token 已透過 body (payload.csrf_token) 傳遞，後端支援讀取。
+          // 認證資料放在 body，避免 Apps Script 觸發 OPTIONS preflight。
           headers: {
             'Content-Type': 'text/plain;charset=utf-8'
           },
           body: JSON.stringify(payload)
         }, POST_TIMEOUT)
-        .then(response => {
-          if (!response.ok) throw new Error('HTTP ' + response.status);
-          return response.json();
-        })
-        .then(data => {
-          if (data && data.duplicate === true) {
-            // 後端回報重複：這筆 client_id 早已成功處理，視為成功（避免重複 alert 失敗）
-            data.ok = true;
-          }
-          if (data && data.ok === false && data.error === 'UNAUTHORIZED') {
-            if (typeof AuthService !== 'undefined') AuthService.logout();
-            data.error = '未登入或登入已過期，請再試一次並輸入工作人員密碼';
-          }
-          if (isWrite) {
-            auditWrite(payload, (data && data.ok) ? 'success' : 'error', (data && data.ok) ? null : (data && data.error));
-          }
-          return data;
-        })
-      )
-    );
+          .then(response => parseApiResponse(response, 'POST ' + (payload.type || 'request')))
+      );
+
+      let data = await send();
+      let authRetried = false;
+
+      // ScriptCache 可能在前端 session 仍有效時已清除 token；
+      // 收到認證失效時強制重新登入，並以同一 client_id 重送一次。
+      if (isWrite && isAuthFailure(data) &&
+          !authRetried && typeof AuthService !== 'undefined' && navigator.onLine) {
+        authRetried = true;
+        const reauthenticated = await applyAuth(payload, true);
+        if (reauthenticated) {
+          data = await send();
+        }
+      }
+
+      if (data && data.duplicate === true) {
+        // 後端回報重複：這筆 client_id 早已成功處理，視為成功（避免重複 alert 失敗）
+        data.ok = true;
+      }
+
+      if (isAuthFailure(data)) {
+        if (typeof AuthService !== 'undefined') AuthService.logout();
+        data.error = '未登入或登入已過期，請再試一次並輸入工作人員密碼';
+      }
+
+      if (isWrite) {
+        auditWrite(payload, (data && data.ok) ? 'success' : 'error',
+          (data && data.ok) ? null : (data && data.error));
+      }
+      return data;
+    });
   }
 
   function invalidateCache(type) {
@@ -281,7 +382,16 @@ const ApiService = (function() {
 
   function resetStats() { requestCount = 0; errorCount = 0; cacheHitCount = 0; }
 
-  return { init, get, post, getStats, resetStats, clearCache, newClientMeta };
+  return {
+    init,
+    get,
+    post,
+    getStats,
+    resetStats,
+    clearCache,
+    newClientMeta,
+    parseResponse: parseApiResponse
+  };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {

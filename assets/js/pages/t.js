@@ -65,14 +65,13 @@ import * as TDLogs from './tree-detail/td-logs.js';
   if (!TD.id) {
     $('#app').innerHTML = '<div class="card error">❌ 缺少樹木編號：請由地圖選擇樹木後再開啟此頁。</div>';
   } else {
-    fetch(API + '?action=tree&id=' + encodeURIComponent(TD.id) + '&prj=' + encodeURIComponent(TD.prj))
-      .then(function(r){ return r.json(); })
+    ApiService.get('tree', { id: TD.id, prj: TD.prj })
       .then(function(res){
-        if(res && res.error === 'OFFLINE') {
+        if(res && (res.error === 'OFFLINE' || res.offline)) {
           $('#app').innerHTML = '<div class="card error">📴 離線模式：暫無此樹木的快取資料，請連線後再試。</div>';
           return;
         }
-        const t = res.data;
+        const t = res && res.data;
         if(!t){
           $('#app').innerHTML = '<div class="card error">❌ 找不到樹木：<b>' + escapeHtml(TD.id) + '</b></div>';
           return;
@@ -390,12 +389,15 @@ import * as TDLogs from './tree-detail/td-logs.js';
       $('#eLevel').value = TD.TREE.level || '';
       $('#eDesc').value = TD.TREE.description || '';
 
-      fetch(API + '?action=projects').then(function(r){ return r.json(); }).then(function(res){
+      ApiService.get('projects').then(function(res){
         const opts = (res.data || []).map(function(p){
           return '<option value="' + escapeHtml(p.project_id) + '">🚩 ' + escapeHtml(p.name) + '</option>';
         }).join('');
         $('#eProject').innerHTML = '<option value="">（不屬任何地盤）</option>' + opts;
         $('#eProject').value = TD.TREE.project_id || '';
+      }).catch(function(err){
+        console.error('載入地盤資料失敗:', err);
+        $('#eProject').innerHTML = '<option value="">（地盤資料載入失敗）</option>';
       });
 
       if(!window.allTreesLoaded){

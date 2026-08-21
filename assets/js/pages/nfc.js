@@ -5,6 +5,10 @@ const API = (typeof Config !== 'undefined' && Config.API_ENDPOINT)
   ? Config.API_ENDPOINT
   : '';
 
+if (typeof ApiService !== 'undefined' && API) {
+  ApiService.init(API);
+}
+
 const TAG_CAPACITY = { '213': 144, '215': 504, '216': 888 };
 const TAG_LABELS = { '213': 'NTAG213', '215': 'NTAG215', '216': 'NTAG216' };
 
@@ -132,8 +136,10 @@ function generateURL(silent) {
 async function loadTreePreview(treeId, projectId) {
   const preview = document.getElementById('treePreview');
   try {
-    const r = await fetch(API + '?action=tree&id=' + encodeURIComponent(treeId) + '&prj=' + encodeURIComponent(projectId || ''));
-    const res = await r.json();
+    const res = await ApiService.get('tree', {
+      id: treeId,
+      prj: projectId || ''
+    });
 
     if (res && res.data) {
       const t = res.data;
@@ -150,7 +156,10 @@ async function loadTreePreview(treeId, projectId) {
     }
   } catch (err) {
     console.error('loadTreePreview error:', err);
-    preview.style.display = 'none';
+    document.getElementById('previewId').textContent = '🆔 ' + treeId;
+    document.getElementById('previewName').textContent = '⚠️ ' + (err.message || '樹木資料載入失敗');
+    document.getElementById('previewPrj').textContent = projectId ? '🚩 地盤：' + projectId : '';
+    preview.style.display = 'block';
   }
 }
 

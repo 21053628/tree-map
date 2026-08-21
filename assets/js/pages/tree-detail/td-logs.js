@@ -54,15 +54,16 @@ export function attachLogsDelegation() {
 
 export function loadLogs() {
   attachLogsDelegation();
-  fetch(API + '?action=inspections&id=' + encodeURIComponent(window.TD.id) +
-    '&prj=' + encodeURIComponent(window.TD.prj))
-    .then(function (r) { return r.json(); })
+  ApiService.get('inspections', {
+    id: window.TD.id,
+    prj: window.TD.prj
+  })
     .then(function (res) {
-      if (res && res.error === 'OFFLINE') {
+      if (res && (res.error === 'OFFLINE' || res.offline)) {
         $('#logs').innerHTML = '<div class="log">📴 離線模式：暫無巡查記錄快取</div>';
         return;
       }
-      const data = res.data || [];
+      const data = (res && res.data) || [];
       if (!data.length) {
         $('#logs').innerHTML = '<div class="log">尚無記錄</div>';
         return;
@@ -122,6 +123,6 @@ export function loadLogs() {
     })
     .catch(function (err) {
       console.error('Load logs error:', err);
-      $('#logs').innerHTML = '<div class="log">載入失敗</div>';
+      $('#logs').innerHTML = '<div class="log">載入失敗：' + escapeHtml(err.message || '後端連線失敗') + '</div>';
     });
 }

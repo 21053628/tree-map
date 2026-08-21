@@ -454,16 +454,41 @@
             body: JSON.stringify(item.payload)
           });
 
-          if (!res.ok) {
-            console.warn('🔄 [Sync] 伺服器狀態 ' + res.status + '，稍後重試');
-            quietFailToast('⏳ 後端不穩，記錄已安全排隊');
-            await incrementRetry(item.id, 'HTTP ' + res.status);
-            auditWrite(item.payload, 'sync', 'retry', 'HTTP ' + res.status);
-            failed++;
-            continue; // 繼續處理下一筆，不阻塞
-          }
+          var json;
+          try {
+            if (typeof ApiService !== 'undefined' && ApiService.parseResponse) {
+              // 無論 HTTP 狀態為何都先交給共用 parser，保留 404/403/HTML 的完整原因。
+              json = await ApiService.parseResponse(res, 'POST offline sync');
+            } else {
+              var responseBody = await res.text();
+              try {
+                json = responseBody ? JSON.parse(responseBody) : null;
+              } catch (parseError) {
+                throw new Error('同步回應不是有效 JSON，請確認 GAS 使用正式 /exec 部署網址。');
+              }
+              if (!res.ok) throw new Error('HTTP ' + res.status);
+            }
+          } catch (responseError) {
+            var responseStatus = responseError.status || res.status;
+            var permanentApiError = responseError.noRetry ||
+              responseStatus === 401 || responseStatus === 403 || responseStatus === 404;
+            var responseMessage = responseError.message || ('HTTP ' + responseStatus);
 
-          var json = await res.json();
+            if (permanentApiError) {
+              console.error('🔄 [Sync] API 部署或權限錯誤，停止自動重試:', responseMessage);
+              await markFailed(item.id, responseMessage);
+              auditWrite(item.payload, 'sync', 'failed', responseMessage);
+              failed++;
+              continue;
+            }
+
+            console.warn('🔄 [Sync] 伺服器狀態/格式錯誤，稍後重試:', responseMessage);
+            quietFailToast('⏳ 後端不穩，記錄已安全排隊');
+            await incrementRetry(item.id, responseMessage);
+            auditWrite(item.payload, 'sync', 'retry', responseMessage);
+            failed++;
+            continue;
+          }
           if (json && (json.ok || json.duplicate === true)) {
             // 成功／後端回報重複（同一 client_id 已處理）：都視為成功
             if (json.duplicate === true) {
@@ -472,15 +497,17 @@
             await markSynced(item.id);
             auditWrite(item.payload, 'sync', 'synced');
             synced++;
-          } else if (json && json.error === 'UNAUTHORIZED') {
-            // 登入過期：記錄錯誤並退回 queued，重新驗證後重試同一筆
-            auditWrite(item.payload, 'sync', 'unauthorized', '登入已過期');
+          } else if (json && (json.error === 'UNAUTHORIZED' || json.error === 'CSRF_TOKEN_INVALID')) {
+            // 登入／CSRF 過期：清除舊狀態、重新驗證後重試同一筆
+            auditWrite(item.payload, 'sync', 'unauthorized', json.error);
             await updateItem(item.id, { status: 'queued', lastError: '登入已過期' });
             if (typeof AuthService !== 'undefined' && AuthService.promptAuth) {
-              var reOk = await AuthService.promptAuth('🔐 登入已過期，請重新驗證以繼續同步');
+              // promptAuth 會在已有 token 時直接放行，因此必須先清除失效 token。
+              if (AuthService.logout) AuthService.logout();
+              var reOk = await AuthService.promptAuth('🔐 登入已過期，請重新輸入工作人員密碼以繼續同步');
               if (reOk) {
-                // 重新驗證成功，重試同一筆（不增加 retry）
-                i--; // 重試本筆
+                // 重新驗證成功，重試本筆；同步時會重新注入 token 和 CSRF token。
+                i--;
                 continue;
               }
             }
