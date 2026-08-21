@@ -21,7 +21,7 @@ function syncTreeActionState() {
 
   document.querySelectorAll('.layerbar button[data-act="addTree"]').forEach((button) => {
     button.classList.toggle('is-project-selected', hasProject);
-    button.disabled = !hasProject;
+    button.disabled = false;
     button.setAttribute('aria-disabled', String(!hasProject));
     button.title = hasProject ? '在目前地盤新增樹木' : '請先選擇地盤';
   });

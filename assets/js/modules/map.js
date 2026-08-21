@@ -271,11 +271,8 @@ export function initMap() {
         }
         if (b.dataset.act === 'addTree') {
           closeDrawer();
-          const rt = document.getElementById('addTreeBtn');
-          if (!state.curProject) {
-            updateStatus('👉 請先選擇地盤，先可以新增樹木');
-          } else if (rt) {
-            rt.click();
+          if (window.App && typeof window.App.openTreeForm === 'function') {
+            window.App.openTreeForm();
           }
           return;
         }
