@@ -390,14 +390,29 @@
   }
 
   var _syncing = false;
-  async function syncOutbox(force) {
-    if (!navigator.onLine || _syncing) return;
-    if (!force && Date.now() - _lastSyncAttempt < 60 * 1000) return;
+  var _syncPromise = null;
+
+  // 所有入口共用同一個 Promise，避免 online、visibilitychange、輪詢及手動按鈕
+  // 同時啟動多條同步連線。同步仍維持佇列順序，確保 inspection/photo 依賴不被打亂。
+  function syncOutbox(force) {
+    if (!navigator.onLine) return Promise.resolve(0);
+    if (_syncPromise) return _syncPromise;
+    if (!force && Date.now() - _lastSyncAttempt < 60 * 1000) return Promise.resolve(0);
+
+    _syncPromise = runSyncOutbox(force).finally(function() {
+      _syncPromise = null;
+    });
+    return _syncPromise;
+  }
+
+  async function runSyncOutbox(force) {
+    if (!navigator.onLine || _syncing) return 0;
+    if (!force && Date.now() - _lastSyncAttempt < 60 * 1000) return 0;
     _lastSyncAttempt = Date.now();
     _syncing = true;
 
     try {
-      await cleanupExpired();
+      // 過期記錄清理已由背景排程處理；不要在前景同步熱路徑掃描整個 outbox。
       var items = await all();
       // 只處理「待同步」記錄（queued/syncing）；synced/failed 不會自動重送
       var pending = items.filter(function(it) {
@@ -423,8 +438,8 @@
           continue;
         }
 
-        // 標記為同步中，並附加最新 token + CSRF token（同步器模式，後端會驗證）
-        await markSyncing(item.id);
+        // 不在送出前額外開 IndexedDB 交易標記 syncing。
+        // 請求失敗會保留 queued；頁面中斷時由 queued 狀態安全重試。
         var tk = getCurrentToken();
         if (tk) item.payload.token = tk;
         if (typeof AuthService !== 'undefined' && AuthService.getCsrfToken) {
@@ -581,8 +596,9 @@
   });
 
   window.addEventListener('online', function() {
+    // 暖機與同步並行啟動；不再固定等待 800ms，避免恢復連線後白等近一秒。
     warmGAS();
-    setTimeout(function() { syncOutbox(true); }, 800);
+    setTimeout(function() { syncOutbox(true); }, 0);
   });
 
   document.addEventListener('visibilitychange', function() {

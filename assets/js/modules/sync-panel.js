@@ -16,6 +16,8 @@
 
   var _els = {};
   var _pollTimer = null;
+  var _refreshPromise = null;
+  var _manualSyncPromise = null;
 
   function isTreePage() {
     return !!document.getElementById('app') && !document.getElementById('map');
@@ -207,16 +209,19 @@
       ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
   }
 
-  async function refresh() {
-    var items = [];
-    try { items = await window.OfflineQueue.all(); } catch (e) { items = []; }
+  function refresh() {
+    if (_refreshPromise) return _refreshPromise;
 
-    var pending = 0, failed = 0, lastSync = 0, failedItems = [];
-    items.forEach(function (it) {
-      if (it.status === 'queued' || it.status === 'syncing') pending++;
-      if (it.status === 'failed') { failed++; failedItems.push(it); }
-      if (it.syncedAt && it.syncedAt > lastSync) lastSync = it.syncedAt;
-    });
+    _refreshPromise = (async function () {
+      var items = [];
+      try { items = await window.OfflineQueue.all(); } catch (e) { items = []; }
+
+      var pending = 0, failed = 0, lastSync = 0, failedItems = [];
+      items.forEach(function (it) {
+        if (it.status === 'queued' || it.status === 'syncing') pending++;
+        if (it.status === 'failed') { failed++; failedItems.push(it); }
+        if (it.syncedAt && it.syncedAt > lastSync) lastSync = it.syncedAt;
+      });
 
     if (_els.bubble) {
       _els.bubble.className = 'bubble';
@@ -245,7 +250,13 @@
     if (_els.failed) _els.failed.textContent = failed;
     if (_els.lastSync) _els.lastSync.textContent = fmtTime(lastSync);
 
-    renderFailedList(failedItems);
+      renderFailedList(failedItems);
+    })();
+
+    _refreshPromise = _refreshPromise.finally(function () {
+      _refreshPromise = null;
+    });
+    return _refreshPromise;
   }
 
   function renderFailedList(failedItems) {
@@ -295,8 +306,21 @@
     });
   }
   async function doSyncNow() {
-    await window.syncNow();
-    refresh();
+    if (_manualSyncPromise) return _manualSyncPromise;
+
+    _manualSyncPromise = (async function () {
+      try {
+        await window.syncNow();
+      } finally {
+        await refresh();
+      }
+    })();
+
+    try {
+      return await _manualSyncPromise;
+    } finally {
+      _manualSyncPromise = null;
+    }
   }
 
   async function doRetryOne(id) {
