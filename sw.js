@@ -7,7 +7,7 @@
  *   5. 升版號強制清除舊快取
  *   6. Phase 5：抽出快取處理函數，並加入 isApiRequest 預留公司 server 遷移
  */
-const VERSION = 'v2.9.8'; // 🔐 [修復] 登入失效時重新驗證並重試寫入；同步最新認證流程
+const VERSION = 'v2.9.9'; // 🔐 [修復] 共用重新登入流程並同步最新認證腳本
 const STATIC_CACHE = 'static-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const TILE_CACHE = 'tiles-' + VERSION;
@@ -231,6 +231,12 @@ function isTileRequest(url) {
 }
 
 function isImageRequest(url) {
+  // GAS ContentService 的 redirect JSON 不能當作圖片快取。
+  if (url.hostname === 'script.googleusercontent.com' &&
+      url.pathname === '/macros/echo') {
+    return false;
+  }
+
   return url.hostname.indexOf('googleusercontent.com') !== -1 ||
          url.hostname.indexOf('drive.google.com') !== -1 ||
          url.hostname.indexOf('drive.usercontent.google.com') !== -1;

@@ -501,16 +501,19 @@
             // 登入／CSRF 過期：清除舊狀態、重新驗證後重試同一筆
             auditWrite(item.payload, 'sync', 'unauthorized', json.error);
             await updateItem(item.id, { status: 'queued', lastError: '登入已過期' });
-            if (typeof AuthService !== 'undefined' && AuthService.promptAuth) {
-              // promptAuth 會在已有 token 時直接放行，因此必須先清除失效 token。
-              if (AuthService.logout) AuthService.logout();
-              var reOk = await AuthService.promptAuth('🔐 登入已過期，請重新輸入工作人員密碼以繼續同步');
-              if (reOk) {
-                // 重新驗證成功，重試本筆；同步時會重新注入 token 和 CSRF token。
-                i--;
-                continue;
+              if (typeof AuthService !== 'undefined' &&
+                  (AuthService.reauthenticate || AuthService.promptAuth)) {
+                // 與前景 ApiService 共用重新登入 promise，避免同步流程
+                // logout()/promptAuth() 互相競爭並清除剛取得的新 token。
+                var reOk = AuthService.reauthenticate
+                  ? await AuthService.reauthenticate('🔐 登入已過期，請重新輸入工作人員密碼以繼續同步')
+                  : await AuthService.promptAuth('🔐 登入已過期，請重新輸入工作人員密碼以繼續同步');
+                if (reOk) {
+                  // 重新驗證成功，下一輪會重新注入 token 和 CSRF token。
+                  i--;
+                  continue;
+                }
               }
-            }
             failed++;
             continue;
           } else {

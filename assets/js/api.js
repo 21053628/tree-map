@@ -254,19 +254,24 @@ const ApiService = (function() {
   async function applyAuth(payload, forcePrompt) {
     if (typeof AuthService === 'undefined') return true;
 
-    if (forcePrompt && AuthService.logout) {
-      AuthService.logout();
-    }
-
-    const ok = await AuthService.promptAuth(forcePrompt
+    const message = forcePrompt
       ? '🔐 登入狀態已失效，請重新輸入工作人員密碼：'
-      : undefined);
+      : undefined;
+
+    // 強制重新登入使用共用 promise，避免前景寫入與背景同步同時
+    // logout()/promptAuth()，造成新 token/CSRF 被另一個流程清除。
+    const ok = forcePrompt && typeof AuthService.reauthenticate === 'function'
+      ? await AuthService.reauthenticate(message)
+      : await AuthService.promptAuth(message);
+
     if (!ok) return false;
 
     const token = AuthService.getToken();
     const csrf = AuthService.getCsrfToken();
     if (!token || !csrf) return false;
 
+    // 重新登入後一定覆寫同一個 payload 的認證欄位；
+    // client_id 保持不變，避免重試產生重複樹木。
     payload.token = token;
     payload.csrf_token = csrf;
     return true;
@@ -355,8 +360,12 @@ const ApiService = (function() {
       }
 
       if (isAuthFailure(data)) {
-        if (typeof AuthService !== 'undefined') AuthService.logout();
-        data.error = '未登入或登入已過期，請再試一次並輸入工作人員密碼';
+        if (typeof AuthService !== 'undefined' && AuthService.logout) AuthService.logout();
+        // 保留後端原始錯誤碼，避免 CSRF 失效被誤報成部署/網路錯誤。
+        data.auth_error = data.error;
+        data.error = data.auth_error === 'CSRF_TOKEN_INVALID'
+          ? '安全驗證已失效，請重新登入後再試'
+          : '登入驗證失敗，請重新登入後再試';
       }
 
       if (isWrite) {

@@ -6,7 +6,7 @@
   'use strict';
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function (err) {
+      navigator.serviceWorker.register('sw.js?v=2.9.9').catch(function (err) {
         console.warn('Service Worker 註冊失敗:', err);
       });
     });
