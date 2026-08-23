@@ -2,8 +2,8 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' https: 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; object-src 'none'; base-uri 'self';">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; object-src 'none'; base-uri 'self';">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,12 +20,24 @@
 <!-- LCP 預連線 -->
 <link rel="preconnect" href="https://mapapi.geodata.gov.hk" crossorigin>
 <link rel="preconnect" href="https://script.google.com" crossorigin>
+<link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
+<link rel="preconnect" href="https://drive.usercontent.google.com" crossorigin>
 
 <!-- 自托管樣式 -->
 <link rel="stylesheet" href="assets/vendor/leaflet.css">
 <link rel="stylesheet" href="assets/vendor/MarkerCluster.css">
 <link rel="stylesheet" href="assets/vendor/MarkerCluster.Default.css">
-<link rel="stylesheet" href="assets/css/main.css">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/layout.css">
+<link rel="stylesheet" href="assets/css/map.css">
+<link rel="stylesheet" href="assets/css/ui.css">
+<link rel="stylesheet" href="assets/css/responsive.css">
+<link rel="stylesheet" href="assets/css/dark.css">
+<link rel="stylesheet" href="assets/css/filters.css">
+<link rel="stylesheet" href="assets/css/gis.css">
+<link rel="stylesheet" href="assets/css/performance.css">
+<link rel="stylesheet" href="assets/css/utilities.css">
 
 <!-- Modulepreload 極速 -->
 <link rel="modulepreload" href="assets/js/app.js">
@@ -44,22 +56,26 @@
 <link rel="modulepreload" href="assets/js/modules/draw.js">
 <link rel="modulepreload" href="assets/js/modules/geolocate.js">
 <link rel="modulepreload" href="assets/js/modules/loader.js">
+<link rel="modulepreload" href="assets/js/core/spatial-index.js">
 </head>
 <body>
 <div id="bar">
-  <select id="projSel"></select>
-  <button class="blue" id="addProjectBtn">＋ 建立地盤</button>
-  <button id="addTreeBtn" class="ghost-hidden">🌳 新增樹木</button>
+  <select id="projSel" aria-label="選擇地盤"></select>
 
   <!-- 🔥 樹木搜尋框 -->
   <div class="search-wrap">
-    <input type="text" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off">
+    <input type="search" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off" aria-label="搜尋當前地盤樹木">
     <div id="searchResults" class="search-results"></div>
   </div>
 
+  <div class="primary-actions" aria-label="主要操作">
+    <button class="blue" id="addProjectBtn" type="button">＋ 建立地盤</button>
+    <button id="addTreeBtn" class="ghost-hidden" type="button">🌳 新增樹木</button>
+  </div>
+
   <!-- 🔥 桌面過濾（圖層）按鈕：放在搜尋框下方 -->
-  <button id="filterBtn" class="filter-btn" type="button" title="過濾樹木狀態">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>
+  <button id="filterBtn" class="filter-btn" type="button" title="過濾樹木狀態" aria-label="過濾樹木狀態">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7-1.63 1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7-1.63 1.27L12 16z"/></svg>
     <span>篩選</span>
   </button>
 </div>
@@ -68,11 +84,17 @@
 <div id="status">🗺️ 載入中…</div>
 <div id="map"></div>
 
+<!-- 0️⃣ 環境注入（最優先，runtime 注入 API_ENDPOINT） -->
+<script src="assets/js/env.js"></script>
 <!-- 1️⃣ 自家全域腳本（defer：不阻塞 HTML 首屏解析，仍按順序執行） -->
+<script defer src="assets/js/core/cache-policy.js"></script>
+<script defer src="assets/js/core/cache-manager.js"></script>
 <script defer src="assets/js/config.js"></script>
-<script defer src="assets/js/api-config.js"></script>
 <script defer src="assets/js/modules/audit-log.js"></script>
+<!-- 統一座標工具（ESM 提供 CoordUtils/CoordLazy 全域兼容，utils.js shim 自動被覆蓋） -->
+<script type="module" src="assets/js/core/coordinates.js"></script>
 <script defer src="assets/js/utils.js"></script>
+<script defer src="assets/js/core/error-codes.js"></script>
 <script defer src="assets/js/api.js"></script>
 <script defer src="assets/js/auth.js"></script>
 <script defer src="offline.js"></script>

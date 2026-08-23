@@ -1,6 +1,6 @@
 /**
  * 樹木管理系統 - 本地診斷／審計記錄 (Phase 6)
- * 純 plain script（IIFE），暴露 window.AuditLog
+ * 純 plain script（IIFE），暴露 globalThis.AuditLog
  * 記錄：time / action / type / tree_id / project_id / staff / status / error / online / userAgent
  * 用 localStorage 環形緩衝（上限 MAX_ENTRIES），關閉分頁仍保留
  */
@@ -74,7 +74,8 @@
     return arr.length;
   }
 
-  window.AuditLog = {
+  var _gAudit = typeof globalThis !== 'undefined' ? globalThis : window;
+  _gAudit.AuditLog = {
     log: log,
     getAll: getAll,
     clear: clear,

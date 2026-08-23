@@ -1,5 +1,6 @@
 /**
  * 地圖初始化模組
+ * v2.62 - 整理手機版底圖控制：政府／官航／地段／航拍統一收納於 Layer FAB
  * v2.52 - 加入 🎚 狀態過濾按鈕（配合 filters.js）
  * v2.51 - 抽屜加入「建立地盤／新增樹木」動作按鈕
  * v2.50 - 手機版 layer bar 變身 FAB 抽屜
@@ -9,18 +10,14 @@ import { updateStatus, closePanel } from './dom.js';
 import { hideSearch } from './search.js';
 import { toggleLotLayer } from './lots.js';
 import { toggleTreeLabels, scheduleRedraw } from './trees.js';
+import { loadTreesForProject } from './loader.js';
 import { toggleFilterPanel, closeFilterPanel } from './filters.js'; // 🔥 [v2.52]
-import { startMeasure, startDrawPolygon, cancelInteraction, clearAllDrawings, getMode as getDrawMode } from './draw.js'; // 🔥 [Phase1]
+import { startMeasure, cancelInteraction, clearAllDrawings, getMode as getDrawMode } from './draw.js'; // 🔥 [Phase1]
 import { toggleGeolocation, locateOnce } from './geolocate.js'; // 🔥 [Phase1]
 import { on } from '../core/event-bus.js'; // 🔥 [Phase4] 訂閱 project:selected 以觸發航拍圖刷新
 
 // 🔥 layers 圖示（filter 按鈕用，清楚表示「分層」）
 const LAYERS_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
-
-// 🔥 [Phase1] 邊界繪製完成後暫存（Phase2 接後端儲存）
-function onDrawBoundary(latlngs) {
-  state.drawBoundary = latlngs.map(function (ll) { return [ll.lat, ll.lng]; });
-}
 
 export function initMap() {
   if (!window.L) {
@@ -28,7 +25,8 @@ export function initMap() {
     return false;
   }
 
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isMobile = window.matchMedia('(max-width: 600px)').matches ||
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
   const mapOptions = {
@@ -113,11 +111,6 @@ export function initMap() {
     if (getDrawMode() === 'area') { cancelInteraction(); return; }
     startMeasure('area');
   }
-  function toggleDrawBoundary() {
-    if (getDrawMode() === 'polygon') { cancelInteraction(); return; }
-    startDrawPolygon(onDrawBoundary);
-  }
-
   // 🔥 全螢幕＋三個 GIS 工具（電腦版 icon bar，垂直排列在縮放按鈕下面）
   const gisCtrl = L.control({ position: 'topleft' });
   gisCtrl.onAdd = function () {
@@ -145,7 +138,6 @@ export function initMap() {
     });
     addBtn('📏', '量度距離', '量度距離', toggleMeasureLine);
     addBtn('📐', '量度面積', '量度面積', toggleMeasureArea);
-    addBtn('🖍', '繪畫邊界', '繪畫邊界', toggleDrawBoundary);
     addBtn('✕', '清除所有量測／繪圖', '清除所有量測／繪圖', clearAllDrawings);
 
     return div;
@@ -163,31 +155,34 @@ export function initMap() {
     const fab = L.DomUtil.create('button', 'layerbar-fab', layerWrap);
     fab.type = 'button';
     fab.innerHTML = '▲';
-    fab.title = '圖層與功能';
+    fab.title = '開啟圖層與功能';
+    fab.setAttribute('aria-label', '開啟圖層與功能');
+    fab.setAttribute('aria-expanded', 'false');
+    fab.setAttribute('aria-controls', 'map-layer-drawer');
 
     const div = L.DomUtil.create('div', 'layerbar', layerWrap);
+    div.id = 'map-layer-drawer';
     if (isMobile) {
-      // 🔥 手機版：兩大分類（測量工具／圖層）+ 4 個直接按鈕
+      // 手機版：底圖切換直接收納在 Layer FAB，避免再點擊一層「圖層」分類。
       div.innerHTML =
-        '<button class="drawer-cat" data-cat="tools">📏 測量工具</button>' +
+        '<button class="drawer-cat" data-cat="tools" aria-expanded="false">📏 測量工具</button>' +
         '<div class="drawer-sub" data-sub="tools">' +
           '<button data-act="measureLine">📏 距離</button>' +
           '<button data-act="measureArea">📐 面積</button>' +
-          '<button data-act="drawPolygon">🖍 邊界</button>' +
           '<button data-act="clearDrawings">✕ 清除</button>' +
         '</div>' +
-        '<button class="drawer-cat" data-cat="layers">🗺️ 圖層</button>' +
+        '<div class="drawer-sep"></div>' +
+        '<button class="drawer-cat" data-cat="layers" aria-expanded="false">🗺️ 圖層</button>' +
         '<div class="drawer-sub" data-sub="layers">' +
-          '<button data-l="hk" class="on">政府</button>' +
-          '<button data-l="sat">官航</button>' +
-          '<button data-l="lot">🗺️ 地段</button>' +
-          '<button data-l="aerial">🛰 航拍</button>' +
+          '<button data-l="hk" class="on">🏛️ 政府</button>' +
+          '<button data-l="sat">🛰️ 衛星</button>' +
+          '<button data-l="lot">🗺️ 地段索引</button>' +
+          '<button data-l="aerial">📷 航拍</button>' +
         '</div>' +
         '<div class="drawer-sep"></div>' +
         '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +
         '<button data-l="labels">🔢 樹木數字顯示</button>' +
-        '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
-        '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>';
+        '<button data-act="sync">☁️ 同步 <span class="drawer-sync-badge" aria-hidden="true">●</span></button>';
     } else {
       div.innerHTML =
         '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
@@ -195,7 +190,6 @@ export function initMap() {
         '<div class="drawer-sep sep-tools"></div>' +
         '<button data-act="measureLine">📏 距離</button>' +
         '<button data-act="measureArea">📐 面積</button>' +
-        '<button data-act="drawPolygon">🖍 邊界</button>' +
         '<button data-act="locate">📍 定位</button>' +
         '<button data-act="clearDrawings">✕ 清除</button>' +
         '<div class="drawer-sep"></div>' +
@@ -206,26 +200,67 @@ export function initMap() {
         '<button data-l="lot">🗺️ 地段</button>' +
         '<button data-l="aerial">🛰 航拍</button>';
     }
+
     L.DomEvent.disableClickPropagation(layerWrap);
 
+    function setDrawerOpen(open) {
+      layerWrap.classList.toggle('open', open);
+      fab.innerHTML = open ? '✕' : '▲';
+      fab.setAttribute('aria-expanded', String(open));
+    }
+
     function closeDrawer() {
-      layerWrap.classList.remove('open');
-      fab.innerHTML = '▲';
+      setDrawerOpen(false);
     }
     closeDrawerFn = closeDrawer;
 
-    fab.addEventListener('click', function () {
-      const open = layerWrap.classList.toggle('open');
-      fab.innerHTML = open ? '✕' : '▲';
-    });
+    // FAB 同時位於 Leaflet 控制列及可觸控地圖上方；使用 pointerup
+    // 處理觸控，並抑制瀏覽器隨後合成的 click，避免一次點擊被開關兩次。
+    let suppressFabClickUntil = 0;
+    function toggleDrawer(event) {
+      if (event) {
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+      }
+      setDrawerOpen(!layerWrap.classList.contains('open'));
+    }
 
-    div.querySelectorAll('button').forEach((b) => {
+    function handleFabPointerUp(event) {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      suppressFabClickUntil = Date.now() + 500;
+      toggleDrawer(event);
+    }
+
+    function handleFabTouchEnd(event) {
+      suppressFabClickUntil = Date.now() + 500;
+      toggleDrawer(event);
+    }
+
+    function handleFabClick(event) {
+      if (Date.now() < suppressFabClickUntil) {
+        suppressFabClickUntil = 0;
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      toggleDrawer(event);
+    }
+
+    if (window.PointerEvent) {
+      fab.addEventListener('pointerup', handleFabPointerUp);
+    } else {
+      fab.addEventListener('touchend', handleFabTouchEnd, { passive: false });
+    }
+    fab.addEventListener('click', handleFabClick);
+
+    layerWrap.querySelectorAll('.layerbar button').forEach((b) => {
       b.onclick = function () {
         if (b.dataset.cat) {
           const sub = div.querySelector('.drawer-sub[data-sub="' + b.dataset.cat + '"]');
           if (sub) {
             const open = sub.classList.toggle('open');
             b.classList.toggle('open', open);
+            b.setAttribute('aria-expanded', String(open));
           }
           return;
         }
@@ -237,15 +272,22 @@ export function initMap() {
         }
         if (b.dataset.act === 'addTree') {
           closeDrawer();
-          const rt = document.getElementById('addTreeBtn');
-          if (rt && rt.classList.contains('ghost-hidden')) {
-            updateStatus('👉 請先選擇地盤，先可以新增樹木');
-          } else if (rt) {
-            rt.click();
+          if (globalThis.App && typeof globalThis.App.openTreeForm === 'function') {
+            globalThis.App.openTreeForm();
           }
           return;
         }
 
+        if (b.dataset.act === 'sync') {
+          closeDrawer();
+          const syncBadge = document.getElementById('syncBadge');
+          if (syncBadge) {
+            syncBadge.click();
+          } else {
+            updateStatus('☁️ 同步中心尚未就緒');
+          }
+          return;
+        }
         if (b.dataset.act === 'measureLine') {
           closeDrawer();
           if (getDrawMode() === 'line') { cancelInteraction(); return; }
@@ -256,12 +298,6 @@ export function initMap() {
           closeDrawer();
           if (getDrawMode() === 'area') { cancelInteraction(); return; }
           startMeasure('area');
-          return;
-        }
-        if (b.dataset.act === 'drawPolygon') {
-          closeDrawer();
-          if (getDrawMode() === 'polygon') { cancelInteraction(); return; }
-          startDrawPolygon(onDrawBoundary);
           return;
         }
         if (b.dataset.act === 'locate') {
@@ -278,10 +314,13 @@ export function initMap() {
         const layerType = b.dataset.l;
         if (layerType === 'lot') {
           toggleLotLayer();
+          if (isMobile) closeDrawer();
         } else if (layerType === 'aerial') {
           toggleAerial();
+          if (isMobile) closeDrawer();
         } else if (layerType === 'labels') {
           toggleTreeLabels();
+          if (isMobile) closeDrawer();
         } else if (layerType === 'filter') {
           // 🔥 [v2.52] 按 filter 按鈕：收起抽屜，彈出 filter 面板
           if (layerWrap && layerWrap.classList.contains('open')) closeDrawer();
@@ -292,6 +331,7 @@ export function initMap() {
           state.currentBaseLayer.addTo(state.map);
           div.querySelectorAll('button[data-l="hk"], button[data-l="sat"]')
             .forEach((x) => { x.classList.toggle('on', x.dataset.l === layerType); });
+          if (isMobile) closeDrawer();
         }
       };
       if (isTouch) {
@@ -305,9 +345,38 @@ export function initMap() {
   };
   layerBar.addTo(state.map);
 
+  // ---- Viewport 按需增量载入（混合模式：仅对大项目启用）----
+  let _viewportTimer = null;
+  const _loadedBboxKeys = new Set();
+  let _lastPidForViewport = '';
+  function bboxKey(pid, b){
+    const s=b.getSouth().toFixed(2), w=b.getWest().toFixed(2), n=b.getNorth().toFixed(2), e=b.getEast().toFixed(2);
+    return pid+':'+s+','+w+','+n+','+e;
+  }
+  function maybeLoadViewport(){
+    try{
+      const pid = String(state.curProject||'');
+      if(!pid) return;
+      const list = state.treeSearchIndex.get(pid) || [];
+      // 仅当该地盘树数较多时启用 bbox 增量（避免小项目过度请求）
+      const threshold = (typeof Config !== 'undefined' && Config.MAP && Config.MAP.VIEWPORT_THRESHOLD) ? Config.MAP.VIEWPORT_THRESHOLD : 2000;
+      if(list.length < threshold) return;
+      if(!state.map) return;
+      const b = state.map.getBounds().pad(0.3);
+      if(pid !== _lastPidForViewport){ _loadedBboxKeys.clear(); _lastPidForViewport = pid; }
+      const k = bboxKey(pid, b);
+      if(_loadedBboxKeys.has(k)) return;
+      _loadedBboxKeys.add(k);
+      loadTreesForProject(pid, { south:b.getSouth(), west:b.getWest(), north:b.getNorth(), east:b.getEast(), appendViewport:true }).catch(function(){});
+    }catch(e){}
+  }
   state.map.on('moveend', function () {
     scheduleRedraw();
+    clearTimeout(_viewportTimer);
+    _viewportTimer = setTimeout(maybeLoadViewport, 400);
   });
+  // 切地盘时清 bbox 去重
+  try{ on('project:selected', function(pid){ _loadedBboxKeys.clear(); _lastPidForViewport=String(pid||''); }); }catch(e){}
 
   state.markerCluster = L.markerClusterGroup({
     showCoverageOnHover: false,
@@ -319,7 +388,7 @@ export function initMap() {
     iconCreateFunction: function (cluster) {
       const count = cluster.getChildCount();
       return L.divIcon({
-        html: '<div style="background:#e74c3c;color:white;border-radius:50%;width:36px;height:36px;line-height:36px;text-align:center;font-weight:bold;font-size:14px;">' + count + '</div>',
+        html: '<div class="cluster-badge">' + count + '</div>',
         className: '',
         iconSize: [36, 36]
       });
@@ -333,11 +402,12 @@ export function initMap() {
   legend.onAdd = function () {
     const d = L.DomUtil.create('div', 'legend');
     d.innerHTML = '<b>🚩 地盤｜● Tree Status</b><br>' +
-      '<span style="color:' + Config.TREE_STATUS_COLORS.Normal + '">●</span> Normal ' +
-      '<span style="color:' + Config.TREE_STATUS_COLORS.Fair + '">●</span> Fair ' +
-      '<span style="color:' + Config.TREE_STATUS_COLORS.Poor + '">●</span> Poor ' +
-      '<span style="color:' + Config.TREE_STATUS_COLORS['Very Poor'] + '">●</span> Very Poor ' +
-      '<span style="color:' + Config.TREE_STATUS_COLORS.Dead + '">●</span> Dead';
+      '<span class="legend-dot" data-c="' + Config.TREE_STATUS_COLORS.Normal + '">●</span> Normal ' +
+      '<span class="legend-dot" data-c="' + Config.TREE_STATUS_COLORS.Fair + '">●</span> Fair ' +
+      '<span class="legend-dot" data-c="' + Config.TREE_STATUS_COLORS.Poor + '">●</span> Poor ' +
+      '<span class="legend-dot" data-c="' + Config.TREE_STATUS_COLORS["Very Poor"] + '">●</span> Very Poor ' +
+      '<span class="legend-dot" data-c="' + Config.TREE_STATUS_COLORS.Dead + '">●</span> Dead';
+    d.querySelectorAll('.legend-dot').forEach(function(el){ if(el.dataset.c) el.style.color = el.dataset.c; });
     return d;
   };
   legend.addTo(state.map);
@@ -351,6 +421,13 @@ export function initMap() {
       closePanel();
     }
     hideSearch();
+  });
+
+  // Marker、地段及其他 popup 開啟時，避免抽屜遮擋 popup。
+  state.map.on('popupopen', function () {
+    if (closeDrawerFn && layerWrap && layerWrap.classList.contains('open')) {
+      closeDrawerFn();
+    }
   });
 
   // 🔥 [v2.61] 桌面 filter 按鈕（#bar 搜尋框下方）

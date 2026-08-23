@@ -4,21 +4,13 @@
  */
 import { state } from './state.js';
 import { $, showPanel, closePanel, updateStatus, escapeHtml } from './dom.js';
-import { loadTreeSpecies, fillSpeciesDatalist } from './species.js';
+import { SpeciesRepository, loadTreeSpecies, fillSpeciesDatalist } from './species.js';
 import { bringTreeToFront } from './trees.js';
 import { startPick } from './draw.js'; // 🔥 [Phase1]
-import { load } from './loader.js'; // 🔥 [Phase2] 直接 import，移除 setLoad 注入
+import { load, loadProjects, loadTreesForProject, bustBootstrapCache, applyTreesForProject } from './loader.js'; // 依 project 按需載入
+import { VALID_HEALTH, isValidHK80 } from '../core/utils.js';
 
 // ========== [Phase4] 提交前驗證 ==========
-const VALID_HEALTH = ['Normal', 'Fair', 'Poor', 'Very Poor', 'Dead'];
-
-function isValidHK80(N, E) {
-  if (N === '' || N === null || N === undefined) return false;
-  if (E === '' || E === null || E === undefined) return false;
-  const n = Number(N), e = Number(E);
-  if (!isFinite(n) || !isFinite(e)) return false;
-  return n >= 800000 && n <= 850000 && e >= 800000 && e <= 870000;
-}
 
 let _promptAuth = null;
 
@@ -33,7 +25,7 @@ export async function openProjectForm() {
     '<b>＋ 建立地盤</b>' +
     '<input id="pName" placeholder="地盤名稱（e.g. 泥涌）">' +
     '<input id="pCustomId" placeholder="自訂英文 ID（NFC 用，e.g. NaiChung）">' +
-    '<div style="font-size:12px;color:#666;margin-top:4px">💡 此 ID 會寫入 NFC tag，建議用簡短英文</div>' +
+    '<div class="form-hint">💡 此 ID 會寫入 NFC tag，建議用簡短英文</div>' +
     '<div class="row2"><input id="pN" placeholder="HK80 N" inputmode="decimal"><input id="pE" placeholder="HK80 E" inputmode="decimal"></div>' +
     '<button id="btnCreateProject">💾 建立</button>' +
     '<button class="x" id="btnCloseProject">✖ 關閉</button>'
@@ -50,7 +42,10 @@ export async function doCreateProject() {
 
   if (!name || !N || !E) { alert('請填寫完整'); return; }
 
-  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須是有效數字，並在香港範圍內'); return; }
+  if (!isValidHK80(N, E)) {
+    alert('⚠️ HK80 位置錯誤：請輸入香港範圍內的 HK80 N/E 座標。');
+    return;
+  }
 
   const w = CoordUtils.toWGS84(N, E);
   if (!w) { alert('HK80 座標轉換失敗'); return; }
@@ -74,9 +69,10 @@ export async function doCreateProject() {
       state.treesCache.clear();
       state.spatialIndexCache = null;
       state.coordGroupsCache = null;
-      await load();
+      if (typeof ApiService !== 'undefined' && ApiService.clearCache) try{ ApiService.clearCache(); }catch(e){}
+      try { await loadProjects(); } catch(e){ await load(); }
     } else {
-      alert('❌ ' + r.error);
+      alert('❌ ' + (typeof ErrorCodes !== 'undefined' ? ErrorCodes.messageForResponse(r, r.error) : r.error));
     }
   } catch (error) {
     alert('❌ 請求失敗：' + error.message);
@@ -90,22 +86,27 @@ export async function openTreeForm(preset) {
   if (authResult instanceof Promise) { if (!await authResult) return; }
   else { if (!authResult) return; }
 
-  const presetN = (preset && preset.N != null) ? escapeHtml(String(preset.N)) : '';
-  const presetE = (preset && preset.E != null) ? escapeHtml(String(preset.E)) : '';
+  // 🔥 [手機版修復] preset 支援填返上次輸入嘅欄位值（揀完位置後唔會清空表單）
+  const val = function (id) {
+    return (preset && preset[id] != null) ? escapeHtml(String(preset[id])) : '';
+  };
+  const statusOptions = ['Normal', 'Fair', 'Poor', 'Very Poor', 'Dead'].map(function (s) {
+    return '<option' + ((preset && preset.tStatus === s) ? ' selected' : '') + '>' + s + '</option>';
+  }).join('');
 
   showPanel(
     '<b>🌳 新增樹木</b>' +
     '<button class="pick-loc-btn" id="btnPickLocation">📍 在地圖按位置（自動填 N/E）</button>' +
-    '<input id="tId" placeholder="樹木編號（留空自動）">' +
-    '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）...">' +
+    '<input id="tId" placeholder="樹木編號（留空＝該地盤最大編號＋1）" value="' + val('tId') + '">' +
+    '<input id="tName" list="tree_datalist" placeholder="選擇樹種（輸入關鍵字搜尋）..." value="' + val('tName') + '">' +
     '<datalist id="tree_datalist"></datalist>' +
-    '<select id="tStatus"><option>Normal</option><option>Fair</option><option>Poor</option><option>Very Poor</option><option>Dead</option></select>' +
-    '<div class="row2"><input id="tHeight" placeholder="Tree Height (m)" inputmode="decimal"><input id="tSpread" placeholder="Crown Width (m)" inputmode="decimal"></div>' +
-    '<div class="row2"><input id="tDbh" placeholder="DBH (m)" inputmode="decimal"><input id="tGroundDia" placeholder="Ground Dia. (m)" inputmode="decimal"></div>' +
-    '<div class="row2"><input id="tStemLen" placeholder="Stem Length (m)" inputmode="decimal"><input id="tCrownArea" placeholder="Crown Area (㎡)" inputmode="decimal"></div>' +
-    '<input id="tCrownVol" placeholder="Crown Volume (m³)" inputmode="decimal">' +
-    '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal" value="' + presetN + '"><input id="tE" placeholder="HK80 E" inputmode="decimal" value="' + presetE + '"></div>' +
-    '<input id="tLevel" placeholder="Level (m)" inputmode="decimal">' +
+    '<select id="tStatus">' + statusOptions + '</select>' +
+    '<div class="row2"><input id="tHeight" placeholder="Tree Height (m)" inputmode="decimal" value="' + val('tHeight') + '"><input id="tSpread" placeholder="Crown Width (m)" inputmode="decimal" value="' + val('tSpread') + '"></div>' +
+    '<div class="row2"><input id="tDbh" placeholder="DBH (m)" inputmode="decimal" value="' + val('tDbh') + '"><input id="tGroundDia" placeholder="Ground Dia. (m)" inputmode="decimal" value="' + val('tGroundDia') + '"></div>' +
+    '<div class="row2"><input id="tStemLen" placeholder="Stem Length (m)" inputmode="decimal" value="' + val('tStemLen') + '"><input id="tCrownArea" placeholder="Crown Area (㎡)" inputmode="decimal" value="' + val('tCrownArea') + '"></div>' +
+    '<input id="tCrownVol" placeholder="Crown Volume (m³)" inputmode="decimal" value="' + val('tCrownVol') + '">' +
+    '<div class="row2"><input id="tN" placeholder="HK80 N" inputmode="decimal" value="' + val('N') + '"><input id="tE" placeholder="HK80 E" inputmode="decimal" value="' + val('E') + '"></div>' +
+    '<input id="tLevel" placeholder="Level (m)" inputmode="decimal" value="' + val('tLevel') + '">' +
     '<button id="btnCreateTree">💾 建立樹木</button>' +
     '<button class="x" id="btnCloseTree">✖ 關閉</button>'
   );
@@ -114,26 +115,57 @@ export async function openTreeForm(preset) {
   document.getElementById('btnCreateTree').addEventListener('click', doCreateTree);
   document.getElementById('btnCloseTree').addEventListener('click', closePanel);
 
-  loadTreeSpecies().then(fillSpeciesDatalist);
+  SpeciesRepository.load().then(function(){ SpeciesRepository.fillDatalist(); }).catch(function(){ loadTreeSpecies().then(fillSpeciesDatalist); });
+}
+
+// 🔥 [手機版修復] 快照而家表單內容，揀完位置後自動填返（唔會清空）
+function snapshotTreeForm_() {
+  const ids = ['tId', 'tName', 'tStatus', 'tHeight', 'tSpread', 'tDbh', 'tGroundDia', 'tStemLen', 'tCrownArea', 'tCrownVol', 'tLevel'];
+  const snap = {};
+  ids.forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) snap[id] = el.value;
+  });
+  return snap;
 }
 
 export function pickTreeLocation() {
-  closePanel();
   if (!state.curProject) { alert('請先選擇地盤'); return; }
+  const snap = snapshotTreeForm_();
+  const panelEl = document.getElementById('panel');
+  // 🔥 [手機版修復] 暫時關閉 slide 動畫，避免「關→開」閃跳；0.9s 後自動恢復
+  if (panelEl) panelEl.classList.add('no-anim');
+  setTimeout(function () { if (panelEl) panelEl.classList.remove('no-anim'); }, 900);
+  closePanel();
   startPick(function (latlng) {
     const hk = CoordUtils.toHK80(latlng.lat, latlng.lng);
     if (!hk) { alert('HK80 座標轉換失敗'); return; }
-    openTreeForm({ N: CoordUtils.format1(hk.N), E: CoordUtils.format1(hk.E) });
+    openTreeForm(Object.assign({}, snap, { N: CoordUtils.format1(hk.N), E: CoordUtils.format1(hk.E) }));
   }, '📍 按一下選擇樹木位置');
 }
 
 export async function doCreateTree() {
+  // 🔥 [Phase8] 即時檢查：同地盤樹木編號唔可重複
+  const inputId = $('#tId').value.trim();
+  if (inputId) {
+    const dup = state.TREES.some((t) =>
+      String(t.tree_id).trim() === inputId &&
+      String(t.project_id) === String(state.curProject));
+    if (dup) {
+      alert('⚠️ 樹木編號 ' + inputId + ' 已存在於此地盤，請改用其他編號（或留空自動編號）');
+      return;
+    }
+  }
+
   const N = $('#tN').value;
   const E = $('#tE').value;
 
   if (!N || !E) { alert('請填寫 HK80 座標 N/E'); return; }
 
-  if (!isValidHK80(N, E)) { alert('HK80 座標 N/E 必須是有效數字，並在香港範圍內'); return; }
+  if (!isValidHK80(N, E)) {
+    alert('⚠️ HK80 位置錯誤：請輸入香港範圍內的 HK80 N/E 座標。');
+    return;
+  }
   if (VALID_HEALTH.indexOf($('#tStatus').value) === -1) { alert('樹木狀態不合法：' + $('#tStatus').value); return; }
 
   const w = CoordUtils.toWGS84(N, E);
@@ -159,15 +191,29 @@ export async function doCreateTree() {
       lat: w.lat.toFixed(6), lng: w.lng.toFixed(6)
     });
 
-    alert(r.ok ? '✅ 樹木 ' + r.tree_id + ' 已建立' : '❌ ' + r.error);
+    alert(r.ok ? '✅ 樹木 ' + r.tree_id + ' 已建立' : '❌ ' + (typeof ErrorCodes !== 'undefined' ? ErrorCodes.messageForResponse(r, r.error) : r.error));
     if (r.ok) {
       closePanel();
       state.treesCache.clear();
       state.spatialIndexCache = null;
       state.coordGroupsCache = null;
-      await load();
+      try{ bustBootstrapCache(); }catch(e){}
+      if (typeof ApiService !== 'undefined' && ApiService.clearCache) try{ ApiService.clearCache(state.curProject); }catch(e){}
+      try{ if (typeof CacheManager!=='undefined' && CacheManager.notifySwInvalidate) CacheManager.notifySwInvalidate('create_tree', {project_id: state.curProject}); }catch(e){}
+      let loaded = null;
+      for(let attempt=0; attempt<2; attempt++){
+        try{ loaded = await loadTreesForProject(state.curProject, {nocache:'1'}); break; }catch(e){ if(attempt===0) await new Promise(function(rr){ setTimeout(rr, 900); }); else try{ await load(); }catch(_2){} }
+      }
 
       const newId = String(r.tree_id);
+      let _nt0 = state.treeMap.get(state.curProject + '_' + newId) || state.TREES.find(function(tt){ return String(tt.tree_id)===newId && String(tt.project_id)===String(state.curProject); });
+      if(!_nt0){
+        try{
+          const _optTree = { tree_id: newId, project_id: String(state.curProject), name: 'New tree', status: (document.getElementById('tStatus')&&document.getElementById('tStatus').value)||'Normal', lat: w?+w.lat.toFixed(6):0, lng: w?+w.lng.toFixed(6):0 };
+          const _curIdx = state.treeSearchIndex.get(String(state.curProject)) || [];
+          if(!_curIdx.some(function(x){ return String(x.tree_id)===newId; })){ applyTreesForProject(String(state.curProject), _curIdx.concat([_optTree]), {saveSnapshot:true}); console.warn('[forms] optimistic insert '+newId); }
+        }catch(e){ console.warn('[forms] optimistic failed', e); }
+      }
       const nt = state.treeMap.get(state.curProject + '_' + newId) ||
         state.TREES.find((t) => String(t.tree_id) === newId && String(t.project_id) === state.curProject);
 
@@ -178,7 +224,7 @@ export async function doCreateTree() {
           setTimeout(function () {
             const m = state.treesCache.get(state.curProject + '_' + newId) || state.treesCache.get(newId);
             if (m) {
-              state.treesCache.forEach((otherM) => { if (otherM && otherM.bringToFront) otherM.bringToFront(); });
+              state.treesCache.forEach((otherM) => { bringTreeToFront(otherM); });
               bringTreeToFront(m);
               m.openPopup();
             }

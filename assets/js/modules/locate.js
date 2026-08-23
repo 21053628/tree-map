@@ -15,11 +15,21 @@ export function saveViewState(treeId, lat, lng) {
   // 保留函數殼避免其他模組 (如 projects.js) 呼叫時出錯
 }
 
-export function locateTree(treeId, projectId, lat, lng) {
+export async function locateTree(treeId, projectId, lat, lng) {
   state.isLocating = true;
 
   let tree = null;
   let targetPid = projectId ? String(projectId) : '';
+  // 若目標地盤的樹尚未載入，先按需拉取
+  if (targetPid && treeId) {
+    const hasPidData = state.treeSearchIndex.has(targetPid) && state.treeSearchIndex.get(targetPid).length > 0;
+    if (!hasPidData) {
+      try {
+        const mod = await import('./loader.js');
+        if (mod.loadTreesForProject) await mod.loadTreesForProject(targetPid);
+      } catch(e) { console.warn('[locateTree] preload failed', e); }
+    }
+  }
 
   // 大小寫不敏感
   if (targetPid) {
@@ -51,26 +61,7 @@ export function locateTree(treeId, projectId, lat, lng) {
   if (finalPid && String(state.curProject) !== finalPid) {
     state.curProject = finalPid;
 
-    const sel = DOM.projSel;
-    if (sel) {
-      const inlineOnChange = sel.getAttribute('onchange');
-      sel.removeAttribute('onchange');
-      sel.onchange = null;
-
-      let hasOption = false;
-      for (let i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].value === finalPid) { hasOption = true; break; }
-      }
-      if (hasOption) {
-        sel.value = finalPid;
-      } else {
-        buildSelect();
-      }
-
-      if (inlineOnChange) sel.setAttribute('onchange', inlineOnChange);
-      else sel.onchange = function () { window.App.selectProject(this.value); };
-    }
-    DOM.addTreeBtn.classList.toggle('ghost-hidden', !state.curProject);
+    buildSelect();
 
     state.treesCache.clear();
     state.spatialIndexCache = null;
@@ -82,22 +73,31 @@ export function locateTree(treeId, projectId, lat, lng) {
     emit('project:selected', finalPid);
   }
 
-  if (targetLat && targetLng && !isNaN(targetLat) && !isNaN(targetLng)) {
+  if (targetLat != null && targetLng != null && !isNaN(targetLat) && !isNaN(targetLng)) {
     // 🔥 [v2.39] 搜尋／定位到樹木後使用 TREE_ZOOM (22)，只給座標使用 MAX_ZOOM
     state.map.flyTo([targetLat, targetLng], tree ? Config.MAP.TREE_ZOOM : (state.map.getZoom() || Config.MAP.MAX_ZOOM), { duration: 1.2 });
 
     if (tree) {
-      setTimeout(function () {
+      // 🔥 [修復] 一次性定位開啟：成功即停，之後 zoom/pan 絕不再開
+      let opened = false;
+      let tries = 0;
+      const tryOpen = function () {
+        if (opened) return;
         const marker = state.treesCache.get(finalPid + '_' + tree.tree_id) ||
           state.treesCache.get(tree.tree_id) ||
           state.treesCache.get(String(treeId));
-        if (marker) {
-          state.treesCache.forEach((m) => { if (m && m.bringToFront) m.bringToFront(); });
+        if (marker && marker._map) {
+          opened = true;                      // 成功即鎖死，重試鏈即刻終止
           bringTreeToFront(marker);
           marker.openPopup();
           updateStatus('✅ 已定位到樹木：' + treeId);
+          return;
         }
-      }, 1400);
+        if (tries < 20) { tries += 1; setTimeout(tryOpen, 150); }
+      };
+      // 只掛本次 flyTo 嘅 moveend（once = 觸發一次自動解綁）
+      state.map.once('moveend', function () { setTimeout(tryOpen, 80); });
+      setTimeout(tryOpen, 1600);              // 安全網：moveend 萬一唔觸發
     }
   } else if (finalPid) {
     const p = state.PROJECTS.find((x) => String(x.project_id) === finalPid);

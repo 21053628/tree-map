@@ -16,7 +16,18 @@ const ApiService = (function() {
   
   const MAX_RETRIES = 1;             // 只重試 1 次 (針對偶發網路波動)
   const RETRY_DELAY = 800;
-  const CACHE_TTL = 60000;           // 1 分鐘記憶體快取
+  // 統一快取策略：優先讀 CachePolicy（assets/js/core/cache-policy.js），未載入時回退 60s
+  function getCacheTtlForKey_(cacheKey){
+    try {
+      if (typeof CachePolicy !== 'undefined' && CachePolicy.getMemoryTtl) {
+        var m = cacheKey.match(/^get:([^:]+)/);
+        var action = m ? m[1] : '';
+        return CachePolicy.getMemoryTtl(action) || 60*1000;
+      }
+    } catch(e) {}
+    return 60*1000;
+  }
+  const CACHE_TTL = (function(){ try { if(typeof CachePolicy!=='undefined'&&CachePolicy.POLICY&&CachePolicy.POLICY.trees) return CachePolicy.POLICY.trees.memoryTtl; }catch(e){} return 60*1000; })();
   const MAX_CONCURRENT_POST = 3;     // POST 最大並發數
   const MAX_CACHE_SIZE = 100;        // LRU 快取上限
   
@@ -57,9 +68,9 @@ const ApiService = (function() {
 
   // [Phase6] 本地審計記錄（若有載入 audit-log.js）
   function auditWrite(payload, status, error) {
-    if (typeof window === 'undefined' || !window.AuditLog) return;
+    if (typeof window === 'undefined' || !globalThis.AuditLog) return;
     try {
-      window.AuditLog.log({
+      globalThis.AuditLog.log({
         action: 'write',
         type: payload.type || null,
         tree_id: payload.tree_id || payload.treeId || null,
@@ -74,7 +85,8 @@ const ApiService = (function() {
   function getFromCache(key) {
     const cached = responseCache.get(key);
     if (!cached) return null;
-    if (Date.now() - cached.timestamp > CACHE_TTL) {
+    var ttl = getCacheTtlForKey_(key);
+    if (Date.now() - cached.timestamp > ttl) {
       responseCache.delete(key);
       return null;
     }
@@ -88,6 +100,14 @@ const ApiService = (function() {
       responseCache.delete(firstKey);
     }
     responseCache.set(key, { data: data, timestamp: Date.now() });
+  }
+  function notifySwInvalidate_(type, payload){
+    try {
+      if (typeof CacheManager !== 'undefined' && CacheManager.notifySwInvalidate) { CacheManager.notifySwInvalidate(type,payload); return; }
+      if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type:'INVALIDATE_DATA_CACHE', invalidateType:type, payload: payload||null });
+      }
+    } catch(e) {}
   }
 
   function fetchWithTimeout(url, options, timeout) {
@@ -108,6 +128,75 @@ const ApiService = (function() {
         if (error.name === 'AbortError') throw new Error('TIMEOUT');
         throw error;
       });
+  }
+
+  /**
+   * 安全解析 GAS 回應。
+   * GAS 部署失效、權限不足或網址錯誤時，Google 可能回傳 HTML；
+   * 先讀取文字再 JSON.parse，避免直接 response.json() 產生
+   * `Unexpected token '<'`，並提供可操作的錯誤資訊。
+   */
+  function createApiResponseError(response, body, context, parseError) {
+    const status = response && response.status;
+    const isHtml = /^\s*</.test(body || '') || /text\/html/i.test(
+      response && response.headers ? response.headers.get('content-type') || '' : ''
+    );
+    let message;
+
+    if (status === 404) {
+      message = 'GAS API 回應 HTTP 404：找不到部署端點。請確認使用仍存在的正式 /exec 網址。';
+    } else if (status === 401 || status === 403) {
+      message = 'GAS API 回應 HTTP ' + status + '：沒有存取權限。請確認部署的「誰有權限存取」設定為「所有人」。';
+    } else if (status >= 500) {
+      message = 'GAS API 回應 HTTP ' + status + '：伺服器暫時無法使用，請稍後再試。';
+    } else if (isHtml) {
+      message = 'GAS API 回傳 HTML 而非 JSON：部署網址可能已失效，或存取權限要求登入。請確認使用正式 /exec 網址及「所有人」存取權限。';
+    } else if (parseError) {
+      message = 'GAS API 回傳的資料不是有效 JSON。請檢查 doGet/doPost 是否使用 ContentService 回傳 JSON。';
+    } else {
+      message = 'GAS API 回應格式錯誤。';
+    }
+
+    const error = new Error(message);
+    error.name = 'ApiResponseError';
+    error.code = status === 404 ? 'API_NOT_FOUND'
+      : (status === 401 || status === 403) ? 'API_FORBIDDEN'
+      : (status >= 500) ? 'API_SERVER_ERROR'
+      : isHtml ? 'API_HTML_RESPONSE (use /exec without /u/N/ and add &nocache=1 to bust DATA_CACHE)' : 'API_INVALID_JSON';
+    error.status = status || 0;
+    error.context = context || '';
+    error.isHtml = isHtml;
+    error.noRetry = error.code === 'API_NOT_FOUND' ||
+      error.code === 'API_FORBIDDEN' ||
+      error.code === 'API_HTML_RESPONSE' ||
+      error.code === 'API_INVALID_JSON';
+    error.bodyPreview = String(body || '').slice(0, 200);
+    return error;
+  }
+
+  async function parseApiResponse(response, context) {
+    const body = await response.text();
+    let data = null;
+
+    try {
+      data = body ? JSON.parse(body) : null;
+    } catch (parseError) {
+      throw createApiResponseError(response, body, context, parseError);
+    }
+
+    if (!response.ok) {
+      const error = createApiResponseError(response, body, context);
+      if (data && typeof data === 'object' && data.error) {
+        error.backendError = data.error;
+      }
+      throw error;
+    }
+
+    if (data === null || typeof data !== 'object') {
+      throw createApiResponseError(response, body, context);
+    }
+
+    return data;
   }
 
   // 🔥 [v2.3] 只有 POST 才排隊，避免寫入衝突
@@ -138,8 +227,9 @@ const ApiService = (function() {
       return await requestFn();
     } catch (error) {
       errorCount++;
-      // 離線、超時 直接放棄，不再空等
-      if (retries > 0 && error.message !== 'OFFLINE' && error.message !== 'TIMEOUT') {
+      // 離線、超時及部署/格式錯誤直接放棄，不再空等
+      if (retries > 0 && !error.noRetry &&
+          error.message !== 'OFFLINE' && error.message !== 'TIMEOUT') {
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
         return withRetry(requestFn, retries - 1, attempt + 1);
       }
@@ -151,12 +241,23 @@ const ApiService = (function() {
   async function get(action, params) {
     params = params || {};
     if (!apiEndpoint) throw new Error('API 服務未初始化');
-    
+    // normalize project_id trim to avoid cache-miss due to whitespace
+    try{ if(params && params.project!==undefined && params.project!==null) params.project = String(params.project).trim(); if(params && params.project_id!==undefined) params.project_id = String(params.project_id).trim(); }catch(e){}
+    var isBypass = !!(params && (params.nocache==='1' || params.bust==='1'));
     const queryString = new URLSearchParams(params).toString();
-    const cacheKey = 'get:' + action + ':' + queryString;
+    // 🔥 [Bugfix] 快取 key 用 encodeURIComponent 統一編碼（同 invalidateCache / invalidateProjectTrees 一致），
+    // 避免 URLSearchParams 將空格編碼為 '+' 而 encodeURIComponent 編碼為 '%20' 導致 per-project 快取失效 miss
+    const cacheKey = 'get:' + action + ':' + Object.keys(params).sort().map(function(k){
+      return k + '=' + encodeURIComponent(params[k] === undefined || params[k] === null ? '' : params[k]);
+    }).join('&');
     
-    const cached = getFromCache(cacheKey);
-    if (cached) return cached;
+    if(!isBypass){
+      const cached = getFromCache(cacheKey);
+      if (cached) return cached;
+    } else {
+      // bypass memory cache too
+      responseCache.delete(cacheKey);
+    }
     
     requestCount++;
     const url = apiEndpoint + '?action=' + action + (queryString ? '&' + queryString : '');
@@ -168,15 +269,94 @@ const ApiService = (function() {
     // 直接 fetch，不需經 enqueueRequest
     return withRetry(() =>
       fetchWithTimeout(url, { method: 'GET' }, timeout)
-        .then(response => {
-          if (!response.ok) throw new Error('HTTP ' + response.status);
-          return response.json();
-        })
+        .then(response => parseApiResponse(response, 'GET ' + action))
         .then(data => { 
-          setCache(cacheKey, data); 
+          if(!isBypass) setCache(cacheKey, data); 
           return data; 
         })
     );
+  }
+
+  // ---- 依 project / viewport 按需載入便捷封裝 ----
+  function getProjects(opts) {
+    opts = opts || {};
+    var params = {};
+    if (opts.nocache) params.nocache = String(opts.nocache);
+    if (opts.bust) params.bust = String(opts.bust);
+    try{ var _u=new URLSearchParams(location.search); if(_u.get('nocache')==='1') params.nocache='1'; if(_u.get('bust')==='1') params.bust='1'; }catch(e){}
+    return get('projects', params);
+  }
+  function getTreesByProject(projectId, opts) {
+    opts = opts || {};
+    const params = { project: String(projectId) };
+    if (opts.bbox) params.bbox = opts.bbox;
+    if (opts.south != null) { params.south = opts.south; params.west = opts.west; params.north = opts.north; params.east = opts.east; }
+    if (opts.limit) params.limit = String(opts.limit);
+    if (opts.offset) params.offset = String(opts.offset);
+    if (opts.nocache) params.nocache = String(opts.nocache);
+    if (opts.bust) params.bust = String(opts.bust);
+    // URL nocache auto-propagate
+    try{ var _u=new URLSearchParams(location.search); if(_u.get('nocache')==='1') params.nocache='1'; if(_u.get('bust')==='1') params.bust='1'; }catch(e){}
+    return get('trees', params);
+  }
+  function getTreesByViewport(projectId, bounds, opts) {
+    // bounds: Leaflet LatLngBounds 或 {south,west,north,east}，自動 pad 0.3 由呼叫端決定
+    let south, west, north, east;
+    if (bounds && typeof bounds.getSouth === 'function') {
+      south = bounds.getSouth(); west = bounds.getWest(); north = bounds.getNorth(); east = bounds.getEast();
+    } else if (bounds) { south = bounds.south; west = bounds.west; north = bounds.north; east = bounds.east; }
+    const p = { south, west, north, east };
+    if (opts && opts.limit) p.limit = opts.limit;
+    if (opts && opts.offset) p.offset = opts.offset;
+    return getTreesByProject(projectId, p);
+  }
+  function invalidateProjectTrees(projectId) {
+    const prefix = 'get:trees:' + (projectId ? 'project=' + encodeURIComponent(String(projectId)) : '');
+    // 若未指定 pid，則清所有 trees 快取
+    for (const key of Array.from(responseCache.keys())) {
+      if (key.indexOf('get:trees') === 0 && (!projectId || key.indexOf(prefix) !== -1)) responseCache.delete(key);
+    }
+  }
+
+  function getErrorCode_(data){
+    if(!data) return '';
+    return String(data.error_code || data.error || data.code || '').trim();
+  }
+  function isAuthFailure(data) {
+    var c = getErrorCode_(data);
+    return !!(data && data.ok === false &&
+      (c === 'UNAUTHORIZED' || c === 'CSRF_INVALID' || c === 'CSRF_TOKEN_INVALID' || c === 'AUTH_FAILED'));
+  }
+  function userMessageForResponse_(data, fallback){
+    if(typeof ErrorCodes !== 'undefined' && ErrorCodes.messageForResponse) return ErrorCodes.messageForResponse(data, fallback);
+    var c = getErrorCode_(data); if(typeof ErrorCodes !== 'undefined' && ErrorCodes.messageFor) return ErrorCodes.messageFor(c, fallback);
+    return fallback || '請求失敗，請稍後再試';
+  }
+
+  async function applyAuth(payload, forcePrompt) {
+    if (typeof AuthService === 'undefined') return true;
+
+    const message = forcePrompt
+      ? '🔐 登入狀態已失效，請重新輸入工作人員密碼：'
+      : undefined;
+
+    // 強制重新登入使用共用 promise，避免前景寫入與背景同步同時
+    // logout()/promptAuth()，造成新 token/CSRF 被另一個流程清除。
+    const ok = forcePrompt && typeof AuthService.reauthenticate === 'function'
+      ? await AuthService.reauthenticate(message)
+      : await AuthService.promptAuth(message);
+
+    if (!ok) return false;
+
+    const token = AuthService.getToken();
+    const csrf = AuthService.getCsrfToken();
+    if (!token || !csrf) return false;
+
+    // 重新登入後一定覆寫同一個 payload 的認證欄位；
+    // client_id 保持不變，避免重試產生重複樹木。
+    payload.token = token;
+    payload.csrf_token = csrf;
+    return true;
   }
 
   /* POST：寫入 (保持排隊，確保寫入順序同並發控制) */
@@ -184,16 +364,13 @@ const ApiService = (function() {
     if (!apiEndpoint) throw new Error('API 服務未初始化');
     requestCount++;
 
+    // 不直接修改呼叫端的 payload，避免重試時保留失效認證資料。
+    payload = Object.assign({}, payload);
     var isWrite = WRITE_TYPES.indexOf(payload.type) !== -1;
 
     if (isWrite && typeof AuthService !== 'undefined') {
-      const ok = await AuthService.promptAuth();
-      if (!ok) return { ok: false, error: '未登入，操作已取消' };
-      const token = AuthService.getToken();
-      if (token) payload.token = token;
-      // 🔐 CSRF Token 附在 body（Apps Script 無法讀取自訂 Header，需由 body 回傳）
-      const csrf = AuthService.getCsrfToken();
-      if (csrf) payload.csrf_token = csrf;
+      const ok = await applyAuth(payload, false);
+      if (!ok) return { ok: false, error_code: 'UNAUTHORIZED', error: 'UNAUTHORIZED' };
     }
 
     // 🔐 Idempotency：寫入 payload 一律帶 client_id + client_created_at（重試時不變）
@@ -209,44 +386,110 @@ const ApiService = (function() {
       auditWrite(payload, 'attempt');
     }
 
-    if (payload.type) invalidateCache(payload.type);
+    return enqueuePost(async () => {
+      // POST 可能在佇列中等待；真正發送前重新讀取認證資料，
+      // 避免沿用排隊前已失效或已被另一個請求更新的 token。
+      const attachCurrentAuth = () => {
+        if (!isWrite || typeof AuthService === 'undefined') return true;
 
-    return enqueuePost(() =>
-      withRetry(() =>
-        fetchWithTimeout(apiEndpoint, {
-          method: 'POST',
-          // 🔥 [CORS 修正] 只保留 Content-Type（text/plain 為簡單請求）。
-          // 自訂 header（如 X-CSRF-Token）會觸發 preflight OPTIONS，
-          // 而 Apps Script 無法回應 OPTIONS，導致 CORS 阻擋所有寫入。
-          // CSRF token 已透過 body (payload.csrf_token) 傳遞，後端支援讀取。
-          headers: {
-            'Content-Type': 'text/plain;charset=utf-8'
-          },
-          body: JSON.stringify(payload)
-        }, POST_TIMEOUT)
-        .then(response => {
-          if (!response.ok) throw new Error('HTTP ' + response.status);
-          return response.json();
-        })
-        .then(data => {
-          if (data && data.duplicate === true) {
-            // 後端回報重複：這筆 client_id 早已成功處理，視為成功（避免重複 alert 失敗）
-            data.ok = true;
-          }
-          if (data && data.ok === false && data.error === 'UNAUTHORIZED') {
-            if (typeof AuthService !== 'undefined') AuthService.logout();
-            data.error = '未登入或登入已過期，請再試一次並輸入工作人員密碼';
-          }
-          if (isWrite) {
-            auditWrite(payload, (data && data.ok) ? 'success' : 'error', (data && data.ok) ? null : (data && data.error));
-          }
-          return data;
-        })
-      )
-    );
+        const token = AuthService.getToken();
+        const csrf = AuthService.getCsrfToken();
+        if (!token || !csrf) return false;
+
+        payload.token = token;
+        payload.csrf_token = csrf;
+        return true;
+      };
+
+      const send = () => {
+        if (!attachCurrentAuth()) {
+          return Promise.resolve({ ok: false, error_code: 'UNAUTHORIZED', error: 'UNAUTHORIZED' });
+        }
+
+        return withRetry(() =>
+          fetchWithTimeout(apiEndpoint, {
+            method: 'POST',
+            // 🔥 [CORS 修正] 只保留 Content-Type（text/plain 為簡單請求）。
+            // 認證資料放在 body，避免 Apps Script 觸發 OPTIONS preflight。
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify(payload)
+          }, POST_TIMEOUT)
+            .then(response => parseApiResponse(response, 'POST ' + (payload.type || 'request')))
+        );
+      };
+
+      let data = await send();
+      let authRetried = false;
+
+      // ScriptCache 可能在前端 session 仍有效時已清除 token；
+      // 收到認證失效時強制重新登入，並以同一 client_id 重送一次。
+      if (isWrite && isAuthFailure(data) &&
+          !authRetried && typeof AuthService !== 'undefined' && navigator.onLine) {
+        authRetried = true;
+        const reauthenticated = await applyAuth(payload, true);
+        if (reauthenticated) {
+          data = await send();
+        }
+      }
+
+      if (data && data.duplicate === true) {
+        // 後端回報重複：這筆 client_id 早已成功處理，視為成功（避免重複 alert 失敗）
+        data.ok = true;
+      }
+
+      if (isAuthFailure(data)) {
+        if (typeof AuthService !== 'undefined' && AuthService.logout) AuthService.logout();
+        // 保留後端原始錯誤碼，前端提示由 ErrorCodes 對照表產生，不在此硬編中文
+        var ac = getErrorCode_(data);
+        data.auth_error = data.error_code || data.error;
+        data.error = data.auth_error;
+        data.error_code = ac || data.error_code || data.error;
+        // 對外顯示交由呼叫端透過 ErrorCodes.messageForResponse 轉譯，避免此處外洩細節
+      }
+
+      if (isWrite) {
+        auditWrite(payload, (data && data.ok) ? 'success' : 'error',
+          (data && data.ok) ? null : (data && data.error));
+      }
+
+      // 🔥 [Bugfix] Cache 失效改為 POST 成功後先執行（原本喺 POST 前清 cache，
+      // 會造成「第二筆寫入排隊時第一筆未完成 → 中間 GET 攞到半新狀態」嘅 race condition，
+      // 同埋 POST 失敗時白白清咗 cache）
+      if (data && data.ok && payload.type) {
+        invalidateCache(payload.type, payload);
+      }
+      return data;
+    });
   }
 
-  function invalidateCache(type) {
+  function invalidateCache(type, payload) {
+    // 巡查/打卡/逐張相後需同時失效 inspections + trees（樹狀態/首圖可能已變），否則 TTL 內不可見
+    // 🔥 [Bugfix] 只精準清除相關地盤的 trees 快取，不再無差別清空所有地盤（避免大地盤短時間內全量重載）
+    if (type === 'inspection' || type === 'inspection_photo' || type === 'checkin') {
+      const pid = payload && (payload.project_id || payload.prj)
+        ? String(payload.project_id || payload.prj)
+        : '';
+      for (const k of Array.from(responseCache.keys())) {
+        if (k.indexOf('get:inspections') === 0 || k.indexOf('get:bootstrap') === 0) {
+          responseCache.delete(k);
+        } else if (k.indexOf('get:trees') === 0) {
+          // 有 pid 只清該地盤；無 pid 才全清
+          if (!pid ||
+              k.indexOf('project=' + encodeURIComponent(pid)) !== -1 ||
+              k.indexOf('project=' + pid) !== -1 ||
+              !k.includes('project=')) {
+            responseCache.delete(k);
+          }
+        }
+      }
+      // 同步 SW 層 DATA_CACHE：A 方案全清對應 action
+      notifySwInvalidate_(type, payload);
+      if (pid) invalidateProjectTrees(pid);
+      return;
+    }
+    // 寫入後失效：同時支援 per-project 精準清除
     const prefixes = {
       'create_project': ['get:projects'],
       'update_project': ['get:projects', 'get:trees', 'get:bootstrap'],
@@ -258,15 +501,30 @@ const ApiService = (function() {
     };
     const prefixList = prefixes[type];
     if (prefixList) {
-      for (const key of responseCache.keys()) {
+      const pid = payload && (payload.project_id || payload.prj) ? String(payload.project_id || payload.prj) : '';
+      for (const key of Array.from(responseCache.keys())) {
         if (prefixList.some(p => key.startsWith(p))) {
-          responseCache.delete(key);
+          // 若為 trees 且帶 pid，只清該地盤；否則全清
+          if (pid && key.indexOf('get:trees') === 0) {
+            if (key.indexOf('project=' + encodeURIComponent(pid)) !== -1 || key.indexOf('project=' + pid) !== -1) responseCache.delete(key);
+            else if (key.indexOf('get:bootstrap') === 0) responseCache.delete(key);
+            else if (!key.includes('project=')) responseCache.delete(key); // 無 project 參數視為全量，順便清
+          } else {
+            responseCache.delete(key);
+          }
         }
       }
+      // SW 層同步失效（A 方案按 action 前綴全清）
+      notifySwInvalidate_(type, payload);
     }
+    // 兼容直接按 pid 清理
+    if (payload && payload.project_id) invalidateProjectTrees(payload.project_id);
   }
 
-  function clearCache() { responseCache.clear(); }
+  function clearCache(projectId) {
+    if (projectId) { invalidateProjectTrees(projectId); return; }
+    responseCache.clear();
+  }
 
   function getStats() {
     return {
@@ -281,7 +539,20 @@ const ApiService = (function() {
 
   function resetStats() { requestCount = 0; errorCount = 0; cacheHitCount = 0; }
 
-  return { init, get, post, getStats, resetStats, clearCache, newClientMeta };
+  return {
+    init,
+    get,
+    getProjects,
+    getTreesByProject,
+    getTreesByViewport,
+    invalidateProjectTrees,
+    post,
+    getStats,
+    resetStats,
+    clearCache,
+    newClientMeta,
+    parseResponse: parseApiResponse
+  };
 })();
 
 if (typeof module !== 'undefined' && module.exports) {

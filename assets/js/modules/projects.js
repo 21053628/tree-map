@@ -1,31 +1,59 @@
 /**
  * 地盤標記與選擇模組
+ * v2.44 - XSS 加固：buildSelect / drawProjects 改用 DOM API，移除 innerHTML 拼字串與 inline onchange
  * v2.43 - 修正「前往地盤」按鈕的 zoom 級別
  */
 import { state } from './state.js';
-import { DOM, updateStatus } from './dom.js';
+import { DOM } from './dom.js';
 import { hideSearch } from './search.js';
 import { drawTrees } from './trees.js';
 import { emit } from '../core/event-bus.js'; // 🔥 [Phase4] 事件解耦，移除對 map.js 的直接依賴
+
+function syncTreeActionState() {
+  const hasProject = Boolean(String(state.curProject || '').trim());
+  const addTreeBtn = DOM.addTreeBtn;
+
+  if (addTreeBtn) {
+    addTreeBtn.classList.toggle('ghost-hidden', !hasProject);
+    addTreeBtn.classList.toggle('is-project-selected', hasProject);
+    addTreeBtn.setAttribute('aria-disabled', String(!hasProject));
+    addTreeBtn.title = hasProject ? '在目前地盤新增樹木' : '請先選擇地盤';
+  }
+
+  document.querySelectorAll('.layerbar button[data-act="addTree"]').forEach((button) => {
+    button.classList.toggle('is-project-selected', hasProject);
+    button.disabled = false;
+    button.setAttribute('aria-disabled', String(!hasProject));
+    button.title = hasProject ? '在目前地盤新增樹木' : '請先選擇地盤';
+  });
+}
 
 export function buildSelect() {
   const sel = DOM.projSel;
   if (!sel) return;
 
-  const inlineOnChange = sel.getAttribute('onchange');
+  // [v2.44 XSS 加固] 移除任何遺留的 inline handler，CSP 友好
   sel.removeAttribute('onchange');
   sel.onchange = null;
 
-  sel.innerHTML = '<option value="">🗂️ 全部地盤</option>' +
-    state.PROJECTS.map((p) => '<option value="' + p.project_id + '">🚩 ' + p.name + '</option>').join('');
-  sel.value = state.curProject;
-  DOM.addTreeBtn.classList.toggle('ghost-hidden', !state.curProject);
-
-  if (inlineOnChange) {
-    sel.setAttribute('onchange', inlineOnChange);
-  } else {
-    sel.onchange = function () { window.App.selectProject(this.value); };
-  }
+  // [v2.44 XSS 加固] 純 DOM API 重建選單，避免 innerHTML 拼字串
+  // value / textContent 由瀏覽器自動處理跳脫，p.name / p.project_id 即使含 < > " ' & 亦只會當純文字
+  sel.replaceChildren();
+  const frag = document.createDocumentFragment();
+  const allOpt = document.createElement('option');
+  allOpt.value = '';
+  allOpt.textContent = '🗂️ 全部地盤';
+  frag.appendChild(allOpt);
+  state.PROJECTS.forEach((p) => {
+    const opt = document.createElement('option');
+    opt.value = String(p.project_id ?? '');
+    opt.textContent = '🚩 ' + String(p.name ?? '');
+    frag.appendChild(opt);
+  });
+  sel.appendChild(frag);
+  sel.value = String(state.curProject ?? '');
+  syncTreeActionState();
+  // 變更監聽由 app.js 單次綁定 addEventListener('change') 統一處理，此處不再寫入 inline onchange
 }
 
 export function drawProjects() {
@@ -38,7 +66,7 @@ export function drawProjects() {
   state.PROJECTS.forEach((p) => {
     if (String(p.project_id) === String(state.curProject)) return;
     const lat = +p.lat, lng = +p.lng;
-    if (!lat || !lng) return;
+    if (isNaN(lat) || isNaN(lng)) return;
 
     const hk = CoordUtils.toHK80(lat, lng);
     const count = state.treeCountMap.get(String(p.project_id)) || 0;
@@ -53,17 +81,23 @@ export function drawProjects() {
     });
 
     const popupDiv = L.DomUtil.create('div');
-    popupDiv.innerHTML = DOMPurify.sanitize(
-      '<b>🚩 ' + p.name + '</b><br>' +
-      '此地盤樹木：' + count + ' 棵<br>' +
-      (hk ? 'HK80：N ' + CoordUtils.format1(hk.N) + ' / E ' + CoordUtils.format1(hk.E) + '<br>' : '')
-    );
+    // [v2.44 XSS 加固] 改用 DOM API 逐段以 textContent / createTextNode 組裝，不再 innerHTML + DOMPurify 拼字串
+    const b = document.createElement('b');
+    b.textContent = '🚩 ' + String(p.name ?? '');
+    popupDiv.appendChild(b);
+    popupDiv.appendChild(document.createElement('br'));
+    popupDiv.appendChild(document.createTextNode('此地盤樹木：' + String(count) + ' 棵'));
+    popupDiv.appendChild(document.createElement('br'));
+    if (hk) {
+      popupDiv.appendChild(document.createTextNode('HK80：N ' + CoordUtils.format1(hk.N) + ' / E ' + CoordUtils.format1(hk.E)));
+      popupDiv.appendChild(document.createElement('br'));
+    }
     const btn = L.DomUtil.create('button', '', popupDiv);
     btn.textContent = '📍 前往地盤查看樹木';
     L.DomEvent.disableClickPropagation(btn);
     btn.onclick = function (e) {
       e.stopPropagation();
-      window.App.selectProject(p.project_id);
+      globalThis.App.selectProject(p.project_id);
     };
     marker.bindPopup(popupDiv);
 
@@ -82,17 +116,28 @@ function performFlyTo(pid) {
   state.treesCache.clear();
   state.prjLayer.clearLayers();
 
+  function afterFly(cb) {
+    var done = false;
+    function run() {
+      if (done) return;
+      done = true;
+      cb();
+    }
+    state.map.once('moveend', run);
+    setTimeout(run, 1500); // 安全網：flyTo 若被中斷仍會觸發
+  }
+
   if (pid) {
     const p = state.PROJECTS.find((x) => String(x.project_id) === String(pid));
     if (p) {
       // 🔥 [v2.43 修正] 前往地盤：使用 PROJECT_ZOOM (19)，移除無效參數 easeLineProxy
       state.map.flyTo([+p.lat, +p.lng], Config.MAP.PROJECT_ZOOM || 19, { duration: 1.2 });
-      state.map.once('moveend', function () { drawProjects(); drawTrees(); });
+      afterFly(function () { drawProjects(); drawTrees(); });
       return;
     }
   } else {
     state.map.flyTo(Config.MAP.DEFAULT_CENTER, Config.MAP.DEFAULT_ZOOM, { duration: 1.0 });
-    state.map.once('moveend', function () { drawProjects(); drawTrees(); });
+    afterFly(function () { drawProjects(); drawTrees(); });
     return;
   }
 
@@ -100,20 +145,25 @@ function performFlyTo(pid) {
   drawTrees();
 }
 
-export function selectProject(pid) {
+export function selectProject(pid, opts) {
   if (state.isLocating) {
     console.log('[v2.8] selectProject blocked by isLocating lock');
     return;
   }
-
+  opts = opts || {};
+  const prevPid = String(state.curProject || '');
+  pid = pid ? String(pid) : '';
   state.curProject = pid;
   buildSelect();
   hideSearch();
-
-  // 🔥 [Phase4] 移除 no-op saveViewState 呼叫，斷開 projects ⇄ locate 循環依賴
-  // 🔥 [Phase4] 轉地盤自動換航拍圖：改用事件通知，交由 map.js 訂閱處理
   emit('project:selected', pid);
-
+  // 依 project 按需載入：首次進入該地盤自動拉樹（動態 import 避免循環依賴）
+  if (pid && !opts.skipLoad) {
+    const hasData = state.treeSearchIndex.has(pid) && state.treeSearchIndex.get(pid).length > 0;
+    if (!hasData) {
+      import('./loader.js').then(function(m){ if(m.loadTreesForProject) m.loadTreesForProject(pid).catch(function(e){ console.warn('[selectProject] loadTrees failed', e); }); }).catch(function(){});
+    }
+  }
   if (state.map) {
     state.map.closePopup();
     setTimeout(function () { performFlyTo(pid); }, 50);

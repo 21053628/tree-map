@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="樹木資訊管理系統 - 查看樹木詳細資料、巡查記錄">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' https: 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; object-src 'none'; base-uri 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; object-src 'none'; base-uri 'self';">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -30,87 +30,47 @@
 <!-- 🔥 [Tier1-B] 自托管樣式（零 CDN 依賴） -->
 <link rel="stylesheet" href="assets/vendor/leaflet.css">
 
-<style>
-  :root{--primary:#2e7d32;--primary-dark:#1b5e20;--secondary:#546e7a;--bg:#f1f5f1;--text:#222;--muted:#666;--card-bg:#fff;--radius:12px;--shadow:0 2px 8px rgba(0,0,0,.08)}
-  *{box-sizing:border-box}body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent;line-height:1.6}
-  .wrap{max-width:600px;margin:0 auto;padding:16px}.card{background:var(--card-bg);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
-  h1{font-size:22px;margin:0 0 6px;font-weight:600}.sub{color:var(--muted);font-size:14px;margin-top:4px}.badge{display:inline-block;padding:4px 12px;border-radius:999px;color:#fff;font-size:13px;font-weight:500}
-  img.tree{width:100%;aspect-ratio:4/3;min-height:160px;border-radius:10px;margin-top:10px;object-fit:cover;content-visibility:auto;background:#e8f5e9}
-  button{width:100%;padding:14px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-size:16px;font-weight:500;margin-top:10px;cursor:pointer;touch-action:manipulation;transition:background .2s,transform .1s}
-  button:hover{background:var(--primary-dark)}button:active{transform:scale(.98)}button.sec{background:var(--secondary)}button.sec:hover{background:#37474f}
-  a.back{display:inline-block;background:#37474f;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;margin-bottom:12px;font-size:15px;transition:opacity .2s}a.back:hover{opacity:.8}
-  select,textarea,input{width:100%;padding:13px;border:1px solid #ccc;border-radius:9px;font-size:16px;margin-top:10px;box-sizing:border-box;background:#fff;transition:border-color .2s,box-shadow .2s}
-  select:focus,textarea:focus,input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(46,125,50,.15)}
-  
-  /* 🔥 [v2.47 性能優化] 巡查記錄虛擬列表 */
-  .log{font-size:14px;color:#444;border-top:1px dashed #ccc;padding:10px 0;margin-top:8px;content-visibility:auto;contain-intrinsic-size:80px}
-  .ok{color:var(--primary);font-weight:600}
-  
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}.grid div{background:#f8fafc;padding:12px;border-radius:8px;text-align:center;font-size:14px}
-  .grid b{display:block;color:var(--primary);font-size:17px;margin-top:3px;font-weight:600}.row2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-  hr{border:none;border-top:1px dashed #ccc;margin:14px 0}#minimap{height:200px;border-radius:10px;margin-top:10px;border:1px solid #e0e0e0;}
-  .loading{display:flex;align-items:center;justify-content:center;min-height:60vh;color:var(--muted)}.error{background:#ffebee;color:#c62828;padding:14px;border-radius:8px;margin:14px 0}
-  .zoomable-img{cursor:zoom-in;transition:transform .2s}.zoomable-img:hover{transform:scale(1.02)}
-  .modal{display:none;position:fixed;z-index:9999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.9);align-items:center;justify-content:center}
-  .modal.show{display:flex}.modal img{max-width:95%;max-height:95%;object-fit:contain;cursor:zoom-out}.modal-close{position:absolute;top:20px;right:30px;color:#fff;font-size:40px;cursor:pointer}
-  .inspection-photo-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(80px, 1fr));gap:8px;margin-top:8px}
-  
-  /* 🔥 [v2.47 性能優化] 相片網格虛擬列表 */
-  .inspection-photo-item{background:#f5f5f5;border-radius:8px;overflow:hidden;content-visibility:auto;contain-intrinsic-size:100px}
-  
-  .inspection-photo-thumb{width:100%;height:80px;object-fit:cover;display:block;cursor:zoom-in}
-  .inspection-photo-btn{width:100%;padding:4px;margin:0;font-size:11px;background:#546e7a;color:#fff;border:none;border-radius:0;cursor:pointer}
-  .inspection-photo-btn:hover{background:#37474f}
-  .form-group{margin-top:12px}.form-label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px;font-weight:500}
-  .section-title{font-size:15px;color:var(--primary);font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:6px}
-  .photo-preview-container{margin-top:12px;padding:12px;background:#f5f5f5;border-radius:10px}
-  .photo-preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-top:8px}
-  .photo-preview-item{position:relative;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1)}
-  .photo-preview-thumb{width:100%;height:100px;object-fit:cover;display:block}
-  .photo-preview-remove{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(255,0,0,.85);color:#fff;border:none;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
-  .photo-preview-remove:hover{background:rgba(255,0,0,1)}
-  .photo-count{font-size:13px;color:var(--muted);margin-bottom:8px}
-  
-  .sk{background:linear-gradient(90deg,#e8e8e8,#f5f5f5,#e8e8e8);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:8px}
-  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-
-  @media (max-width:600px){.wrap{padding:12px}.card{padding:14px}#minimap{height:180px}.grid{grid-template-columns:repeat(3,1fr);gap:8px}.grid div{padding:10px;font-size:13px}}
-  @media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
-</style>
+<link rel="stylesheet" href="assets/css/pages/t.css">
+<link rel="stylesheet" href="assets/css/utilities.css">
 </head>
 <body>
 <div class="wrap" id="app">
-  <div class="sk" style="height:40px;width:110px;margin-bottom:12px"></div>
+  <div class="sk sk--h40"></div>
   <div class="card">
-    <div class="sk" style="height:26px;width:75%"></div>
-    <div class="sk" style="height:26px;width:45%;margin-top:10px"></div>
-    <div class="sk" style="aspect-ratio:4/3;margin-top:12px"></div>
-    <div class="sk" style="height:76px;margin-top:12px"></div>
-    <div class="sk" style="height:200px;margin-top:12px"></div>
+    <div class="sk sk--h26-w75"></div>
+    <div class="sk sk--h26-w45"></div>
+    <div class="sk sk--ratio"></div>
+    <div class="sk sk--h76"></div>
+    <div class="sk sk--h200"></div>
   </div>
-  <div class="card"><div class="sk" style="height:52px"></div></div>
-  <div class="card"><div class="sk" style="height:120px"></div></div>
+  <div class="card"><div class="sk sk--h52"></div></div>
+  <div class="card"><div class="sk sk--h120"></div></div>
 </div>
 
 <!-- 🔥 [Tier1-B] 自托管第三方函式庫（同域、即時執行） -->
 <script src="assets/vendor/leaflet.js" defer></script>
 
-<!-- 🔥 [Phase6] 統一 services：config → api-config → api → auth，再由 pages/t.js 共用 -->
-<!-- 註：t.html 保留原本 async 延遲載入 proj4 的座標轉換，以維持首屏效能，不改行為 -->
+<!-- 🔥 環境注入（最優先） -->
+<script src="assets/js/env.js"></script>
+<!-- 🔥 [Phase6] 統一 services：config → audit-log → api → auth -->
+<!-- 註：coord-lazy.js 維持 plain script，首次轉換座標時才延遲載入 proj4。 -->
+<script src="assets/js/core/cache-policy.js"></script>
+<script src="assets/js/core/cache-manager.js"></script>
 <script src="assets/js/config.js"></script>
-<script src="assets/js/api-config.js"></script>
 <script src="assets/js/modules/audit-log.js"></script>
+<script src="assets/js/core/error-codes.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/vendor/purify.min.js"></script>
-<script src="assets/js/core/global-utils.js"></script>
+<!-- 統一座標工具（ESM 真源，plain-script 的 coord-lazy 為轉發層） -->
+<script type="module" src="assets/js/core/coordinates.js"></script>
 <script src="assets/js/core/coord-lazy.js"></script>
 
-<script src="assets/js/pages/t.js"></script>
-
-<!-- 🔥 PWA 離線佇列（會 hook ApiService）與 Service Worker 註冊 -->
+<!-- 🔥 PWA 離線佇列必須先於 t.js module 執行，確保 ApiService hook 已建立。 -->
 <script src="offline.js"></script>
 <script src="assets/js/modules/sync-panel.js"></script>
+<script type="module" src="assets/js/pages/t.js"></script>
+
 <script defer src="assets/js/sw-register.js"></script>
 </body>
 </html>

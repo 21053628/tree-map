@@ -25,15 +25,25 @@
   var MAX_AGE_DAYS = 30;
   var MAX_RETRY = 5;
   var SYNC_BATCH_SIZE = 10;
+  var BATCH_DELAY_MS = 250;
+  var MAX_DRAIN_BATCHES = 100;
 
   var CACHE_KEY_PREFIX = 'tree_cache_';
-  var CACHE_MAX_AGE = 24 * 60 * 60 * 1000;
+  // 統一來源：CachePolicy.snapshot.ttl（24h），未載入時回退
+  var CACHE_MAX_AGE = (function(){ try{ if(typeof CachePolicy!=='undefined'&&CachePolicy.POLICY&&CachePolicy.POLICY.snapshot) return CachePolicy.POLICY.snapshot.ttl; }catch(e){} return 24*60*60*1000; })();
+  function notifySwInvalidateOffline_(type, payload){
+    try{
+      if (typeof CacheManager !== 'undefined' && CacheManager.notifySwInvalidate) { CacheManager.notifySwInvalidate(type, payload); return; }
+      if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type:'INVALIDATE_DATA_CACHE', invalidateType:type, payload:payload||null });
+      }
+    }catch(e){}
+  }
 
   // 節流時間戳
   var _lastWarm = 0;
   var _lastSyncAttempt = 0;
   var _failToastShown = false;
-  var _reloading = false;
 
   // ========== 工具函式 ==========
   function pwaToast(msg, duration) {
@@ -41,13 +51,13 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'pwaToast';
-      el.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:#263238;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.3);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;';
+      el.className = 'offline-toast';
       document.body.appendChild(el);
     }
     el.textContent = msg;
-    el.style.opacity = '1';
+    el.classList.add('is-visible');
     clearTimeout(el._t);
-    el._t = setTimeout(function() { el.style.opacity = '0'; }, duration || 2600);
+    el._t = setTimeout(function() { el.classList.remove('is-visible'); }, duration || 2600);
   }
 
   function quietFailToast(msg) {
@@ -58,10 +68,10 @@
 
   // [Phase6] 本地審計記錄（若有載入 audit-log.js）
   function auditWrite(payload, action, status, error) {
-    if (typeof window === 'undefined' || !window.AuditLog) return;
+    if (typeof window === 'undefined' || !globalThis.AuditLog) return;
     var p = payload || {};
     try {
-      window.AuditLog.log({
+      globalThis.AuditLog.log({
         action: action,
         type: p.type || null,
         tree_id: p.tree_id || p.treeId || null,
@@ -99,6 +109,67 @@
       var v = (c === 'x') ? r : ((r & 0x3) | 0x8);
       return v.toString(16);
     });
+  }
+
+  // 📷 離線圖片限制（與 Config.UPLOAD / GAS 一致）
+  function getUploadLimitsOffline(){
+    var up = (typeof Config !== 'undefined' && Config.UPLOAD) ? Config.UPLOAD : null;
+    return {
+      allowed: (up && up.ALLOWED_MIMES) || ['image/jpeg','image/png','image/webp'],
+      maxBytes: (up && up.MAX_BYTES) || 10*1024*1024,
+      maxCount: (up && up.MAX_COUNT) || 10,
+      singleB64: 15*1024*1024
+    };
+  }
+  function estimateDecodedBytesOffline(clean){
+    var s = String(clean||'').replace(/\s/g,'');
+    if(!s) return 0;
+    var pad=0; if(s.slice(-2)==='==') pad=2; else if(s.slice(-1)==='=') pad=1;
+    return Math.floor(s.length*3/4)-pad;
+  }
+  function detectMimeFromBytesOffline(bytes){
+    if(!bytes || bytes.length<4) return '';
+    if(bytes[0]===0xFF && bytes[1]===0xD8 && bytes[2]===0xFF) return 'image/jpeg';
+    if(bytes[0]===0x89 && bytes[1]===0x50 && bytes[2]===0x4E && bytes[3]===0x47) return 'image/png';
+    if(bytes.length>=12 && bytes[0]===0x52 && bytes[1]===0x49 && bytes[2]===0x46 && bytes[3]===0x46 && bytes[8]===0x57 && bytes[9]===0x45 && bytes[10]===0x42 && bytes[11]===0x50) return 'image/webp';
+    return '';
+  }
+  function validatePhotoPayloadOffline(payload){
+    var p = payload || {};
+    var b64 = p.photo_base64;
+    if(b64===undefined || b64===null || b64==='') return null;
+    var arr = Array.isArray(b64) ? b64 : [b64];
+    var lim = getUploadLimitsOffline();
+    var nonEmpty = arr.filter(function(v){ return String(v||'').trim()!==''; });
+    if(nonEmpty.length>lim.maxCount || arr.length>lim.maxCount) return '相片數量不可超過 '+lim.maxCount+' 張（目前 '+arr.length+' 張）';
+    for(var i=0;i<arr.length;i++){
+      var raw = String(arr[i]||''); if(!raw.trim()) continue;
+      if(raw.length>lim.singleB64) return '單張相片過大，請壓縮後再上傳';
+      var comma = raw.indexOf(',');
+      var prefix=''; var clean=raw;
+      if(raw.slice(0,5)==='data:' && comma!==-1){ prefix=raw.slice(0,comma); clean=raw.slice(comma+1); }
+      var declared='';
+      if(prefix){ var m=prefix.match(/^data:([^;]+);base64$/i); declared=m?String(m[1]).toLowerCase().trim():''; if(declared && lim.allowed.indexOf(declared)===-1) return '不支援的圖片格式：'+declared; }
+      clean=String(clean||'').replace(/\s/g,'');
+      if(!clean) return '相片資料空白';
+      if(!/^[A-Za-z0-9+/=]+$/.test(clean)) return '相片 base64 格式不正確';
+      var est=estimateDecodedBytesOffline(clean);
+      if(est>lim.maxBytes) return '單張相片過大（'+(est/1024/1024).toFixed(1)+'MB），上限 '+Math.round(lim.maxBytes/1024/1024)+'MB';
+      try{
+        var bin = atob(clean.slice(0, 32));
+        var bytes=[]; for(var k=0;k<bin.length;k++) bytes.push(bin.charCodeAt(k));
+        var sniffed=detectMimeFromBytesOffline(bytes);
+        if(declared && sniffed && declared!==sniffed) return '圖片 MIME 與內容不符（聲明 '+declared+' 實際 '+sniffed+'）';
+        var eff=sniffed||declared;
+        if(!eff) {
+          // 無前綴且頭部不足以判斷：若能 decode 則放行由後端最終校驗，否則報格式不明
+          if(nonEmpty.length===arr.length && !prefix) continue;
+          return '無法識別圖片格式（僅支援 '+lim.allowed.join(', ')+'）';
+        }
+        if(lim.allowed.indexOf(eff)===-1) return '不支援的圖片格式：'+eff;
+      }catch(e){ return '相片 base64 解碼失敗'; }
+    }
+    return null;
   }
 
   // 相容舊 queue items：讀取時自動補齊缺少的欄位（不會無故丟失）
@@ -155,7 +226,28 @@
   }
 
   function push(payload) {
-    payload = payload || {};
+    // 📷 先做圖片限制檢查，避免髒資料進入 IndexedDB 佇列（與後端一致）
+    var vErr = validatePhotoPayloadOffline(payload);
+    if (vErr) {
+      pwaToast('⚠️ ' + vErr, 4000);
+      return Promise.reject(new Error(vErr));
+    }
+    // 強制脫敏：任何呼叫路徑寫入 IndexedDB 前一律移除 token / csrf_token
+    // 使用淺拷貝避免污染呼叫方原始物件；同步時 syncOutbox 會從 AuthService / sessionStorage 重新補上最新憑證
+    var src = payload || {};
+    var safe = {};
+    try {
+      Object.keys(src).forEach(function(k) { safe[k] = src[k]; });
+    } catch (e) {
+      safe = {};
+      try { Object.keys(src).forEach(function(k) { safe[k] = src[k]; }); } catch (e2) {}
+      if (!Object.keys(safe).length) safe = src;
+    }
+    if (safe && typeof safe === 'object') {
+      if ('token' in safe) delete safe.token;
+      if ('csrf_token' in safe) delete safe.csrf_token;
+    }
+    payload = safe;
     var now = Date.now();
     // 確保 payload 帶有 client_id（idempotency key），離線／重試都保持同一個 id
     if (!payload.client_id) payload.client_id = genUUID();
@@ -358,6 +450,24 @@
     }
   }
 
+  // 🔥 [Bugfix] 寫入成功後精準失效 localStorage 快取（對應 ApiService.invalidateCache 的 prefix 邏輯），
+  // 不再無差別清空全部離線快取。
+  function clearCacheForType(type) {
+    var prefixes = [];
+    if (type === 'inspection' || type === 'inspection_photo' || type === 'checkin') {
+      prefixes = ['inspections', 'trees', 'bootstrap'];
+    } else if (type === 'create_project' || type === 'update_project' || type === 'delete_project') {
+      prefixes = ['projects', 'trees', 'bootstrap'];
+    } else if (type === 'create_tree' || type === 'update_tree' || type === 'delete_tree') {
+      prefixes = ['trees', 'bootstrap'];
+    } else if (type === 'create_aerial') {
+      prefixes = ['aerials'];
+    } else if (type) {
+      prefixes = [type];
+    }
+    prefixes.forEach(function(prefix) { clearCache(prefix); });
+  }
+
   // ========== 快照（IndexedDB snapshot store） ==========
   function snapSave(key, data) {
     return openDB().then(function(db) {
@@ -370,6 +480,16 @@
     });
   }
 
+  function snapRemove(key){
+    return openDB().then(function(db){
+      return new Promise(function(resolve){
+        var tx=db.transaction(SNAPSHOT_STORE,'readwrite');
+        tx.objectStore(SNAPSHOT_STORE).delete(key);
+        tx.oncomplete=function(){resolve();};
+        tx.onerror=function(){resolve();};
+      });
+    });
+  }
   function snapLoad(key) {
     return openDB().then(function(db) {
       return new Promise(function(resolve) {
@@ -385,125 +505,199 @@
     if (Date.now() - _lastWarm < 5 * 60 * 1000) return;
     _lastWarm = Date.now();
     try {
-      // 使用 no-cors 避免 CORS 錯誤，僅用於喚醒連線
-      fetch(API_URL + '?action=ping', { method: 'GET', mode: 'no-cors' }).catch(function(){});
+      // 🔥 [Bugfix] 改回 cors 模式：no-cors 在部分瀏覽器可能被 network layer 攔截或快取，
+      // 未必能真正觸發 GAS 冷啟動。cors 模式即使被 GAS CORS 拒絕，請求仍會到達伺服器達到暖機效果。
+      // 回應一律忽略（catch 吞掉），不影響主流程。
+      fetch(API_URL + '?action=ping', { method: 'GET', mode: 'cors', cache: 'no-store' }).catch(function(){});
     } catch (e) {}
   }
 
   var _syncing = false;
-  async function syncOutbox(force) {
-    if (!navigator.onLine || _syncing) return;
-    if (!force && Date.now() - _lastSyncAttempt < 60 * 1000) return;
+  var _syncPromise = null;
+
+  // 所有入口共用同一個 Promise，避免 online、visibilitychange、輪詢及手動按鈕
+  // 同時啟動多條同步連線。同步仍維持佇列順序，確保 inspection/photo 依賴不被打亂。
+  function syncOutbox(force) {
+    if (!navigator.onLine) return Promise.resolve(0);
+    if (_syncPromise) return _syncPromise;
+    // 🔥 [Bugfix] 節流時間從 60s 縮短至 15s，確保用戶從離線恢復連線後能更快觸發同步重試
+    if (!force && Date.now() - _lastSyncAttempt < 15 * 1000) return Promise.resolve(0);
+
+    _syncPromise = runSyncOutbox(force).finally(function() {
+      _syncPromise = null;
+    });
+    return _syncPromise;
+  }
+
+  // 可选延时：批次间让出主线程并避免 GAS 限流
+  function delay_(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+  // 单批次逐笔同步（保持顺序，不并发），返回 {synced, failed, networkStreak, shouldBreak}
+  async function processBatch_(batch){
+    var synced = 0;
+    var failed = 0;
+    var networkStreak = 0;
+    var shouldBreak = false;
+    for (var i = 0; i < batch.length; i++) {
+      var item = batch[i];
+      if (!navigator.onLine) { shouldBreak = true; break; }
+      if (item.retry >= MAX_RETRY) {
+        console.warn('[Sync] 记录超过重试上限，标记为 failed（保留）:', item.id);
+        await markFailed(item.id, '超过重试上限(' + MAX_RETRY + '次)');
+        auditWrite(item.payload, 'sync', 'failed', '超过重试上限(' + MAX_RETRY + '次)');
+        failed++;
+        networkStreak = 0;
+        continue;
+      }
+      var photoErr = validatePhotoPayloadOffline(item.payload);
+      if (photoErr) {
+        console.warn('[Sync] 相片校验失败，标记 failed:', photoErr);
+        await markFailed(item.id, photoErr);
+        auditWrite(item.payload, 'sync', 'failed', photoErr);
+        pwaToast('⚠️ 离线记录相片校验失败：' + photoErr, 4000);
+        failed++;
+        networkStreak = 0;
+        continue;
+      }
+      var tk = getCurrentToken();
+      if (tk) item.payload.token = tk;
+      if (typeof AuthService !== 'undefined' && AuthService.getCsrfToken) {
+        var csrfTk = AuthService.getCsrfToken();
+        if (csrfTk) item.payload.csrf_token = csrfTk;
+      }
+      try {
+        var res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(item.payload)
+        });
+        var json;
+        try {
+          if (typeof ApiService !== 'undefined' && ApiService.parseResponse) {
+            json = await ApiService.parseResponse(res, 'POST offline sync');
+          } else {
+            var responseBody = await res.text();
+            try { json = responseBody ? JSON.parse(responseBody) : null; } catch (parseError) {
+              throw new Error('同步回应不是有效 JSON，请确认 GAS 使用正式 /exec 部署网址。');
+            }
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+          }
+        } catch (responseError) {
+          var responseStatus = responseError.status || res.status;
+          var permanentApiError = responseError.noRetry || responseStatus === 401 || responseStatus === 403 || responseStatus === 404;
+          var responseMessage = responseError.message || ('HTTP ' + responseStatus);
+          if (permanentApiError) {
+            console.error('[Sync] API 部署或权限错误，停止自动重试:', responseMessage);
+            await markFailed(item.id, responseMessage);
+            auditWrite(item.payload, 'sync', 'failed', responseMessage);
+            failed++;
+            networkStreak = 0;
+            continue;
+          }
+          console.warn('[Sync] 服务器状态/格式错误，稍后重试:', responseMessage);
+          quietFailToast('⏳ 后端不稳，记录已安全排队');
+          await incrementRetry(item.id, responseMessage);
+          auditWrite(item.payload, 'sync', 'retry', responseMessage);
+          failed++;
+          networkStreak++;
+          if (networkStreak >= 3) { shouldBreak = true; }
+          continue;
+        }
+        if (json && (json.ok || json.duplicate === true)) {
+          if (json.duplicate === true) console.log('[Sync] 后端回报重复（client_id 已处理），视为成功:', item.id);
+          await markSynced(item.id);
+          auditWrite(item.payload, 'sync', 'synced');
+          synced++;
+          networkStreak = 0;
+        } else if (json && (function(j){var c=String(j.error_code||j.error||''); return c==='UNAUTHORIZED'||c==='CSRF_INVALID'||c==='CSRF_TOKEN_INVALID'||c==='AUTH_FAILED'; })(json)) {
+          auditWrite(item.payload, 'sync', 'unauthorized', json.error);
+          await updateItem(item.id, { status: 'queued', lastError: '登入已过期' });
+          if (typeof AuthService !== 'undefined' && (AuthService.reauthenticate || AuthService.promptAuth)) {
+            var reOk = AuthService.reauthenticate ? await AuthService.reauthenticate('登入已过期，请重新输入工作人员密码以继续同步') : await AuthService.promptAuth('登入已过期，请重新输入工作人员密码以继续同步');
+            if (reOk) { i--; networkStreak = 0; continue; }
+          }
+          failed++;
+          networkStreak = 0;
+          shouldBreak = true;
+          break;
+        } else {
+          var bizCode = json && String(json.error_code || json.error || 'UNKNOWN');
+          var noRetryCodes = {VALIDATION_FAILED:true, CONFLICT:true, INVALID_LOCATION:true, INVALID_REQUEST:true, INVALID_JSON:true, UNSUPPORTED_OPERATION:true, UPLOAD_FAILED:true};
+          var bizMsg = (typeof ErrorCodes !== 'undefined' && ErrorCodes.messageForResponse) ? ErrorCodes.messageForResponse(json, bizCode) : bizCode;
+          if(noRetryCodes[bizCode]){
+            console.warn('[Sync] 永久性业务错误，直接标记 failed:', bizCode);
+            await markFailed(item.id, bizCode + ':' + bizMsg);
+            auditWrite(item.payload, 'sync', 'failed', bizCode);
+          } else {
+            console.warn('[Sync] 业务错误（保留重试）:', bizCode);
+            await incrementRetry(item.id, bizCode);
+            auditWrite(item.payload, 'sync', 'error', bizCode);
+          }
+          failed++;
+          networkStreak = 0;
+          continue;
+        }
+      } catch (err) {
+        console.warn('[Sync] 网络不稳，稍后重试');
+        quietFailToast('⏳ 网络不稳，记录已安全排队');
+        await incrementRetry(item.id, (err && err.message) || '网络不稳');
+        auditWrite(item.payload, 'sync', 'retry', (err && err.message) || '网络不稳');
+        failed++;
+        networkStreak++;
+        if (networkStreak >= 3) { shouldBreak = true; break; }
+        continue;
+      }
+    }
+    return { synced: synced, failed: failed, networkStreak: networkStreak, shouldBreak: shouldBreak };
+  }
+
+  async function runSyncOutbox(force) {
+    if (!navigator.onLine || _syncing) return 0;
+    // 🔥 [Bugfix] 與 syncOutbox 節流一致（15s）：避免外層已放行但內層 60s 檢查把請求擋住，
+    // 導致從離線恢復連線後 60 秒內無法重試同步
+    if (!force && Date.now() - _lastSyncAttempt < 15 * 1000) return 0;
     _lastSyncAttempt = Date.now();
     _syncing = true;
-
+    var totalSynced = 0;
+    var totalFailed = 0;
+    var batchCount = 0;
     try {
-      await cleanupExpired();
-      var items = await all();
-      // 只處理「待同步」記錄（queued/syncing）；synced/failed 不會自動重送
-      var pending = items.filter(function(it) {
-        return it.status === 'queued' || it.status === 'syncing';
-      });
-      if (!pending.length) return;
-
-      console.log('🔄 [Sync] 待同步 ' + pending.length + ' 筆（總共 ' + items.length + ' 筆）');
-
-      var synced = 0;
-      var failed = 0;
-      var batch = pending.slice(0, SYNC_BATCH_SIZE);
-
-      for (var i = 0; i < batch.length; i++) {
-        var item = batch[i];
-
-        // 若 retry 超過上限：改為 status='failed' 並保留，等待用戶手動重試／匯出（不再丟棄）
-        if (item.retry >= MAX_RETRY) {
-          console.warn('🔄 [Sync] 記錄超過重試上限，標記為 failed（保留）:', item.id);
-          await markFailed(item.id, '超過重試上限(' + MAX_RETRY + '次)');
-          auditWrite(item.payload, 'sync', 'failed', '超過重試上限(' + MAX_RETRY + '次)');
-          failed++;
-          continue;
+      while (navigator.onLine && batchCount < MAX_DRAIN_BATCHES) {
+        var items = await all();
+        var pending = items.filter(function(it) { return it.status === 'queued' || it.status === 'syncing'; });
+        if (!pending.length) break;
+        if (batchCount > 0) {
+          await delay_(BATCH_DELAY_MS);
+          if (!navigator.onLine) break;
         }
-
-        // 標記為同步中，並附加最新 token + CSRF token（同步器模式，後端會驗證）
-        await markSyncing(item.id);
-        var tk = getCurrentToken();
-        if (tk) item.payload.token = tk;
-        if (typeof AuthService !== 'undefined' && AuthService.getCsrfToken) {
-          var csrfTk = AuthService.getCsrfToken();
-          if (csrfTk) item.payload.csrf_token = csrfTk;
+        console.log('[Sync] 待同步 ' + pending.length + ' 筆（總共 ' + items.length + ' 筆）' + (batchCount ? ' - 第' + (batchCount+1) + '批' : ''));
+        var batch = pending.slice(0, SYNC_BATCH_SIZE);
+        var result = await processBatch_(batch);
+        totalSynced += result.synced;
+        totalFailed += result.failed;
+        batchCount++;
+        if (result.shouldBreak) {
+          console.warn('[Sync] 連續網路失敗或登入過期，暫停本輪 drain，待下次觸發');
+          break;
         }
-
-        try {
-          var res = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(item.payload)
-          });
-
-          if (!res.ok) {
-            console.warn('🔄 [Sync] 伺服器狀態 ' + res.status + '，稍後重試');
-            quietFailToast('⏳ 後端不穩，記錄已安全排隊');
-            await incrementRetry(item.id, 'HTTP ' + res.status);
-            auditWrite(item.payload, 'sync', 'retry', 'HTTP ' + res.status);
-            failed++;
-            continue; // 繼續處理下一筆，不阻塞
-          }
-
-          var json = await res.json();
-          if (json && (json.ok || json.duplicate === true)) {
-            // 成功／後端回報重複（同一 client_id 已處理）：都視為成功
-            if (json.duplicate === true) {
-              console.log('🔄 [Sync] 後端回報重複（client_id 已處理），視為成功:', item.id);
-            }
-            await markSynced(item.id);
-            auditWrite(item.payload, 'sync', 'synced');
-            synced++;
-          } else if (json && json.error === 'UNAUTHORIZED') {
-            // 登入過期：記錄錯誤並退回 queued，重新驗證後重試同一筆
-            auditWrite(item.payload, 'sync', 'unauthorized', '登入已過期');
-            await updateItem(item.id, { status: 'queued', lastError: '登入已過期' });
-            if (typeof AuthService !== 'undefined' && AuthService.promptAuth) {
-              var reOk = await AuthService.promptAuth('🔐 登入已過期，請重新驗證以繼續同步');
-              if (reOk) {
-                // 重新驗證成功，重試同一筆（不增加 retry）
-                i--; // 重試本筆
-                continue;
-              }
-            }
-            failed++;
-            continue;
-          } else {
-            // 業務錯誤：記錄錯誤並保留重試（但會受 MAX_RETRY 限制）
-            console.warn('🔄 [Sync] 業務錯誤（保留重試）:', json && json.error);
-            await incrementRetry(item.id, (json && json.error) || '業務錯誤');
-            auditWrite(item.payload, 'sync', 'error', (json && json.error) || '業務錯誤');
-            failed++;
-            continue;
-          }
-        } catch (err) {
-          // 網路錯誤
-          console.warn('🔄 [Sync] 網絡不穩，稍後重試');
-          quietFailToast('⏳ 網絡不穩，記錄已安全排隊');
-          await incrementRetry(item.id, (err && err.message) || '網絡不穩');
-          auditWrite(item.payload, 'sync', 'retry', (err && err.message) || '網絡不穩');
-          failed++;
-          continue;
-        }
+        if (result.synced === 0 && result.failed === 0) break;
       }
-
-      console.log('🔄 [Sync] 完成：成功 ' + synced + ' 筆，失敗 ' + failed + ' 筆');
-
-      if (synced > 0) {
-        pwaToast('☁️ 已同步 ' + synced + ' 筆離線記錄', 3000);
+      console.log('[Sync] 完成：成功 ' + totalSynced + ' 筆，失敗 ' + totalFailed + ' 筆' + (batchCount ? '（共' + batchCount + '批）' : ''));
+      if (totalSynced > 0) {
+        var remain = await getPendingCount();
+        if (remain === 0) pwaToast('✅ 已全部同步 (' + totalSynced + '筆)', 3000);
+        else pwaToast('☁️ 已同步 ' + totalSynced + ' 筆，剩餘 ' + remain + ' 筆，繼續同步中…', 3000);
         _failToastShown = false;
         clearCache();
-        if (!_reloading) {
-          _reloading = true;
-          setTimeout(function() { location.reload(); }, 1500);
-        }
+        notifySwInvalidateOffline_('sync', null);
+        try { if(typeof ApiService!=='undefined' && ApiService.clearCache) ApiService.clearCache(); } catch(e) {}
+      } else if (totalFailed > 0 && batchCount > 0) {
+        pwaToast('⏳ 部分記錄暫時無法同步，已保留重試', 3000);
       }
+      return totalSynced;
     } catch (err) {
-      console.error('🔄 [Sync] 同步流程發生錯誤:', err);
+      console.error('[Sync] 同步流程發生錯誤:', err);
+      return totalSynced;
     } finally {
       _syncing = false;
     }
@@ -524,16 +718,17 @@
   // 寫入 outbox 前移除 token + csrf_token，確保敏感憑證不會明文殘留在 IndexedDB
   // （同步時 syncOutbox 會從 AuthService 重新補上兩者）
   function stripToken(payload) {
-    if (payload && typeof payload === 'object') {
-      if ('token' in payload) delete payload.token;
-      if ('csrf_token' in payload) delete payload.csrf_token;
-    }
-    return payload;
+    if (!payload || typeof payload !== 'object') return payload;
+    const copy = Object.assign({}, payload);
+    if ('token' in copy) delete copy.token;
+    if ('csrf_token' in copy) delete copy.csrf_token;
+    return copy;
   }
 
   // ========== 攔截 ApiService ==========
   if (typeof ApiService !== 'undefined') {
     var origPost = ApiService.post;
+    var origClearCache = ApiService.clearCache; // 🔥 保留原 ApiService.clearCache（清理 responseCache Map）
     ApiService.post = async function(payload) {
       if (!navigator.onLine) {
         // 🔐 不將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）
@@ -543,7 +738,7 @@
       }
       try {
         var result = await origPost(payload);
-        if (result && result.ok) clearCache();
+        if (result && result.ok) { clearCacheForType(payload.type || 'post'); notifySwInvalidateOffline_(payload.type||'post', payload); }
         return result;
       } catch (err) {
         // 檢查是否為網路錯誤或伺服器錯誤（5xx）
@@ -563,10 +758,20 @@
     ApiService.get = async function(action, params) {
       try {
         var result = await origGet(action, params);
-        if (result && result.data) setCache(action, params, result.data);
+        // nocache/bust: never persist bypass result as snapshot, and warn
+        try{ var _bp = params && (params.nocache==='1'||params.bust==='1'); if(_bp && result && Array.isArray(result.data) && result.data.length===0) console.warn('[OfflineGet] bypass returned 0 for '+action+' '+JSON.stringify(params)); }catch(e){}
+        // 🔥 [Bugfix] bypass 請求的成功結果一律不寫入 localStorage 快取，
+        // 避免「強制刷新」資料反而污染離線快取（cache key 雖不同但佔空間且語義錯誤）
+        if (result && result.data && !(params && (params.nocache==='1'||params.bust==='1'))) setCache(action, params, result.data);
         return result;
       } catch (err) {
-        if (!navigator.onLine || err.message === 'OFFLINE' || err.message === 'TIMEOUT') {
+        // v3.0: SW 離線無快取時回 503 {error:'OFFLINE'}，此處一併視為離線回退
+        var isOfflineErr = !navigator.onLine
+          || err.message === 'OFFLINE' || err.message === 'TIMEOUT'
+          || (err && err.status === 503)
+          || (err && err.backendError === 'OFFLINE')
+          || (err && typeof err.code === 'string' && err.code.indexOf('API_') === 0 && !navigator.onLine);
+        if (isOfflineErr) {
           var cached = getCache(action, params);
           if (cached) return { data: cached, offline: true, stale: true };
           return { data: [], offline: true, stale: true };
@@ -575,7 +780,11 @@
       }
     };
 
-    ApiService.clearCache = clearCache;
+    ApiService.clearCache = function (action) {
+      // 🔥 先清理記憶體快取（responseCache Map），再清理 localStorage
+      if (typeof origClearCache === 'function') origClearCache(action);
+      clearCache(action);
+    };
   }
 
   // ========== 事件監聽 ==========
@@ -584,8 +793,9 @@
   });
 
   window.addEventListener('online', function() {
+    // 暖機與同步並行啟動；不再固定等待 800ms，避免恢復連線後白等近一秒。
     warmGAS();
-    setTimeout(function() { syncOutbox(true); }, 800);
+    setTimeout(function() { syncOutbox(true); }, 0);
   });
 
   document.addEventListener('visibilitychange', function() {
@@ -598,12 +808,12 @@
   setTimeout(warmGAS, 2000);
 
   // ========== 全域暴露 ==========
-  window.OfflineQueue = OfflineQueue;
-  window.pwaToast = pwaToast;
-  window.syncOutbox = syncOutbox;
-  window.syncNow = syncNow;
-  window.warmGAS = warmGAS;
-  window.TreeSnapshot = { save: snapSave, load: snapLoad };
+  globalThis.OfflineQueue = OfflineQueue;
+  globalThis.pwaToast = pwaToast;
+  globalThis.syncOutbox = syncOutbox;
+  globalThis.syncNow = syncNow;
+  globalThis.warmGAS = warmGAS;
+  globalThis.TreeSnapshot = { save: snapSave, load: snapLoad, remove: snapRemove };
 
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     setTimeout(cleanupExpired, 3000);

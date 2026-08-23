@@ -1,20 +1,19 @@
 /**
  * 繪圖／量測／落點互動模組 [Phase1]（零 vendor）
  * - startMeasure('line'|'area')：量距離／面積
- * - startDrawPolygon(cb)：畫地盤邊界（多邊形）
  * - startPick(cb, hint)：按一下選位置（新增／移動樹木）
  */
 import { state } from './state.js';
 import { updateStatus } from './dom.js';
 
-let mode = null;          // 'line' | 'area' | 'polygon' | 'pick'
+let mode = null;          // 'line' | 'area' | 'pick'
 let pts = [];
 let vertexLayer = null;   // L.layerGroup
 let shape = null;         // committed polyline/polygon
 let rubber = null;        // preview segment
 let finalLayer = null;    // finished result
 let pickCb = null;
-let polygonCb = null;
+
 let barEl = null;
 
 const LINE_STYLE = { color: '#1565c0', weight: 3 };
@@ -156,10 +155,8 @@ function finishShape() {
     removeFinal();
     finalLayer = L.polygon(donePts, Object.assign({}, AREA_STYLE, { renderer: getSvgRenderer() })).addTo(state.map);
     bindTooltip(finalLayer, '📐 ' + fmtArea(area) + '｜周 ' + fmtLen(len));
-    const cb = polygonCb;
     resetInteraction();
-    if (m === 'polygon' && cb) cb(donePts, area);
-    else updateStatus('✅ 量測完成：' + fmtArea(area));
+    updateStatus('✅ 量測完成：' + fmtArea(area));
     return;
   }
 }
@@ -173,7 +170,7 @@ function resetInteraction() {
   if (state.map.doubleClickZoom) state.map.doubleClickZoom.enable();
   mode = null;
   pickCb = null;
-  polygonCb = null;
+  
   pts = [];
 }
 
@@ -206,11 +203,6 @@ function begin(m, opts) {
 
 export function startMeasure(kind) {
   begin(kind, { hint: kind === 'line' ? '📏 量距：按地圖加點，按「完成」結束' : '📐 量面積：按地圖加點，按「完成」結束' });
-}
-
-export function startDrawPolygon(cb) {
-  polygonCb = cb;
-  begin('polygon', { hint: '🖍 畫邊界：按地圖加角點，按「完成」閉合' });
 }
 
 export function startPick(cb, hint) {

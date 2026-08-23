@@ -1,13 +1,13 @@
 /**
  * 樹木管理系統 - Sync Center 同步狀態面板 (Phase 3)
  * 純 plain script（IIFE），依賴 offline.js 暴露的：
- *   window.OfflineQueue / window.syncNow / window.pwaToast
+ *   globalThis.OfflineQueue / globalThis.syncNow / globalThis.pwaToast
  * 用途：前線人員不需開啟 devtools 都知道同步狀態、可重試／匯出失敗記錄
  */
 (function () {
   'use strict';
 
-  if (typeof window.OfflineQueue === 'undefined') return; // offline.js 未載入就不顯示
+  if (typeof globalThis.OfflineQueue === 'undefined') return; // offline.js 未載入就不顯示
 
   var BADGE_ID = 'syncBadge';
   var PANEL_ID = 'syncPanel';
@@ -16,6 +16,8 @@
 
   var _els = {};
   var _pollTimer = null;
+  var _refreshPromise = null;
+  var _manualSyncPromise = null;
 
   function isTreePage() {
     return !!document.getElementById('app') && !document.getElementById('map');
@@ -26,27 +28,30 @@
     var css = [
       '#' + BADGE_ID + '{position:fixed;right:12px;bottom:100px;z-index:99990;display:flex;align-items:center;gap:6px;background:#263238;color:#fff;border:none;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);touch-action:manipulation;}',
       '#' + BADGE_ID + ':active{transform:scale(.97);}',
-      '#' + BADGE_ID + ' .bubble{min-width:20px;height:20px;line-height:20px;border-radius:999px;font-size:12px;text-align:center;padding:0 6px;background:#546e7a;}',
-      '#' + BADGE_ID + ' .bubble.ok{background:#2e7d32;}',
+      '#' + BADGE_ID + ' .bubble{min-width:20px;height:20px;line-height:20px;border-radius:999px;font-size:12px;text-align:center;padding:0 6px;background:var(--color-neutral);}',
+      '#' + BADGE_ID + ' .bubble.ok{background:var(--color-primary);}',
       '#' + BADGE_ID + ' .bubble.warn{background:#ffb300;color:#000;}',
       '#' + BADGE_ID + ' .bubble.err{background:#e53935;}',
       '#' + PANEL_ID + '{position:fixed;right:12px;bottom:88px;z-index:99991;width:min(360px,calc(100vw - 24px));max-height:72vh;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;font-size:14px;color:#222;line-height:1.5;}',
       '#' + PANEL_ID + '.open{display:block;}',
       '#' + PANEL_ID + ' .sp-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee;font-weight:600;position:sticky;top:0;background:#fff;}',
+      '#' + PANEL_ID + ' .sp-head{gap:8px;}',
+      '#' + PANEL_ID + ' .sp-head span{white-space:nowrap;}',
+      '#' + PANEL_ID + ' .sp-close{flex-shrink:0;}',
       '#' + PANEL_ID + ' .sp-close{border:none;background:none;font-size:18px;cursor:pointer;color:#666;padding:0 4px;}',
       '#' + PANEL_ID + ' .sp-body{padding:12px 14px;}',
       '#' + PANEL_ID + ' .sp-row{display:flex;justify-content:space-between;margin:6px 0;font-size:13px;}',
       '#' + PANEL_ID + ' .sp-muted{color:#888;font-size:12px;}',
       '#' + PANEL_ID + ' .sp-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;}',
-      '#' + PANEL_ID + ' .sp-btn{flex:1;min-width:120px;border:none;border-radius:9px;padding:10px 8px;background:#2e7d32;color:#fff;font-size:13px;font-weight:500;cursor:pointer;touch-action:manipulation;}',
-      '#' + PANEL_ID + ' .sp-btn.sec{background:#546e7a;}',
+      '#' + PANEL_ID + ' .sp-btn{flex:1;min-width:120px;border:none;border-radius:9px;padding:10px 8px;background:var(--color-primary);color:var(--color-primary-on);font-size:13px;font-weight:500;cursor:pointer;touch-action:manipulation;}',
+      '#' + PANEL_ID + ' .sp-btn.sec{background:var(--color-neutral);color:var(--color-neutral-on);}',
       '#' + PANEL_ID + ' .sp-btn.warn{background:#e65100;}',
       '#' + PANEL_ID + ' .sp-failed{margin-top:8px;border-top:1px dashed #ddd;padding-top:8px;}',
       '#' + PANEL_ID + ' .sp-failed-item{border:1px solid #f0d0d0;background:#fff5f5;border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:12px;}',
       '#' + PANEL_ID + ' .sp-failed-item .f-title{font-weight:600;color:#b71c1c;}',
       '#' + PANEL_ID + ' .sp-failed-item .f-err{color:#888;word-break:break-all;}',
       '#' + PANEL_ID + ' .sp-failed-item .f-actions{margin-top:6px;display:flex;gap:6px;}',
-      '#' + PANEL_ID + ' .sp-failed-item .f-btn{border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;background:#546e7a;color:#fff;}',
+      '#' + PANEL_ID + ' .sp-failed-item .f-btn{border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;background:var(--color-neutral);color:var(--color-neutral-on);}',
       '#' + PANEL_ID + ' .sp-failed-item .f-btn.del{background:#b71c1c;}',
       '#' + PANEL_ID + ' .sp-empty{color:#999;font-size:12px;padding:6px 0;}',
       // [UI] 樹木詳情頁（t.html）：頂欄 Flex（返回按鈕左、同步按鈕右，與下方白卡齊平）
@@ -54,16 +59,40 @@
       '.sync-topbar a.back{margin-bottom:0;}',
       '#' + BADGE_ID + '.compact{position:static;right:auto;bottom:auto;display:inline-flex;width:auto;margin:0;padding:6px 12px;font-size:13px;box-shadow:none;vertical-align:middle;white-space:nowrap;flex-shrink:0;}',
       '#' + BADGE_ID + '.in-drawer{position:static;right:auto;bottom:auto;display:flex;width:100%;justify-content:center;margin:0;padding:8px 12px;font-size:13px;border-radius:8px;box-shadow:none;}',
+      '#' + BADGE_ID + '.in-drawer{display:none !important;}',
+      '#' + BADGE_ID + '.drawer-controller{display:none !important;}',
+      '.drawer-sync-badge.ok{color:var(--color-primary);}',
+      '.drawer-sync-badge.warn{color:#ffb300;}',
+      '.drawer-sync-badge.err{color:#e53935;}',
       '#' + PANEL_ID + '.compact-panel{bottom:auto;top:56px;}',
       // [UI] 電腦版地圖頁：同步按鈕上移，避開右下角 Tree Status 圖例
       '@media (min-width: 601px){#' + BADGE_ID + ':not(.compact){bottom:96px;} #' + PANEL_ID + ':not(.compact-panel){bottom:156px;}}',
       // [UI] 電腦版（≥769px）地圖頁：同步按鈕獨立固定在右下、Tree Status 圖例正上方
-      '@media (min-width: 769px){#' + BADGE_ID + '.desktop-fixed{right:10px;bottom:96px;}}'
+      '@media (min-width: 769px){#' + BADGE_ID + '.desktop-fixed{right:10px;bottom:96px;}}',
+      '#' + BADGE_ID + '.zoom-hidden,#' + PANEL_ID + '.zoom-hidden{display:none !important;}'
     ].join('\n');
     var style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = css;
     document.head.appendChild(style);
+    // 🔥 [CSP 修復] 用 CSSOM insertRule 注入（style-src 唔會封鎖 CSSOM），逐條規則以大括號平衡切分
+    try {
+      var sheet = style.sheet;
+      var cssText = css;
+      var buffer = '';
+      var depth = 0;
+      for (var i = 0; i < cssText.length; i++) {
+        var ch = cssText[i];
+        buffer += ch;
+        if (ch === '{') depth++;
+        else if (ch === '}') {
+          depth--;
+          if (depth === 0) {
+            try { sheet.insertRule(buffer, sheet.cssRules.length); } catch (e) {}
+            buffer = '';
+          }
+        }
+      }
+    } catch (e) { style.textContent = css; }
   }
   // [UI] 樹木詳情頁：等 t.js 異步 render 出 .back 後，包成 Flex 頂欄（返回按鈕左、同步按鈕右）
   function mountTreeBadge(badge) {
@@ -93,6 +122,13 @@
       var bar = document.querySelector('.layerbar');
       if (bar && !done) {
         done = true;
+        var existingSync = bar.querySelector('button[data-act="sync"]');
+        if (existingSync) {
+          badge.classList.add('drawer-controller');
+          document.body.appendChild(badge);
+          mo.disconnect();
+          return;
+        }
         var addTree = bar.querySelector('button[data-act="addTree"]');
         if (addTree) {
           addTree.parentNode.insertBefore(badge, addTree.nextSibling);
@@ -149,8 +185,14 @@
         badge.classList.add('desktop-fixed');
         document.body.appendChild(badge);
       } else {
-        badge.classList.add('in-drawer');
-        mountDrawerBadge(badge);
+        var existingSync = document.querySelector('.layerbar button[data-act="sync"]');
+        if (existingSync) {
+          badge.classList.add('drawer-controller');
+          document.body.appendChild(badge);
+        } else {
+          badge.classList.add('in-drawer');
+          mountDrawerBadge(badge);
+        }
       }
     }
 
@@ -185,16 +227,19 @@
       ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
   }
 
-  async function refresh() {
-    var items = [];
-    try { items = await window.OfflineQueue.all(); } catch (e) { items = []; }
+  function refresh() {
+    if (_refreshPromise) return _refreshPromise;
 
-    var pending = 0, failed = 0, lastSync = 0, failedItems = [];
-    items.forEach(function (it) {
-      if (it.status === 'queued' || it.status === 'syncing') pending++;
-      if (it.status === 'failed') { failed++; failedItems.push(it); }
-      if (it.syncedAt && it.syncedAt > lastSync) lastSync = it.syncedAt;
-    });
+    _refreshPromise = (async function () {
+      var items = [];
+      try { items = await globalThis.OfflineQueue.all(); } catch (e) { items = []; }
+
+      var pending = 0, failed = 0, lastSync = 0, failedItems = [];
+      items.forEach(function (it) {
+        if (it.status === 'queued' || it.status === 'syncing') pending++;
+        if (it.status === 'failed') { failed++; failedItems.push(it); }
+        if (it.syncedAt && it.syncedAt > lastSync) lastSync = it.syncedAt;
+      });
 
     if (_els.bubble) {
       _els.bubble.className = 'bubble';
@@ -203,12 +248,33 @@
       else { _els.bubble.textContent = '✓'; _els.bubble.classList.add('ok'); }
     }
 
+    var db = document.querySelector('.drawer-sync-badge');
+    if (db) {
+      db.className = 'drawer-sync-badge';
+      if (failed > 0) {
+        db.textContent = failed;
+        db.classList.add('err');
+      } else if (pending > 0) {
+        db.textContent = pending;
+        db.classList.add('warn');
+      } else {
+        db.textContent = '✓';
+        db.classList.add('ok');
+      }
+    }
+
     if (_els.status) _els.status.textContent = navigator.onLine ? '🟢 線上' : '🔴 離線';
     if (_els.pending) _els.pending.textContent = pending;
     if (_els.failed) _els.failed.textContent = failed;
     if (_els.lastSync) _els.lastSync.textContent = fmtTime(lastSync);
 
-    renderFailedList(failedItems);
+      renderFailedList(failedItems);
+    })();
+
+    _refreshPromise = _refreshPromise.finally(function () {
+      _refreshPromise = null;
+    });
+    return _refreshPromise;
   }
 
   function renderFailedList(failedItems) {
@@ -258,34 +324,47 @@
     });
   }
   async function doSyncNow() {
-    await window.syncNow();
-    refresh();
+    if (_manualSyncPromise) return _manualSyncPromise;
+
+    _manualSyncPromise = (async function () {
+      try {
+        await globalThis.syncNow();
+      } finally {
+        await refresh();
+      }
+    })();
+
+    try {
+      return await _manualSyncPromise;
+    } finally {
+      _manualSyncPromise = null;
+    }
   }
 
   async function doRetryOne(id) {
-    var r = await window.OfflineQueue.retryOne(id);
-    if (r && r.ok === false) { if (window.pwaToast) window.pwaToast('⚠️ ' + r.error); }
+    var r = await globalThis.OfflineQueue.retryOne(id);
+    if (r && r.ok === false) { if (globalThis.pwaToast) globalThis.pwaToast('⚠️ ' + r.error); }
     refresh();
   }
 
   async function doRetryAll() {
-    var n = await window.OfflineQueue.retryAllFailed();
-    if (window.pwaToast) {
-      window.pwaToast(navigator.onLine ? ('🔁 已重排 ' + n + ' 筆失敗記錄') : ('🔁 已重排 ' + n + ' 筆，連線後自動同步'));
+    var n = await globalThis.OfflineQueue.retryAllFailed();
+    if (globalThis.pwaToast) {
+      globalThis.pwaToast(navigator.onLine ? ('🔁 已重排 ' + n + ' 筆失敗記錄') : ('🔁 已重排 ' + n + ' 筆，連線後自動同步'));
     }
     refresh();
   }
 
   async function doDelete(id) {
     if (!confirm('確定刪除此失敗記錄？刪除後無法復原。')) return;
-    await window.OfflineQueue.remove(id);
+    await globalThis.OfflineQueue.remove(id);
     refresh();
   }
 
   async function doExport() {
-    var items = await window.OfflineQueue.all();
+    var items = await globalThis.OfflineQueue.all();
     var failed = items.filter(function (it) { return it.status === 'failed'; });
-    if (!failed.length) { if (window.pwaToast) window.pwaToast('沒有失敗記錄可匯出'); return; }
+    if (!failed.length) { if (globalThis.pwaToast) globalThis.pwaToast('沒有失敗記錄可匯出'); return; }
 
     var data = failed.map(function (it) {
       var p = {};
@@ -320,9 +399,9 @@
   }
 
   async function doExportLog() {
-    if (typeof window.AuditLog === 'undefined') { if (window.pwaToast) window.pwaToast('⚠️ 診斷記錄未啟用'); return; }
-    var n = window.AuditLog.exportJSON();
-    if (window.pwaToast) window.pwaToast('🧾 已匯出 ' + n + ' 筆診斷記錄');
+    if (typeof globalThis.AuditLog === 'undefined') { if (globalThis.pwaToast) globalThis.pwaToast('⚠️ 診斷記錄未啟用'); return; }
+    var n = globalThis.AuditLog.exportJSON();
+    if (globalThis.pwaToast) globalThis.pwaToast('🧾 已匯出 ' + n + ' 筆診斷記錄');
   }
 
   function startPolling() {
@@ -334,6 +413,21 @@
 
   function init() {
     build();
+
+    // [Phase11] 相片放大時自動隱藏同步 UI（訂閱頁面事件，與 t.js 解耦）
+    function applyPhotoZoom(open) {
+      var badge = document.getElementById(BADGE_ID);
+      var panel = document.getElementById(PANEL_ID);
+      if (badge) badge.classList.toggle('zoom-hidden', !!open);
+      if (panel) {
+        if (open && panel.classList.contains('open')) close(); // 放大時若面板開住，先關閉
+        panel.classList.toggle('zoom-hidden', !!open);
+      }
+    }
+    window.addEventListener('treemap:photozoom', function (e) {
+      applyPhotoZoom(!!(e && e.detail && e.detail.open));
+    });
+
     refresh();
     window.addEventListener('online', refresh);
     window.addEventListener('offline', refresh);

@@ -120,7 +120,7 @@ function addSample(pos, flyNow) {
   const lat = pos.coords.latitude;
   const lng = pos.coords.longitude;
   const acc = pos.coords.accuracy || 0;
-  if (!isFinite(lat) || !isFinite(lng) || !acc) return;
+  if (!isFinite(lat) || !isFinite(lng) || !(acc > 0)) return;
 
   samples.push({ lat: lat, lng: lng, acc: acc });
   const stable = computeStable();

@@ -9,6 +9,7 @@ import { state } from './modules/state.js';
 import { DOM, closePanel } from './modules/dom.js';
 import { initMap } from './modules/map.js';
 import { handleSearch, hideSearch } from './modules/search.js';
+import { SpeciesRepository } from './modules/species.js';
 import { loadTreeSpecies } from './modules/species.js';
 import { selectProject } from './modules/projects.js';
 import { locateTree, checkURLParams } from './modules/locate.js';
@@ -20,6 +21,7 @@ import {
   setPromptAuth
 } from './modules/forms.js';
 import { load } from './modules/loader.js';
+import { getSpatialStats } from './core/spatial-index.js';
 
 // 全域依賴注入（剩餘：AuthService 尚未轉 ESM）
 ApiService.init(Config.API_ENDPOINT);
@@ -30,6 +32,7 @@ function getPerfMetrics() {
     renderTime: state.perfMetrics.renderTime,
     cacheHits: state.perfMetrics.cacheHits,
     totalRenders: state.perfMetrics.totalRenders,
+    spatialIndex: getSpatialStats(),
     apiStats: ApiService.getStats(),
     coordCacheStats: CoordUtils.getCacheStats()
   };
@@ -41,6 +44,7 @@ function clearCache() {
   state.treeCountMap.clear();
   state.treeMap.clear();
   state.treeSearchIndex.clear();
+  if (state.treeTokenIndex) state.treeTokenIndex.clear();
   state.treeLowerIndex.clear();
   state.treeIdIndex.clear();
   state.spatialIndexCache = null;
@@ -61,6 +65,7 @@ function focusTree(treeId) {
 function init() {
   DOM.statusEl = document.getElementById('status');
   DOM.projSel = document.getElementById('projSel');
+  DOM.addProjectBtn = document.getElementById('addProjectBtn');
   DOM.addTreeBtn = document.getElementById('addTreeBtn');
   DOM.panel = document.getElementById('panel');
   DOM.panelContent = document.getElementById('panelContent');
@@ -80,9 +85,8 @@ function init() {
     mo.observe(DOM.statusEl, { childList: true, characterData: true, subtree: true });
   }
 
-  const addProjectBtn = document.getElementById('addProjectBtn');
-  if (addProjectBtn) {
-    addProjectBtn.addEventListener('click', () => openProjectForm());
+  if (DOM.addProjectBtn) {
+    DOM.addProjectBtn.addEventListener('click', () => openProjectForm());
   }
   if (DOM.addTreeBtn) {
     DOM.addTreeBtn.addEventListener('click', () => openTreeForm());
@@ -103,7 +107,8 @@ function init() {
     setTimeout(() => CoordUtils.preheatCache(), 100);
   }
 
-  loadTreeSpecies();
+  SpeciesRepository.load().catch(function(){});
+  // legacy alias still works via loadTreeSpecies
 
   if (DOM.searchResults) {
     DOM.searchResults.addEventListener('click', (e) => {
@@ -122,8 +127,9 @@ function init() {
 
 document.addEventListener('DOMContentLoaded', init);
 
-// 🔥 全域 API（向後相容，保留 window.App）
-window.App = {
+// 🔥 全域 API（向後相容，保留 globalThis.App）
+globalThis.SpeciesRepository = SpeciesRepository;
+globalThis.App = {
   selectProject,
   openProjectForm,
   doCreateProject,
