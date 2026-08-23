@@ -1,0 +1,161 @@
+/* =========================================================
+ * 統一座標工具 - 後端真源（對應前端 assets/js/core/coordinates.js）
+ * 參數與前端 proj4 一致：HK80 = +proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246
+ * 範圍：HK80 N 800000-850000 E 800000-870000；WGS84 lat 22.15-22.55 lng 113.85-114.45（與前端 HK80_BOUNDS/WGS84_BOUNDS 一致）
+ * 舊別名保留：isValidHK80Range_/isValidWgs84HongKong_ 為統一入口
+ * ========================================================= */
+// 統一常數（單一來源，供前端對照；橢球常數在 config.gs 定義 WGS_A_/INTL_A_/ARC_）
+const COORD_HK80_BOUNDS_ = { N_MIN: 800000, N_MAX: 850000, E_MIN: 800000, E_MAX: 870000 };
+const COORD_WGS84_BOUNDS_ = { LAT_MIN: 22.15, LAT_MAX: 22.55, LNG_MIN: 113.85, LNG_MAX: 114.45 };
+// WGS84 → HK80 座標轉換（同前端 proj4 同一套參數）
+function geo2xyz_(lat, lng, h, a, f){
+  const e2 = f*(2-f);
+  const sL = Math.sin(lat), cL = Math.cos(lat);
+  const sG = Math.sin(lng), cG = Math.cos(lng);
+  const N = a/Math.sqrt(1-e2*sL*sL);
+  return [(N+h)*cL*cG, (N+h)*cL*sG, (N*(1-e2)+h)*sL];
+}
+
+function xyz2geo_(x, y, z, a, f){
+  const e2 = f*(2-f);
+  const p = Math.sqrt(x*x+y*y);
+  let lat = Math.atan2(z, p*(1-e2));
+  for(let i=0;i<10;i++){
+    const sL = Math.sin(lat);
+    const N = a/Math.sqrt(1-e2*sL*sL);
+    const nl = Math.atan2(z + e2*N*sL, p);
+    if(Math.abs(nl-lat)<1e-13){ lat=nl; break; }
+    lat = nl;
+  }
+  const sL = Math.sin(lat), cL = Math.cos(lat);
+  const N = a/Math.sqrt(1-e2*sL*sL);
+  const h = p/cL - N;
+  return [lat, Math.atan2(y,x), h];
+}
+
+function wgs84ToHk80_(latDeg, lngDeg){
+  if(latDeg===''||lngDeg===''||latDeg==null||lngDeg==null||isNaN(+latDeg)||isNaN(+lngDeg)) return null;
+  const lat = deg2rad_(+latDeg), lng = deg2rad_(+lngDeg);
+  const xyz = geo2xyz_(lat, lng, 0, WGS_A_, WGS_F_);
+  const x=xyz[0], y=xyz[1], z=xyz[2];
+  const dx=162.619, dy=276.959, dz=161.764;
+  const rx=-0.067753*ARC_, ry=2.243649*ARC_, rz=1.158827*ARC_;
+  const s=1+1.094246/1e6;
+  const X = dx + s*(x + rz*y - ry*z);
+  const Y = dy + s*(-rz*x + y + rx*z);
+  const Z = dz + s*(ry*x - rx*y + z);
+  const g = xyz2geo_(X, Y, Z, INTL_A_, INTL_F_);
+  const lat0 = deg2rad_(22.31213333333334), lon0 = deg2rad_(114.1785555555556);
+  const k0=1, x0=836694.05, y0=819069.8;
+  const a=INTL_A_, f=INTL_F_;
+  const e2=f*(2-f), ep2=e2/(1-e2);
+  const L=g[0], P=g[1];
+  const sL=Math.sin(L), cL=Math.cos(L), tL=Math.tan(L);
+  const N=a/Math.sqrt(1-e2*sL*sL);
+  const Tt=tL*tL, C=ep2*cL*cL, A=(P-lon0)*cL;
+  const e4=e2*e2, e6=e4*e2;
+  const M=a*((1-e2/4-3*e4/64-5*e6/256)*L-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*L)+(15*e4/256+45*e6/1024)*Math.sin(4*L)-(35*e6/3072)*Math.sin(6*L));
+  const M0=a*((1-e2/4-3*e4/64-5*e6/256)*lat0-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*lat0)+(15*e4/256+45*e6/1024)*Math.sin(4*lat0)-(35*e6/3072)*Math.sin(6*lat0));
+  const E = k0*N*(A+(1-Tt+C)*A*A*A/6+(5-18*Tt+Tt*Tt+72*C-58*ep2)*A*A*A*A*A/120)+x0;
+  const Nn = k0*(M-M0+N*tL*(A*A/2+(5-Tt+9*C+4*C*C)*A*A*A*A/24+(61-58*Tt+Tt*Tt+600*C-330*ep2)*A*A*A*A*A*A/720))+y0;
+  return { N: Math.round(Nn*10)/10, E: Math.round(E*10)/10 };
+}
+/* =========================================================
+ * HK80 → WGS84 反向轉換（測量師現場記 HK80 用）
+ * ========================================================= */
+function hk80ToGeo_(E, N){
+  const a=INTL_A_, f=INTL_F_;
+  const e2=f*(2-f), ep2=e2/(1-e2);
+  const k0=1, x0=836694.05, y0=819069.8;
+  const lat0=deg2rad_(22.31213333333334), lon0=deg2rad_(114.1785555555556);
+  const M=(N-y0)/k0;
+  const e4=e2*e2, e6=e4*e2;
+  const mu=M/(a*(1-e2/4-3*e4/64-5*e6/256));
+  const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  const e12=e1*e1, e13=e12*e1, e14=e13*e1;
+  const phi1=mu+(3*e1/2-27*e13/32)*Math.sin(2*mu)+(21*e12/16-55*e14/32)*Math.sin(4*mu)
+            +(151*e13/96)*Math.sin(6*mu)+(1097*e14/512)*Math.sin(8*mu);
+  const sL=Math.sin(phi1), cL=Math.cos(phi1), tL=Math.tan(phi1);
+  const N1=a/Math.sqrt(1-e2*sL*sL);
+  const T1=tL*tL, C1=ep2*cL*cL;
+  const R1=a*(1-e2)/Math.pow(1-e2*sL*sL,1.5);
+  const D=(E-x0)/(k0*N1);
+  const D2=D*D, D3=D2*D, D4=D3*D, D5=D4*D, D6=D5*D;
+  const lat=phi1-(N1*tL/R1)*(D2/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*D4/24
+            +(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*D6/720);
+  const lng=lon0+(D-(1+2*T1+C1)*D3/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*D5/120)/cL;
+  return [lat, lng];
+}
+
+function hk80ToWgs84_(Nn, Ee){
+  if(Nn===''||Ee===''||Nn==null||Ee==null||isNaN(+Nn)||isNaN(+Ee)) return null;
+  const g=hk80ToGeo_(+Ee, +Nn);
+  const xyz=geo2xyz_(g[0], g[1], 0, INTL_A_, INTL_F_);
+  const dx=162.619, dy=276.959, dz=161.764;
+  const rx=-0.067753*ARC_, ry=2.243649*ARC_, rz=1.158827*ARC_;
+  const s=1+1.094246/1e6;
+  const x1=(xyz[0]-dx)/s, y1=(xyz[1]-dy)/s, z1=(xyz[2]-dz)/s;
+  const xw=x1-rz*y1+ry*z1;
+  const yw=rz*x1+y1-rx*z1;
+  const zw=-ry*x1+rx*y1+z1;
+  const geo=xyz2geo_(xw, yw, zw, WGS_A_, WGS_F_);
+  return { lat: rad2deg_(geo[0]), lng: rad2deg_(geo[1]) };
+}
+
+/**
+ * HK80 輸入範圍：沿用前端新增／編輯表單的香港合理範圍。
+ * N 800000–850000、E 800000–870000。
+ */
+function isValidHK80Range_(N, E){
+  if(N === '' || E === '' || N == null || E == null) return false;
+  const n = +N, e = +E;
+  if(!isFinite(n) || !isFinite(e)) return false;
+  return n >= COORD_HK80_BOUNDS_.N_MIN && n <= COORD_HK80_BOUNDS_.N_MAX && e >= COORD_HK80_BOUNDS_.E_MIN && e <= COORD_HK80_BOUNDS_.E_MAX;
+}
+
+function isValidWgs84HongKong_(lat, lng){
+  if(lat === '' || lng === '' || lat == null || lng == null) return false;
+  const la = +lat, ln = +lng;
+  if(!isFinite(la) || !isFinite(ln)) return false;
+  return la >= COORD_WGS84_BOUNDS_.LAT_MIN && la <= COORD_WGS84_BOUNDS_.LAT_MAX && ln >= COORD_WGS84_BOUNDS_.LNG_MIN && ln <= COORD_WGS84_BOUNDS_.LNG_MAX;
+}
+
+// 批次：WGS84 -> HK80（對應前端 batchToHK80），忽略無效項回 null
+function batchWgs84ToHk80_(coords){
+  if(!coords || !coords.length) return [];
+  var out=new Array(coords.length);
+  for(var i=0;i<coords.length;i++){ var c=coords[i]; if(!c||c.lat==null||c.lng==null){ out[i]=null; continue; } out[i]=wgs84ToHk80_(c.lat,c.lng); }
+  return out;
+}
+
+function hk80LocationError_(){
+  return ERROR_CODES_.INVALID_LOCATION;
+}
+
+/**
+ * 驗證寫入請求的位置。若只修改其他欄位，allowEmpty 為 true；
+ * 新增資料則必須提供位置。接受 HK80 N/E 或 WGS84 lat/lng。
+ */
+function validateLocationForWrite_(d, allowEmpty){
+  const hasN = d.hk80_n !== undefined && d.hk80_n !== '';
+  const hasE = d.hk80_e !== undefined && d.hk80_e !== '';
+  const hasLat = d.lat !== undefined && d.lat !== '';
+  const hasLng = d.lng !== undefined && d.lng !== '';
+
+  if(hasN !== hasE || hasLat !== hasLng) return false;
+  if(!hasN && !hasLat) return !!allowEmpty;
+
+  if(hasN){
+    if(!isValidHK80Range_(d.hk80_n, d.hk80_e)) return false;
+    const w = hk80ToWgs84_(d.hk80_n, d.hk80_e);
+    if(!w || !isValidWgs84HongKong_(w.lat, w.lng)) return false;
+  }
+
+  if(hasLat){
+    if(!isValidWgs84HongKong_(d.lat, d.lng)) return false;
+    const hk = wgs84ToHk80_(d.lat, d.lng);
+    if(!hk || !isValidHK80Range_(hk.N, hk.E)) return false;
+  }
+
+  return true;
+}
