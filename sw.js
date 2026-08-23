@@ -160,9 +160,12 @@ function handleNavigation(req){
 function handleApi(req){
   var maxAge=getSwMaxAgeForRequest(req);
   var isBypass=false; try{ var u=new URL(req.url); isBypass = u.searchParams.get('nocache')==='1' || u.searchParams.get('bust')==='1'; }catch(e){}
+  // 🔥 [Bugfix] API 請求超時由 12s 提升至 30s：與前端 api.js 的 BACKGROUND_TIMEOUT (30s) 對齊，
+  // 避免 GAS 冷啟動（可達 20-25s）時 SW 提前回 OFFLINE，令前端誤判離線而回退陳舊快取。
+  var API_TIMEOUT = 30000;
   // nocache=1 -> network-only, do not serve stale DATA_CACHE
   if(isBypass){
-    return fetchWithAbort(req,12000).then(function(res){
+    return fetchWithAbort(req,API_TIMEOUT).then(function(res){
       var ct=''; try{ ct=res.headers.get('content-type')||''; }catch(e){}
       if(ct.indexOf('text/html')!==-1){ console.warn('[SW] API_HTML_RESPONSE bypass, not caching '+req.url); return res; }
       if(res.ok){ var c=res.clone(); caches.open(DATA_CACHE).then(function(cache){ cacheWithTimestamp(cache,req,c).catch(function(){}); }).catch(function(){}); }
@@ -171,7 +174,7 @@ function handleApi(req){
       return new Response(JSON.stringify({ok:false,error:'OFFLINE',offline:true}),{headers:{'Content-Type':'application/json'},status:503,statusText:'Offline'});
     });
   }
-  return fetchWithAbort(req,12000).then(function(res){
+  return fetchWithAbort(req,API_TIMEOUT).then(function(res){
     var ct=''; try{ ct=res.headers.get('content-type')||''; }catch(e){}
     if(ct.indexOf('text/html')!==-1){ console.warn('[SW] API_HTML_RESPONSE not caching '+req.url+' hint: use /exec without /u/N/'); return res; }
     if(res.ok){ var c=res.clone(); caches.open(DATA_CACHE).then(function(cache){ cacheWithTimestamp(cache,req,c).then(function(){ return trimCacheLRU(DATA_CACHE,DATA_MAX_ENTRIES,null); }).catch(function(){}); }).catch(function(){}); checkQuotaAndShrink(); }

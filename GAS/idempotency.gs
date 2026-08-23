@@ -47,13 +47,17 @@ function checkPhotoDuplicate_(sheetName, clientId) {
   if (!clientId) return false;
   const sheet = getSheetByNameRobust_(sheetName);
   if (!sheet) return false;
-  const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return false;
-  const headers = data[0].map(function(k){ return String(k||'').replace(/^\ufeff/, '').trim(); });
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return false;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return false;
+  // 🔥 只讀取 photo_client_ids 一欄（批次一次取得），避免整張表掃描拖慢每次相片上傳
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(k){ return String(k||'').replace(/^\ufeff/, '').trim(); });
   const photoClientIdsIdx = headers.indexOf('photo_client_ids');
   if (photoClientIdsIdx === -1) return false;
-  for (let i = 1; i < data.length; i++) {
-    const idsStr = String(data[i][photoClientIdsIdx] || '');
+  const colData = sheet.getRange(2, photoClientIdsIdx + 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < colData.length; i++) {
+    const idsStr = String(colData[i][0] || '');
     if (idsStr.split(',').indexOf(clientId) !== -1) return true;
   }
   return false;

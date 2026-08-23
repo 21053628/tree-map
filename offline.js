@@ -538,6 +538,7 @@
     var failed = 0;
     var networkStreak = 0;
     var shouldBreak = false;
+    var reauthCount = 0; // 🔥 限制每批次重新認證重試次數，避免無限循環
     for (var i = 0; i < batch.length; i++) {
       var item = batch[i];
       if (!navigator.onLine) { shouldBreak = true; break; }
@@ -614,7 +615,7 @@
           await updateItem(item.id, { status: 'queued', lastError: '登入已过期' });
           if (typeof AuthService !== 'undefined' && (AuthService.reauthenticate || AuthService.promptAuth)) {
             var reOk = AuthService.reauthenticate ? await AuthService.reauthenticate('登入已过期，请重新输入工作人员密码以继续同步') : await AuthService.promptAuth('登入已过期，请重新输入工作人员密码以继续同步');
-            if (reOk) { i--; networkStreak = 0; continue; }
+            if (reOk) { reauthCount++; if (reauthCount >= 2) { shouldBreak = true; break; } i--; networkStreak = 0; continue; }
           }
           failed++;
           networkStreak = 0;

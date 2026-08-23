@@ -17,8 +17,10 @@ export async function checkin(){
   const staff = prompt('工作人員姓名：');
   if (!requireStaff(staff)) return;
   const meta = ApiService.newClientMeta();
+  const lat = (TD.TREE && TD.TREE.lat) ? String(TD.TREE.lat) : '';
+  const lng = (TD.TREE && TD.TREE.lng) ? String(TD.TREE.lng) : '';
   try{
-    const r = await post({type:'checkin', staff:staff, tree_id:TD.id, prj:TD.prj, client_id: meta.client_id, client_created_at: meta.client_created_at});
+    const r = await post({type:'checkin', staff:staff, tree_id:TD.id, prj:TD.prj, lat:lat, lng:lng, client_id: meta.client_id, client_created_at: meta.client_created_at});
     alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：' + (typeof ErrorCodes !== 'undefined' ? ErrorCodes.messageForResponse(r, r.error) : r.error));
     if(r.ok && !r.queued) setTimeout(function(){ location.reload(); }, 800);
   }catch(err){ alert('❌ 連線錯誤：' + err.message); }
@@ -40,8 +42,10 @@ export async function submitInspection(){
   }
   const health=healthEl.value; const note=noteEl?noteEl.value:'';
   const meta=ApiService.newClientMeta();
+  const lat = (TD.TREE && TD.TREE.lat) ? String(TD.TREE.lat) : '';
+  const lng = (TD.TREE && TD.TREE.lng) ? String(TD.TREE.lng) : '';
   if(TD.selectedPhotos.length===0){
-    try{ const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64:'', client_id:meta.client_id, client_created_at:meta.client_created_at}); alert(r.ok?'✅ 已上傳！':'❌ 失敗：'+(typeof ErrorCodes!=='undefined'?ErrorCodes.messageForResponse(r,r.error):r.error)); if(r.ok&&!r.queued) setTimeout(function(){ location.reload(); },1000); }catch(err){ alert('❌ 連線錯誤：'+err.message); }
+    try{ const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64:'', lat:lat, lng:lng, client_id:meta.client_id, client_created_at:meta.client_created_at}); alert(r.ok?'✅ 已上傳！':'❌ 失敗：'+(typeof ErrorCodes!=='undefined'?ErrorCodes.messageForResponse(r,r.error):r.error)); if(r.ok&&!r.queued) setTimeout(function(){ location.reload(); },1000); }catch(err){ alert('❌ 連線錯誤：'+err.message); }
     return;
   }
   const photosData=[]; const skipped=[];
@@ -51,7 +55,7 @@ export async function submitInspection(){
   const splitPhotos=navigator.onLine && (typeof Config!=='undefined'&&Config.INSPECTION_SPLIT_PHOTOS===true);
   if(splitPhotos){
     try{
-      const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64:'', photos_total:photosData.length, photos_pending:photosData.length, client_id:meta.client_id, client_created_at:meta.client_created_at});
+      const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64:'', photos_total:photosData.length, photos_pending:photosData.length, lat:lat, lng:lng, client_id:meta.client_id, client_created_at:meta.client_created_at});
       if(r.queued){ alert('📥 文字記錄已離線暫存（兩階段相片需後端回傳 inspection_id，請連線後重試）'); return; }
       if(r.ok&&r.inspection_id){ const done=await uploadPhotos(r.inspection_id, photosData); alert('✅ 文字記錄已上傳；相片 '+done+'/'+photosData.length+' 張已處理'); TD.selectedPhotos=[]; setTimeout(function(){ location.reload(); },1000); }
       else if(r.ok){ alert('⚠️ 文字記錄已上傳，但後端未回傳 inspection_id，相片未能上傳'); TD.selectedPhotos=[]; setTimeout(function(){ location.reload(); },1000); }
@@ -59,7 +63,7 @@ export async function submitInspection(){
     }catch(err){ alert('❌ 連線錯誤：'+err.message); }
     return;
   }
-  try{ const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64: photosData, client_id:meta.client_id, client_created_at:meta.client_created_at}); alert(r.ok?'✅ 已上傳 '+photosData.length+' 張相片！':'❌ 失敗：'+(typeof ErrorCodes!=='undefined'?ErrorCodes.messageForResponse(r,r.error):r.error)); if(r.ok&&!r.queued){ TD.selectedPhotos=[]; setTimeout(function(){ location.reload(); },1000); } }catch(err){ alert('❌ 連線錯誤：'+err.message); }
+  try{ const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64: photosData, lat:lat, lng:lng, client_id:meta.client_id, client_created_at:meta.client_created_at}); alert(r.ok?'✅ 已上傳 '+photosData.length+' 張相片！':'❌ 失敗：'+(typeof ErrorCodes!=='undefined'?ErrorCodes.messageForResponse(r,r.error):r.error)); if(r.ok&&!r.queued){ TD.selectedPhotos=[]; setTimeout(function(){ location.reload(); },1000); } }catch(err){ alert('❌ 連線錯誤：'+err.message); }
 }
 export async function uploadPhotos(inspectionId, photosData){
   const total=photosData.length; let done=0;

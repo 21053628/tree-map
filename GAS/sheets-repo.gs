@@ -29,11 +29,15 @@ function updateTreeFields_(treeId, prj, fieldUpdates) {
   if (idIdx === -1) return;
   let rowIndex = -1;
   const ids = sheet.getRange(2, idIdx + 1, lastRow - 1, 1).getValues();
+  // 🔥 批次讀取 prj 欄位，避免逐行 getValue()（N+1 次 Sheets API 呼叫）
+  var prjValues = null;
+  if (prj && prjIdx !== -1) {
+    prjValues = sheet.getRange(2, prjIdx + 1, lastRow - 1, 1).getValues();
+  }
   for (let i = 0; i < ids.length; i++) {
     if (typeof isSameId_ === 'function' ? !isSameId_(String(ids[i][0]), String(treeId)) : String(ids[i][0]) !== String(treeId)) continue;
-    if (prj && prjIdx !== -1) {
-      const prjVal = sheet.getRange(2 + i, prjIdx + 1).getValue();
-      if (String(prjVal || '') !== String(prj)) continue;
+    if (prj && prjIdx !== -1 && prjValues) {
+      if (String(prjValues[i][0] || '') !== String(prj)) continue;
     }
     rowIndex = 2 + i;
     break;
