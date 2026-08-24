@@ -25,7 +25,7 @@ const PRECACHE = [
   './assets/css/tokens.css','./assets/css/base.css','./assets/css/layout.css',
   './assets/css/map.css','./assets/css/ui.css','./assets/css/responsive.css',
   './assets/css/dark.css','./assets/css/filters.css','./assets/css/gis.css',
-  './assets/css/performance.css','./assets/css/utilities.css',
+  './assets/css/performance.css','./assets/css/skeleton.css','./assets/css/animations.css','./assets/css/utilities.css',
   './assets/css/pages/t.css','./assets/css/pages/nfc.css',
   './assets/js/env.js','./assets/js/sw-register.js',
   './assets/js/config.js',
