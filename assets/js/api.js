@@ -44,8 +44,15 @@ const ApiService = (function() {
   let activePosts = 0;
 
   function init(endpoint) {
-    if (!endpoint) throw new Error('API 端點未提供');
+    if (!endpoint) {
+      // 🔥 [Bugfix] 唔再 throw，改為記警告＋設 flag，令 app 可以繼續啟動並顯示錯誤提示，
+      // 避免未配置 env.js 時成個 app 硬 crash。
+      apiEndpoint = null;
+      try { console.warn('⚠️ API 端點未配置：請建立 assets/js/env.js 或喺 HTML 加入 <meta name="api-endpoint">'); } catch(e){}
+      return false;
+    }
     apiEndpoint = endpoint;
+    return true;
   }
 
   // 產生 idempotency 資料：client_id（UUID，含非安全環境 fallback）+ client_created_at（ISO 時間）
@@ -311,10 +318,18 @@ const ApiService = (function() {
     return getTreesByProject(projectId, p);
   }
   function invalidateProjectTrees(projectId) {
-    const prefix = 'get:trees:' + (projectId ? 'project=' + encodeURIComponent(String(projectId)) : '');
-    // 若未指定 pid，則清所有 trees 快取
+    // 🔥 [Bugfix] 用 substring 匹配取代 prefix 匹配，因為 cache key 可能係
+    //   get:trees:project=ShingMunRiver  或
+    //   get:trees:nocache=1&project=ShingMunRiver  等，
+    // 舊 code 用 prefix 'get:trees:project=xxx' 只能 match 第一種，漏咗有額外 param 嘅 key。
+    // 🔥 [Bugfix v2.4] 改用精準邊界比對（treeCacheKeyMatchesPid_），
+    // 避免 pid=1 誤清 project=10/100 等其他地盤嘅快取。
     for (const key of Array.from(responseCache.keys())) {
-      if (key.indexOf('get:trees') === 0 && (!projectId || key.indexOf(prefix) !== -1)) responseCache.delete(key);
+      if (key.indexOf('get:trees') !== 0) continue;
+      if (!projectId) { responseCache.delete(key); continue; }
+      if (treeCacheKeyMatchesPid_(key, projectId)) {
+        responseCache.delete(key);
+      }
     }
   }
 
@@ -467,6 +482,33 @@ const ApiService = (function() {
   function invalidateCache(type, payload) {
     // 巡查/打卡/逐張相後需同時失效 inspections + trees（樹狀態/首圖可能已變），否則 TTL 內不可見
     // 🔥 [Bugfix] 只精準清除相關地盤的 trees 快取，不再無差別清空所有地盤（避免大地盤短時間內全量重載）
+    // 🔥 [Bugfix] project= 參數匹配用精準 URL 參數邊界，避免 indexOf substring 誤清（如 pid=1 誤清 project=10/100）
+    function keyHasProjectParam_(k, pid) {
+      // 🔥 [Bugfix v2.4] 精準比對 project= 參數值邊界：
+      // 之前用 substring indexOf，pid=1 會誤中 project=10/100，現改為
+      // 逐個 project= 出現位置截取完整值（到下一個 & 或字串尾）再比對，杜絕誤清。
+      if (!pid) return false;
+      const raw = String(pid);
+      const enc = encodeURIComponent(raw);
+      let idx = k.indexOf('project=');
+      while (idx !== -1) {
+        const start = idx + 'project='.length;
+        let end = k.indexOf('&', start);
+        if (end === -1) end = k.length;
+        const val = k.slice(start, end);
+        if (val === enc || val === raw) return true;
+        idx = k.indexOf('project=', idx + 1);
+      }
+      return false;
+    }
+    // 🔥 [Bugfix] 判斷 trees cache key 是否需要因某地盤資料變更而清除：
+    // - 冇 project 參數（全量 get:trees 或無 project 嘅 viewport key）→ 含所有地盤，需清
+    // - 有 project 參數但為其他地盤 → 保留（精準失效，避免誤清其他地盤快取）
+    function treeCacheKeyMatchesPid_(k, pid) {
+      if (k.indexOf('project=') === -1) return true;
+      if (!pid) return true;
+      return keyHasProjectParam_(k, pid);
+    }
     if (type === 'inspection' || type === 'inspection_photo' || type === 'checkin') {
       const pid = payload && (payload.project_id || payload.prj)
         ? String(payload.project_id || payload.prj)
@@ -475,11 +517,10 @@ const ApiService = (function() {
         if (k.indexOf('get:inspections') === 0 || k.indexOf('get:bootstrap') === 0) {
           responseCache.delete(k);
         } else if (k.indexOf('get:trees') === 0) {
-          // 有 pid 只清該地盤；無 pid 才全清
-          if (!pid ||
-              k.indexOf('project=' + encodeURIComponent(pid)) !== -1 ||
-              k.indexOf('project=' + pid) !== -1 ||
-              !k.includes('project=')) {
+          // 🔥 [Bugfix v2.4] 用精準邊界比對取代舊「get:trees?」字串檢查，
+          // 因 cache key 實際格式係 get:trees:project=xxx（用冒號而非問號），
+          // 舊 check 永不命中，導致每次清 cache 時無差別清除所有地盤嘅 trees 快取。
+          if (treeCacheKeyMatchesPid_(k, pid)) {
             responseCache.delete(k);
           }
         }
@@ -506,9 +547,9 @@ const ApiService = (function() {
         if (prefixList.some(p => key.startsWith(p))) {
           // 若為 trees 且帶 pid，只清該地盤；否則全清
           if (pid && key.indexOf('get:trees') === 0) {
-            if (key.indexOf('project=' + encodeURIComponent(pid)) !== -1 || key.indexOf('project=' + pid) !== -1) responseCache.delete(key);
-            else if (key.indexOf('get:bootstrap') === 0) responseCache.delete(key);
-            else if (!key.includes('project=')) responseCache.delete(key); // 無 project 參數視為全量，順便清
+            // 🔥 [Bugfix v2.4] 用精準邊界比對取代舊「get:trees?」字串檢查，
+            // 避免 pid=1 誤清 project=10/100 及其他地盤。
+            if (treeCacheKeyMatchesPid_(key, pid)) responseCache.delete(key);
           } else {
             responseCache.delete(key);
           }

@@ -209,7 +209,19 @@ export async function doCreateTree() {
       let _nt0 = state.treeMap.get(state.curProject + '_' + newId) || state.TREES.find(function(tt){ return String(tt.tree_id)===newId && String(tt.project_id)===String(state.curProject); });
       if(!_nt0){
         try{
-          const _optTree = { tree_id: newId, project_id: String(state.curProject), name: 'New tree', status: (document.getElementById('tStatus')&&document.getElementById('tStatus').value)||'Normal', lat: w?+w.lat.toFixed(6):0, lng: w?+w.lng.toFixed(6):0 };
+          // 🔥 [Bugfix] 用表單實際值取代硬編碼 name='New tree' / status='Normal'
+          const _realName = (document.getElementById('tName') && document.getElementById('tName').value) || '';
+          const _realStatus = (document.getElementById('tStatus') && document.getElementById('tStatus').value) || 'Normal';
+          const _realHeight = (document.getElementById('tHeight') && document.getElementById('tHeight').value) || '';
+          const _realSpread = (document.getElementById('tSpread') && document.getElementById('tSpread').value) || '';
+          const _realDbh = (document.getElementById('tDbh') && document.getElementById('tDbh').value) || '';
+          const _optTree = {
+            tree_id: newId, project_id: String(state.curProject),
+            name: _realName || 'New tree',
+            status: _realStatus,
+            lat: w ? +w.lat.toFixed(6) : 0, lng: w ? +w.lng.toFixed(6) : 0,
+            tree_height: _realHeight, crown_width: _realSpread, dbh: _realDbh
+          };
           const _curIdx = state.treeSearchIndex.get(String(state.curProject)) || [];
           if(!_curIdx.some(function(x){ return String(x.tree_id)===newId; })){ applyTreesForProject(String(state.curProject), _curIdx.concat([_optTree]), {saveSnapshot:true}); console.warn('[forms] optimistic insert '+newId); }
         }catch(e){ console.warn('[forms] optimistic failed', e); }
@@ -222,7 +234,7 @@ export async function doCreateTree() {
           state.map.flyTo([+nt.lat, +nt.lng], Math.max(state.map.getZoom(), 18), { duration: 0.8 });
 
           setTimeout(function () {
-            const m = state.treesCache.get(state.curProject + '_' + newId) || state.treesCache.get(newId);
+            const m = state.treesCache.get(state.curProject + '_' + newId);
             if (m) {
               state.treesCache.forEach((otherM) => { bringTreeToFront(otherM); });
               bringTreeToFront(m);

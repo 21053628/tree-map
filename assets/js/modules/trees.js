@@ -35,7 +35,13 @@ export function scheduleRedraw() {
 let statusFilter = null;
 
 export function setStatusFilter(set) {
-  statusFilter = (set && set.size) ? set : null;
+  // null/undefined = 顯示全部（不過濾）；空 Set = 全部唔顯示
+  if (set === null || set === undefined) {
+    statusFilter = null;
+  } else {
+    // 保留空 Set 原意：空 = 無樹木符合
+    statusFilter = set;
+  }
   drawTrees();
 }
 
@@ -53,7 +59,9 @@ export function getStatusFilter() { return statusFilter; }
 
 function currentTrees() {
   const list = state.treeSearchIndex.get(state.curProject) || [];
-  return statusFilter ? list.filter((t) => statusFilter.has(t.status)) : list;
+  if (!statusFilter) return list; // null = 全部顯示
+  if (statusFilter.size === 0) return []; // 空 Set = 全部唔顯示
+  return list.filter((t) => statusFilter.has(t.status));
 }
 
 /* =========================================================
@@ -226,14 +234,14 @@ function makeMarker(t) {
   marker.on('popupopen', function (e) {
     const originalHk = CoordUtils.toHK80(+t.lat, +t.lng);
     const popupHtml =
-      '<b>' + t.tree_id + ' ' + t.name + '</b><br>' +
-      '<b>Status:</b> <span style="color:' + color + ';font-weight:bold;">' + t.status + '</span><br>' +
-      '<b>Tree Height:</b> ' + (t.tree_height || t.height || '-') + ' m | <b>DBH:</b> ' + (t.dbh || '-') + ' m<br>' +
-      '<b>Crown Width:</b> ' + (t.crown_width || t.spread || '-') + ' m | <b>Level:</b> ' + (t.level || '-') + ' m<br>' +
-      '<b>Ground Dia.:</b> ' + (t.ground_diameter || '-') + ' m | <b>Stem Length:</b> ' + (t.stem_length || '-') + ' m<br>' +
-      '<b>Crown Area:</b> ' + (t.crown_area || '-') + ' ㎡ | <b>Crown Vol.:</b> ' + (t.crown_volume || '-') + ' m³<br>' +
+      '<b>' + escapeHtml(t.tree_id) + ' ' + escapeHtml(t.name) + '</b><br>' +
+      '<b>Status:</b> <span style="color:' + color + ';font-weight:bold;">' + escapeHtml(t.status) + '</span><br>' +
+      '<b>Tree Height:</b> ' + escapeHtml(t.tree_height || t.height || '-') + ' m | <b>DBH:</b> ' + escapeHtml(t.dbh || '-') + ' m<br>' +
+      '<b>Crown Width:</b> ' + escapeHtml(t.crown_width || t.spread || '-') + ' m | <b>Level:</b> ' + escapeHtml(t.level || '-') + ' m<br>' +
+      '<b>Ground Dia.:</b> ' + escapeHtml(t.ground_diameter || '-') + ' m | <b>Stem Length:</b> ' + escapeHtml(t.stem_length || '-') + ' m<br>' +
+      '<b>Crown Area:</b> ' + escapeHtml(t.crown_area || '-') + ' ㎡ | <b>Crown Vol.:</b> ' + escapeHtml(t.crown_volume || '-') + ' m³<br>' +
       (originalHk ? '<b>HK80：</b>N ' + CoordUtils.format1(originalHk.N) + ' / E ' + CoordUtils.format1(originalHk.E) + '<br>' : '') +
-      ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + t.photo_url + '" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;margin:6px auto 0;border-radius:6px;background:rgba(128,128,128,.12);"><br>' : '') +
+      ((t.photo_url && String(t.photo_url).indexOf('...') === -1) ? '<img class="popup-img" src="' + escapeHtml(t.photo_url) + '" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;margin:6px auto 0;border-radius:6px;background:rgba(128,128,128,.12);"><br>' : '') +
       '<a href="t.html?id=' + encodeURIComponent(t.tree_id) + '&prj=' + encodeURIComponent(t.project_id || '') + '">📋 樹木頁（巡查／簽到）</a>';
     e.popup.setContent(DOMPurify.sanitize(popupHtml));
     // 🔥 [手機修復 C] 用戶主動開啟時，出界就自動 pan 入視野；silent 重開唔 pan
@@ -328,7 +336,6 @@ export function drawTrees(silent) {
       if (!desired.has(m._treeId)) {
         state.treeLayer.removeLayer(m);
         state.treesCache.delete(state.curProject + '_' + m._treeId);
-        state.treesCache.delete(m._treeId);
       }
     });
     const toAdd = [];
@@ -338,7 +345,6 @@ export function drawTrees(silent) {
         const m = makeMarker(t);
         toAdd.push(m);
         state.treesCache.set(state.curProject + '_' + id, m);
-        state.treesCache.set(id, m);
       }
     });
     if (toAdd.length) state.treeLayer.addLayers(toAdd);
@@ -349,7 +355,6 @@ export function drawTrees(silent) {
     const markers = visible.map((t) => {
       const m = makeMarker(t);
       state.treesCache.set(state.curProject + '_' + String(t.tree_id), m);
-      state.treesCache.set(String(t.tree_id), m);
       return m;
     });
     if (markers.length) state.treeLayer.addLayers(markers);
@@ -368,7 +373,7 @@ export function drawTrees(silent) {
     // 🔥 cluster addLayers 異步排隊，marker._map 未必即時 ready，輪詢重開
     const _k = state.curProject + '_' + openTreeId;
     const reopen = function (tries) {
-      const _m = state.treesCache.get(_k) || state.treesCache.get(openTreeId);
+      const _m = state.treesCache.get(_k);
       if (_m && _m._map) {
         const container = state.map.getContainer();
         container.classList.add('popup-silent-reopen');

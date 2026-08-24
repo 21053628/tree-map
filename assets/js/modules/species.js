@@ -25,12 +25,13 @@ function _syncState(list,prom){ try{ state.speciesCache=list; state.speciesPromi
 function normalizeText(text){ return String(text||'').toLowerCase().normalize('NFKC').trim(); }
 function tokenize(text){
   var s=normalizeText(text); if(!s) return [];
-  var raw=s.match(/[a-z0-9]+|[\u4e00-\u9fff]+/g)||[];
+  // 🔥 [Bugfix] 支援 CJK 統一表意文字（U+4E00-9FFF）+ 擴展 A（U+3400-4DBF）+ 兼容表意文字（U+F900-FAFF）
+  var raw=s.match(/[a-z0-9]+|[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]+/g)||[];
   var out=[]; var seen=new Set();
   function add(tok){ if(!tok||seen.has(tok)) return; seen.add(tok); out.push(tok); }
   for(var i=0;i<raw.length;i++){
     var seg=raw[i];
-    if(/^[\u4e00-\u9fff]+$/.test(seg)){
+    if(/^[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]+$/.test(seg)){
       add(seg);
       if(seg.length>=2){ for(var k=0;k<seg.length-1;k++) add(seg.slice(k,k+2)); if(seg.length<=4){ for(var k2=0;k2<seg.length;k2++) add(seg[k2]); } }
     } else { add(seg); }

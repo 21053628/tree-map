@@ -60,8 +60,71 @@ function bypassOpts_(){ return hasBypass_() ? {nocache:'1'} : {}; }
 let _bootstrapFallbackCache = { data: null, ts: 0 };
 export function bustBootstrapCache(){ _bootstrapFallbackCache={data:null,ts:0}; }
 function isNoCacheOpts_(opts){ try{ return String((opts&&opts.nocache)||'').trim()==='1' || hasBypass_(); }catch(e){ return false; } }
-function treesEqual_(a,b){ if(!Array.isArray(a)||!Array.isArray(b)) return false; if(a.length!==b.length) return false; var sa=new Set(a.map(function(x){return String(x.tree_id||'');})); var sb=new Set(b.map(function(x){return String(x.tree_id||'');})); if(sa.size!==sb.size) return false; for(var v of sa) if(!sb.has(v)) return false; return true; }
-function reconcileFromBootstrap_(bt){ if(!Array.isArray(bt)) return 0; var byPid=new Map(); for(var i=0;i<bt.length;i++){ var pid=normalizePid(bt[i].project_id); if(!pid) continue; if(!byPid.has(pid)) byPid.set(pid,[]); byPid.get(pid).push(bt[i]); } var changed=0; for(var j=0;j<state.PROJECTS.length;j++){ var pid2=normalizePid(state.PROJECTS[j].project_id); if(!pid2) continue; var incoming=byPid.get(pid2)||[]; var existing=state.treeSearchIndex.get(pid2)||[]; if(!existing.length && incoming.length){ applyTreesForProject(pid2,incoming,{saveSnapshot:true}); changed++; } else if(existing.length && !incoming.length){ applyTreesForProject(pid2,[],{saveSnapshot:true}); try{ if(globalThis.TreeSnapshot) globalThis.TreeSnapshot.delete(snapKeyForProject(pid2)); }catch(e){} changed++; } else if(existing.length && incoming.length && !treesEqual_(existing,incoming)){ applyTreesForProject(pid2,incoming,{saveSnapshot:true}); changed++; } } if(changed){ if(state.isLocating){ try{console.warn('[loader] reconcile deferred isLocating',changed);}catch(e){} setTimeout(function(){ try{ drawProjects(); drawTrees(); }catch(e){} }, 2600); } else { drawProjects(); drawTrees(); } } return changed; }
+/**
+ * 保守合併兩份樹木列表：以 tree_id 為 key，incoming 嘅欄位值覆蓋 existing，
+ * 但 existing 有而 incoming 冇嘅樹木保留（避免 bootstrap 快取較舊時意外刪除本地較新資料）。
+ * @returns {{ list: Array, changed: boolean }}
+ */
+function mergeTreeLists_(existing, incoming) {
+  // 🔥 [Bugfix] key 以 project_id + '_' + tree_id 組成，避免跨地盤同 tree_id 互相覆蓋（防禦性；目前呼叫方已按地盤分組）
+  var map = new Map();
+  function keyOf(t) { return String(t.project_id || '') + '_' + String(t.tree_id || ''); }
+  for (var i = 0; i < existing.length; i++) {
+    var k = keyOf(existing[i]);
+    if (String(existing[i].tree_id || '')) map.set(k, existing[i]);
+  }
+  var incomingCount = 0;
+  for (var j = 0; j < incoming.length; j++) {
+    var k2 = keyOf(incoming[j]);
+    if (String(incoming[j].tree_id || '')) {
+      map.set(k2, incoming[j]); // incoming 覆蓋 existing（server 為真源）
+      incomingCount++;
+    }
+  }
+  var merged = Array.from(map.values());
+  var changed = merged.length !== existing.length || incomingCount > 0;
+  return { list: merged, changed: changed };
+}
+function reconcileFromBootstrap_(bt){
+  if(!Array.isArray(bt)) return 0;
+  var byPid=new Map();
+  for(var i=0;i<bt.length;i++){
+    var pid=normalizePid(bt[i].project_id);
+    if(!pid) continue;
+    if(!byPid.has(pid)) byPid.set(pid,[]);
+    byPid.get(pid).push(bt[i]);
+  }
+  var changed=0;
+  for(var j=0;j<state.PROJECTS.length;j++){
+    var pid2=normalizePid(state.PROJECTS[j].project_id);
+    if(!pid2) continue;
+    var incoming=byPid.get(pid2)||[];
+    var existing=state.treeSearchIndex.get(pid2)||[];
+    if(!existing.length && incoming.length){
+      // 本地無資料 → 直接採用
+      applyTreesForProject(pid2,incoming,{saveSnapshot:true});
+      changed++;
+    } else if(existing.length && incoming.length){
+      // 兩邊都有 → 保守合併（保留本地專有樹木，incoming 覆蓋共同樹木嘅欄位）
+      var merged = mergeTreeLists_(existing, incoming);
+      if(merged.changed){
+        applyTreesForProject(pid2, merged.list, {saveSnapshot:true});
+        changed++;
+      }
+    }
+    // existing.length && !incoming.length → 保留本地（避免 bootstrap 快取較舊時清空資料）
+    // 本地已有資料但後端回 0 時，applyTreesForProject 嘅空陣列保護已處理
+  }
+  if(changed){
+    if(state.isLocating){
+      try{console.warn('[loader] reconcile deferred isLocating',changed);}catch(e){}
+      setTimeout(function(){ try{ drawProjects(); drawTrees(); }catch(e){} }, 2600);
+    } else {
+      drawProjects(); drawTrees();
+    }
+  }
+  return changed;
+}
 function rebuildAllIndexes(){
   state.treeCountMap.clear();
   state.treeMap.clear();
@@ -272,7 +335,13 @@ export async function load(){
         else { try{ var b=await ApiService.get('bootstrap', hasBypass_()?{nocache:'1'}:{}); bt=(b&&b.data&&b.data.trees)?b.data.trees:[]; if(Array.isArray(bt)) _bootstrapFallbackCache={data:bt, ts:Date.now()}; }catch(e){ bt=null; } }
         if(Array.isArray(bt)) { var ch=reconcileFromBootstrap_(bt); try{ console.warn('[loader] warm counts pids='+(new Set(bt.map(function(x){return normalizePid(x.project_id);}))).size+' ch='+ch); }catch(e){} }
         if(!hasBypass_()){
-          (function scheduleRevalidate(){ var _d=1200; try{ _d=(typeof state!=='undefined' && state.isLocating)?2600:1200; }catch(e){} setTimeout(async function(){ try{ if(typeof state!=='undefined' && state.isLocating){ scheduleRevalidate(); return; } }catch(e){} try{ var bf=await ApiService.get('bootstrap', {nocache:'1'}); var btf=(bf&&bf.data&&bf.data.trees)?bf.data.trees:[]; _bootstrapFallbackCache={data:btf, ts:Date.now()}; var ch2=reconcileFromBootstrap_(btf); try{ console.warn('[loader] revalidate changed='+ch2+' total='+btf.length); }catch(e){} }catch(e){} }, _d); })();
+          // 🔥 [Bugfix] 重試上限 8 次，防止 isLocating 永鎖時無限遞迴消耗 GAS quota
+          (function scheduleRevalidate(attempt){ attempt = attempt || 0; var _d=1200; try{ _d=(typeof state!=='undefined' && state.isLocating)?2600:1200; }catch(e){}
+            if(attempt > 8){ return; }
+            setTimeout(async function(){ try{ if(typeof state!=='undefined' && state.isLocating){ scheduleRevalidate(attempt+1); return; } }catch(e){}
+              try{ var bf=await ApiService.get('bootstrap', {nocache:'1'}); var btf=(bf&&bf.data&&bf.data.trees)?bf.data.trees:[]; _bootstrapFallbackCache={data:btf, ts:Date.now()}; var ch2=reconcileFromBootstrap_(btf); try{ console.warn('[loader] revalidate changed='+ch2+' total='+btf.length); }catch(e){} }catch(e){}
+            }, _d);
+          })(0);
         }
       }catch(e){ console.warn('[loader] warm failed', e); }
     })();

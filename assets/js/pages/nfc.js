@@ -142,6 +142,13 @@ function generateURL(silent) {
     return;
   }
 
+  // 🔥 [Bugfix] 檢查 API 端點是否已配置，避免後續 fetch 靜默失敗（silent 模式只記警告）
+  if (!API) {
+    if (!silent) alert('⚠️ API 端點未配置：請先建立 assets/js/env.js 設定 API_ENDPOINT');
+    else console.warn('[nfc] API 端點未配置，無法載入樹木預覽');
+    return;
+  }
+
   const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
   let url = baseUrl + 'index.html?tree_id=' + encodeURIComponent(treeId);
 

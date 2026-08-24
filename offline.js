@@ -239,9 +239,8 @@
     try {
       Object.keys(src).forEach(function(k) { safe[k] = src[k]; });
     } catch (e) {
-      safe = {};
-      try { Object.keys(src).forEach(function(k) { safe[k] = src[k]; }); } catch (e2) {}
-      if (!Object.keys(safe).length) safe = src;
+      // Object.keys 極端情況下失敗，用 Object.assign 兜底（不污染原物件）
+      try { safe = Object.assign({}, src); } catch (e2) { safe = {}; }
     }
     if (safe && typeof safe === 'object') {
       if ('token' in safe) delete safe.token;
@@ -412,8 +411,17 @@
   };
 
   // ========== 快取（localStorage） ==========
+  // 🔥 [Bugfix] key 用排序後嘅 params 建構，與 ApiService memory cache（api.js）一致，
+  // 避免 URLSearchParams/JSON.stringify 因 params 順序唔同而 cache miss 或重複存儲
   function buildCacheKey(action, params) {
-    return action + (params ? '?' + JSON.stringify(params) : '');
+    if (!params) return action;
+    var keys = Object.keys(params).sort();
+    var parts = [];
+    for (var i = 0; i < keys.length; i++) {
+      var v = params[keys[i]];
+      parts.push(keys[i] + '=' + encodeURIComponent(v === undefined || v === null ? '' : String(v)));
+    }
+    return action + '?' + parts.join('&');
   }
 
   function setCache(action, params, data) {
@@ -440,8 +448,11 @@
   function clearCache(action) {
     if (action) {
       // 清除該 action 的所有快取（因為可能有多種 params）
+      // 🔥 [Bugfix] 用「action + '?'」做分隔，避免 prefix 誤殺（如 'trees' 誤匹配 'treeshot'）
+      const exactKey = CACHE_KEY_PREFIX + action;
+      const paramPrefix = CACHE_KEY_PREFIX + action + '?';
       Object.keys(localStorage).forEach(function(k) {
-        if (k.indexOf(CACHE_KEY_PREFIX + action) === 0) localStorage.removeItem(k);
+        if (k === exactKey || k.indexOf(paramPrefix) === 0) localStorage.removeItem(k);
       });
     } else {
       Object.keys(localStorage).forEach(function(k) {
@@ -502,6 +513,8 @@
 
   // ========== 暖機與同步 ==========
   function warmGAS() {
+    // 🔥 [Bugfix] 未配置 API 端點時直接跳過，避免 fetch('?action=ping') 打到錯誤 URL
+    if (!API_URL) return;
     if (Date.now() - _lastWarm < 5 * 60 * 1000) return;
     _lastWarm = Date.now();
     try {
@@ -743,7 +756,7 @@
         return result;
       } catch (err) {
         // 檢查是否為網路錯誤或伺服器錯誤（5xx）
-        var isNetworkError = (err instanceof TypeError) || !navigator.onLine || err.message === 'TIMEOUT';
+        var isNetworkError = (err instanceof TypeError) || !navigator.onLine || err.message === 'TIMEOUT' || (err.status === 0);
         var isServerError = (err && err.status && err.status >= 500);
         if (isNetworkError || isServerError) {
           // 🔐 不將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）

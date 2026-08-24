@@ -36,7 +36,7 @@
   try{
     var count=0;
     // 嘗試讀 IndexedDB pending 數（不阻塞）
-    var req=indexedDB.open('tree-offline',3);
+    var req=indexedDB.open('tree-offline');
     req.onsuccess=function(e){
       try{
         var db=e.target.result;

@@ -15,11 +15,12 @@ export function normalizeText(text) {
 export function tokenize(text) {
   const s = normalizeText(text);
   if (!s) return [];
-  const raw = s.match(/[a-z0-9]+|[\u4e00-\u9fff]+/g) || [];
+  // 🔥 [Bugfix] 支援 CJK 統一表意文字（U+4E00-9FFF）+ 擴展 A（U+3400-4DBF）+ 兼容表意文字（U+F900-FAFF）
+  const raw = s.match(/[a-z0-9]+|[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]+/g) || [];
   const out = []; const seen = new Set();
   function add(tok) { if (!tok || seen.has(tok)) return; seen.add(tok); out.push(tok); }
   for (const seg of raw) {
-    if (/^[\u4e00-\u9fff]+$/.test(seg)) {
+    if (/^[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]+$/.test(seg)) {
       add(seg);
       if (seg.length >= 2) {
         for (let i = 0; i < seg.length - 1; i++) add(seg.slice(i, i + 2));

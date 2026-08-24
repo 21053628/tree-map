@@ -36,19 +36,27 @@ export function isValidWGS84(lat,lng){ if(lat===''||lat==null||lat===undefined) 
 export const isValidHK80Range=isValidHK80; export const isValidWgs84HongKong=isValidWGS84;
 export function format1(n){ return Number(n).toFixed(1); }
 export function format5(n){ return Number(n).toFixed(5); }
+let _warnedProj4 = false;
+// 同步轉換若 proj4 未就緒：記警告（只記一次）並觸發非同步載入，令後續呼叫成功
+function warnProj4Missing_(){
+  if (_warnedProj4) return;
+  _warnedProj4 = true;
+  try { console.warn('[coordinates] proj4 尚未載入：同步轉換暫返回 null，已觸發非同步載入'); } catch(e){}
+  try { ensureProj4().catch(function(){}); } catch(e){}
+}
 export function toHK80(lat,lng){
   if(lat===''||lat==null||lat===undefined) return null; if(lng===''||lng==null||lng===undefined) return null;
   const numLat=Number(lat),numLng=Number(lng); if(!Number.isFinite(numLat)||!Number.isFinite(numLng)) return null;
-  const pj=getProj4(); if(!pj) return null;
+  const pj=getProj4(); if(!pj){ warnProj4Missing_(); return null; }
   const key='wgs2hk:'+numLat.toFixed(6)+','+numLng.toFixed(6); const c=getFromCache(key); if(c) return c;
-  try{ const tr=initProj4(); if(!tr) return null; let r; if(tr.forward) r=tr.forward([numLng,numLat]); else { const projs=getProjections(); r=pj(projs.WGS84,projs.HK80,[numLng,numLat]); } const out={N:r[1],E:r[0]}; setCache(key,out); return out; }catch(e){ return null; }
+  try{ const tr=initProj4(); if(!tr){ warnProj4Missing_(); return null; } let r; if(tr.forward) r=tr.forward([numLng,numLat]); else { const projs=getProjections(); r=pj(projs.WGS84,projs.HK80,[numLng,numLat]); } const out={N:r[1],E:r[0]}; setCache(key,out); return out; }catch(e){ return null; }
 }
 export function toWGS84(N,E){
   if(N===''||N==null||N===undefined) return null; if(E===''||E==null||E===undefined) return null;
   const numN=Number(N),numE=Number(E); if(!Number.isFinite(numN)||!Number.isFinite(numE)) return null;
-  const pj=getProj4(); if(!pj) return null;
+  const pj=getProj4(); if(!pj){ warnProj4Missing_(); return null; }
   const key='hk2wgs:'+numN+','+numE; const c=getFromCache(key); if(c) return c;
-  try{ const tr=initProj4(); if(!tr) return null; let r; if(tr.inverse) r=tr.inverse([numE,numN]); else { const projs=getProjections(); r=tr(projs.HK80,projs.WGS84,[numE,numN]); } const out={lat:r[1],lng:r[0]}; setCache(key,out); return out; }catch(e){ return null; }
+  try{ const tr=initProj4(); if(!tr){ warnProj4Missing_(); return null; } let r; if(tr.inverse) r=tr.inverse([numE,numN]); else { const projs=getProjections(); r=tr(projs.HK80,projs.WGS84,[numE,numN]); } const out={lat:r[1],lng:r[0]}; setCache(key,out); return out; }catch(e){ return null; }
 }
 export const toHK=toHK80; export const toWGS=toWGS84;
 export async function toHK80Async(lat,lng){

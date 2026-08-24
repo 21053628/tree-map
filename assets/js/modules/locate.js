@@ -83,9 +83,7 @@ export async function locateTree(treeId, projectId, lat, lng) {
       let tries = 0;
       const tryOpen = function () {
         if (opened) return;
-        const marker = state.treesCache.get(finalPid + '_' + tree.tree_id) ||
-          state.treesCache.get(tree.tree_id) ||
-          state.treesCache.get(String(treeId));
+        const marker = state.treesCache.get(finalPid + '_' + tree.tree_id);
         if (marker && marker._map) {
           opened = true;                      // 成功即鎖死，重試鏈即刻終止
           bringTreeToFront(marker);

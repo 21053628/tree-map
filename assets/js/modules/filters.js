@@ -57,11 +57,13 @@ export function toggleFilterPanel(btn) {
   panelEl = document.createElement('div');
   panelEl.className = 'filter-panel';
   const C = Config.TREE_STATUS_COLORS;
+  // 🔥 [XSS 加固] 顏色值限定為合法 hex，避免 Config 被污染時注入 HTML
+  const safeColor = (c) => (/^#[0-9a-fA-F]{3,8}$/.test(String(c || ''))) ? String(c) : '#757575';
 
   let html = '<div class="filter-title">過濾樹木狀態</div>';
   html += '<button class="filter-chip all" data-s="__all" data-c="#1565c0">全部</button>';
   STATUSES.forEach((s) => {
-    html += '<button class="filter-chip" data-s="' + s + '" data-c="' + C[s] + '"><span class="fc-dot"></span>' + s + '</button>';
+    html += '<button class="filter-chip" data-s="' + s + '" data-c="' + safeColor(C[s]) + '"><span class="fc-dot"></span>' + s + '</button>';
   });
   panelEl.innerHTML = html;
   document.body.appendChild(panelEl);

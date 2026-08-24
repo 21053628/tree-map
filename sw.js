@@ -102,7 +102,7 @@ function checkQuotaAndShrink(){
   }}catch(e){}
 }
 function handleInvalidateDataCache(type,payload){
-  var map={'inspection':['action=inspections','action=trees','action=bootstrap'],'inspection_photo':['action=inspections','action=trees','action=bootstrap'],'checkin':['action=inspections','action=trees','action=bootstrap'],'create_tree':['action=trees','action=bootstrap'],'update_tree':['action=trees','action=bootstrap'],'delete_tree':['action=trees','action=bootstrap'],'create_project':['action=projects'],'update_project':['action=projects','action=trees','action=bootstrap'],'delete_project':['action=projects','action=trees','action=bootstrap'],'sync':['action=trees','action=projects','action=inspections','action=bootstrap']};
+  var map={'inspection':['action=inspections','action=trees','action=bootstrap'],'inspection_photo':['action=inspections','action=trees','action=bootstrap'],'checkin':['action=inspections','action=trees','action=bootstrap'],'create_tree':['action=trees','action=bootstrap'],'update_tree':['action=trees','action=bootstrap'],'delete_tree':['action=trees','action=bootstrap'],'create_project':['action=projects'],'update_project':['action=projects','action=trees','action=bootstrap'],'delete_project':['action=projects','action=trees','action=bootstrap'],'create_aerial':['action=aerials'],'sync':['action=trees','action=projects','action=inspections','action=bootstrap']};
   var needles=map[type]||['action=trees','action=projects','action=inspections','action=bootstrap'];
   var pid=payload&&(payload.project_id||payload.prj)?String(payload.project_id||payload.prj):'';
   return caches.open(DATA_CACHE).then(function(c){ return c.keys().then(function(keys){

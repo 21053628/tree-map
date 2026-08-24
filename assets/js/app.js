@@ -52,6 +52,9 @@ function clearCache() {
   clearLotCache();
   localStorage.removeItem('tree_map_last_view');
   if (typeof ApiService !== 'undefined' && ApiService.clearCache) ApiService.clearCache();
+  // 🔥 [Bugfix] 清除快取時一併 reset 效能計數器，避免累積數值誤導
+  state.perfMetrics.cacheHits = 0;
+  state.perfMetrics.spatialIndexBuildTime = 0;
   console.log('🗑️ 緩存已清除');
 }
 
@@ -71,6 +74,12 @@ function init() {
   DOM.panelContent = document.getElementById('panelContent');
   DOM.searchResults = document.getElementById('searchResults');
   DOM.treeSearch = document.getElementById('treeSearch');
+
+  // 🔥 [Bugfix] 若 API 端點未配置，喺 UI 顯示明確提示（否則只係 console warning 用戶睇唔到）
+  if (!Config.API_ENDPOINT && DOM.statusEl) {
+    DOM.statusEl.textContent = '⚠️ API 端點未配置：請建立 assets/js/env.js 或設定 <meta name="api-endpoint">';
+    DOM.statusEl.classList.add('warning');
+  }
 
   // 🔥 [v2.55] 狀態雲「前置→淡出」：文字一變就浮到最前 3 秒，然後退回後面
   if (DOM.statusEl && 'MutationObserver' in window) {
