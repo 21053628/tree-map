@@ -1,6 +1,7 @@
 /**
  * 表單模組：建立地盤與樹木
- * v5.0 - Step 5：doCreateTree 改用新欄位名 + 補齊新增欄位
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v5.0 - doCreateTree 改用新欄位名 + 補齊新增欄位
  */
 import { state } from './state.js';
 import { $, showPanel, closePanel, updateStatus, escapeHtml } from './dom.js';

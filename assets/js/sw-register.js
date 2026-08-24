@@ -1,6 +1,7 @@
 /**
  * Service Worker 註冊（外部化，避免 CSP script-src 'self' 擋掉內嵌 script）
- * v3.0.0：updateViaCache none + SKIP_WAITING 交由前端決定 + 更新提示
+ * v1.0.0-beta：統一版本號（正式發佈前整合）
+ * 歷史：v3.0.0 - updateViaCache none + SKIP_WAITING 交由前端決定 + 更新提示
  */
 (function () {
   'use strict';

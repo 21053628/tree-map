@@ -1,10 +1,7 @@
 /**
  * 樹木標記與 popup 模組
- * v4.4 - 加入狀態過濾（配合 filters.js）
- * v4.3 - 🔢 按鈕升級做三模式循環：智能(默認) → 恆常 → 關閉 → 智能…
- * v4.2 - 樹木編號標籤系統
- * v4.1 - 固定尺寸狀態 marker，配合 MarkerCluster 穩定縮放渲染
- * v4.5 - 🔥 [防閃爍] silent 增量差量 + 自動平移 ensurePopupInViewport(panInside)
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v4.5 - 增量差量 + 防閃爍；v4.4 - 狀態過濾；v4.3 - 標籤三模式；v4.2 - 編號標籤系統；v4.1 - 固定尺寸 marker
  */
 import { state } from './state.js';
 import { updateStatus, escapeHtml } from './dom.js';

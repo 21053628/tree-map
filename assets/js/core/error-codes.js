@@ -13,6 +13,7 @@ var ErrorCodes = (function(){
     CSRF_TOKEN_INVALID: '安全驗證已失效，請重新登入後再試',
     RATE_LIMITED: '嘗試太頻繁，請稍後再試',
     CONFLICT: '資料已存在或衝突，請改用其他編號後再試',
+    VERSION_CONFLICT: '版本衝突：此樹木已被其他人更新，請重新載入頁面後再編輯',
     UPLOAD_FAILED: '相片上傳失敗，請稍後再試',
     SYSTEM_BUSY: '系統忙碌中，請稍後再試',
     INTERNAL_READ_ERROR: '伺服器讀取失敗，請稍後再試',
@@ -43,6 +44,7 @@ var ErrorCodes = (function(){
     'DECODE_EMPTY': '解碼後為空',
     'INVALID_NUMBER': '必須為有效數字',
     'INVALID_VALUE': '值不正確',
+    'VERSION_CONFLICT': '版本衝突，請重新載入',
     'INVALID': '不正確',
     'ALREADY_EXISTS': '已存在',
     'UNSUPPORTED': '不支援'
@@ -64,6 +66,14 @@ var ErrorCodes = (function(){
   }
   function messageForResponse(data, fallback){
     var code = codeOf(data);
+    // 🔥 [P0 修復] 優先檢查細節碼：若係 VERSION_CONFLICT 用專用訊息，唔用 CONFLICT 嘅預設文字
+    if(data && data.details && data.details.length){
+      for(var i=0; i<data.details.length; i++){
+        if(data.details[i].code === 'VERSION_CONFLICT'){
+          return M['VERSION_CONFLICT'] || '版本衝突：此樹木已被其他人更新，請重新載入';
+        }
+      }
+    }
     var msg = messageFor(code, '');
     if(msg && data && data.details && data.details.length){
       var dmsg = detailMessage(data.details);

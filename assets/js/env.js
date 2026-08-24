@@ -1,6 +1,6 @@
 /**
  * 環境注入 - Runtime 配置（零 window 橋接）
- * 部署時由 CI / 手動生成，覆蓋 api-config.js
+ * 部署時由 CI / 手動生成（取代已移除的 api-config.js）
  * 產生方式（CI）： echo "globalThis.ENV={API_ENDPOINT:'https://script.google.com/macros/s/<ID>/exec'}" > assets/js/env.js
  * 本文件已被 .gitignore 忽略，請複製 env.example.js 為 env.js 並填入實際值
  * ESM 兼容：同時提供 ESM 導出（當以 type=\"module\" 載入時）

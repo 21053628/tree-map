@@ -20,8 +20,12 @@ const AuthService = (function() {
     : 4 * 60 * 60 * 1000;
 
   // token 改放 sessionStorage（XSS 洩漏面較小，關閉分頁即失效）
+  // 🔥 [P0 修復] 同步寫入 localStorage 做 backup，離線同步時可 fallback 讀取（見 offline.js getCurrentToken）
   function getStore() {
     try { return window.sessionStorage; } catch (e) { return null; }
+  }
+  function getPersistentStore() {
+    try { return window.localStorage; } catch (e) { return null; }
   }
 
   function getToken() {
@@ -43,6 +47,15 @@ const AuthService = (function() {
     } catch (e) {
       return null;
     }
+  }
+
+  /** 🔥 [P0 修復] 更新 CSRF Token（後端每次成功寫入後旋轉，前端需同步） */
+  function setCsrfToken(token){
+    if(!token) return;
+    try{
+      const store = getStore();
+      if(store) store.setItem(CSRF_KEY, String(token));
+    }catch(e){}
   }
 
   /** 生成加密安全的隨機 CSRF Token（保留供相容舊呼叫） */
@@ -107,6 +120,16 @@ const AuthService = (function() {
         until: Date.now() + SESSION_DURATION
       }));
       store.setItem(CSRF_KEY, String(res.csrf_token));
+      // 🔥 [P0 修復] 同步寫入 localStorage backup，確保離線同步 / 分頁重開後仍可 fallback 取得 token
+      try {
+        const pStore = getPersistentStore();
+        if (pStore) {
+          pStore.setItem(TOKEN_KEY, JSON.stringify({
+            token: String(res.token),
+            until: Date.now() + Math.max(SESSION_DURATION, 6 * 60 * 60 * 1000)
+          }));
+        }
+      } catch (e) {}
 
       // 確認保存後仍能讀到完整的一對憑證。
       if (!getToken() || !getCsrfToken()) {
@@ -130,6 +153,13 @@ const AuthService = (function() {
       store.removeItem(TOKEN_KEY);
       store.removeItem(CSRF_KEY);
     }
+    // 🔥 [P0 修復] 同步清除 localStorage backup
+    try {
+      const pStore = getPersistentStore();
+      if (pStore) {
+        pStore.removeItem(TOKEN_KEY);
+      }
+    } catch (e) {}
   }
 
   /** @deprecated GAS 無法讀取自訂 HTTP Header（Apps Script 限制），
@@ -179,6 +209,7 @@ const AuthService = (function() {
   return {
     getToken,
     getCsrfToken,
+    setCsrfToken,
     isAuthenticated,
     authenticate,
     logout,

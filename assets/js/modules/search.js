@@ -1,7 +1,7 @@
 /**
  * 搜尋功能模組 — Token 倒排索引版
- * v3.0 - 建立樹木 token search index（分區倒排 + 中英分詞 + 前綴 + 評分排序）
- * v2.46 - Debounce 150ms 保留
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v3.0 - Token 倒排索引；v2.46 - Debounce 150ms
  */
 import { state } from './state.js';
 import { DOM, escapeHtml } from './dom.js';

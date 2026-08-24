@@ -1,8 +1,6 @@
 /**
  * 樹木管理系統 - 主入口（ES Modules 版本）
- * v2.55 - 狀態雲「前置→淡出」：更新時浮到最前 3 秒，然後漸變退回後面
- * v2.54 - 兩段式載入：快照 → GAS 背景刷新
- * [Phase2] 移除脆皮 setter 注入，改由模組直接 import
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
  */
 
 import { state } from './modules/state.js';
@@ -131,7 +129,7 @@ function init() {
 
   load().then(() => checkURLParams());
 
-  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.55 - 狀態雲前置淡出）');
+  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v1.0.0-beta）');
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -1,6 +1,7 @@
 /**
  * URL 參數解析與定位模組
- * v2.44 - 移除 localStorage 記憶，F5 刷新時回到預設位置
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v2.44 - 移除 localStorage 記憶，F5 刷新時回到預設位置
  */
 import { state } from './state.js';
 import { DOM, updateStatus } from './dom.js';

@@ -4,7 +4,6 @@
  * 環境注入優先級（高 → 低）：
  * 1. ENV.API_ENDPOINT  (assets/js/env.js - ESM 注入，CI 生成)
  * 2. <meta name="api-endpoint" content="..."> (反向代理 / 模板注入)
- * 3. API_CONFIG.ENDPOINT (assets/js/api-config.js - 已棄用，僅本地兼容)
  */
 
 function resolveApiEndpoint_() {
@@ -20,18 +19,6 @@ function resolveApiEndpoint_() {
     if (typeof document !== 'undefined' && document.querySelector) {
       var m = document.querySelector('meta[name="api-endpoint"]');
       if (m && m.content && m.content.trim()) return m.content.trim();
-    }
-  } catch (e) {}
-  // 3) 舊 api-config.js 兼容（若為佔位符 YOUR_ 則忽略）
-  try {
-    var _g2 = typeof globalThis !== 'undefined' ? globalThis : null;
-    if (_g2 && _g2.API_CONFIG && typeof _g2.API_CONFIG.ENDPOINT === 'string' && _g2.API_CONFIG.ENDPOINT.trim() && _g2.API_CONFIG.ENDPOINT.indexOf('YOUR_') === -1) {
-      return _g2.API_CONFIG.ENDPOINT.trim();
-    }
-  } catch (e) {}
-  try {
-    if (typeof API_CONFIG !== 'undefined' && API_CONFIG && typeof API_CONFIG.ENDPOINT === 'string' && API_CONFIG.ENDPOINT.trim() && API_CONFIG.ENDPOINT.indexOf('YOUR_') === -1) {
-      return API_CONFIG.ENDPOINT.trim();
     }
   } catch (e) {}
   return '';
@@ -125,7 +112,7 @@ function initConfig(apiEndpoint) {
   if (!Config.API_ENDPOINT) {
     console.warn('⚠️ API_ENDPOINT 未配置：請建立 assets/js/env.js（複製 env.example.js）或在 HTML 加入 <meta name="api-endpoint">，或設定 CI Secrets GAS_API_URL');
   } else {
-    // 若已載入校驗函數（api-config.js），則校驗格式
+    // 校驗端點格式（若已載入外部校驗函數則優先使用）
     var validator = (typeof isValidGasExecEndpoint === 'function') ? isValidGasExecEndpoint : isValidGasExecEndpointFallback_;
     if (!validator(Config.API_ENDPOINT)) {
       console.warn('⚠️ API_ENDPOINT 格式不符預期（應為 https://script.google.com/macros/s/<id>/exec），當前值:', Config.API_ENDPOINT);

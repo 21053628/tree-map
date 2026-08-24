@@ -16,9 +16,9 @@ handling, or offline hook is changed by the module conversion.
 
 | HTML | 實際 script 載入／執行順序 |
 | --- | --- |
-| `t.html` | `config.js` → `api-config.js` → `audit-log.js` → `api.js` → `auth.js` → `purify.min.js` → `core/coord-lazy.js` → `offline.js` → `modules/sync-panel.js` → module `pages/t.js` |
-| `nfc.html` | `config.js` → `api-config.js` → module `pages/nfc.js` |
-| `index.html` | shared classic scripts（`config.js` → `api-config.js` → `audit-log.js` → `utils.js` → `api.js` → `auth.js` → `offline.js` → `sync-panel.js`）→ vendor（Leaflet、marker cluster、`proj4.js`、`DOMPurify`）→ module `app.js` |
+| `t.html` | `config.js` → `audit-log.js` → `api.js` → `auth.js` → `purify.min.js` → `offline.js` → `modules/sync-panel.js` → module `pages/t.js` |
+| `nfc.html` | `config.js` → module `pages/nfc.js` |
+| `index.html` | shared classic scripts（`config.js` → `audit-log.js` → `api.js` → `auth.js` → `offline.js` → `sync-panel.js`）→ vendor（Leaflet、marker cluster、`proj4.js`、`DOMPurify`）→ module `app.js` |
 
 | File | Loading mode | Global surface | Used by |
 | --- | --- | --- | --- |
@@ -29,14 +29,11 @@ handling, or offline hook is changed by the module conversion.
 | `assets/js/pages/tree-detail/td-photos.js` | ES Module | Reads `window.TD`; named exports for photo actions | `assets/js/pages/t.js` |
 | `assets/js/pages/tree-detail/td-logs.js` | ES Module | Reads `window.TD`; uses page callback bridge for photo actions | `assets/js/pages/t.js` |
 | `assets/js/config.js` | Plain script | `window.Config` / `Config` | `index.html`, `t.html`, `nfc.html`, shared services |
-| `assets/js/api-config.js` | Plain script | Shared API configuration | `index.html`, `t.html`, `nfc.html` and API code |
 | `assets/js/api.js` | Plain script | `ApiService` / `window` global contract | `index.html`, `t.html`, `offline.js`, page logic |
 | `assets/js/auth.js` | Plain script | `AuthService` / `window` global contract | `index.html`, `t.html`, page logic |
 | `offline.js` | Plain script | `window.OfflineQueue`, `window.syncNow`, and `ApiService` hooks | `index.html`, `t.html` |
 | `assets/js/modules/sync-panel.js` | Plain script | Synchronisation UI and `window.OfflineQueue` | `index.html`, `t.html` |
-| `assets/js/utils.js` | Plain script | `window.CoordUtils` | `index.html` and classic-script consumers |
 | `assets/js/core/utils.js` | ES Module | Named utility exports | Page/application modules |
-| `assets/js/core/coord-lazy.js` | Plain script | `window.CoordLazy` | `t.html` and `assets/js/pages/t.js` |
 | `assets/js/core/event-bus.js` | ES Module | Module exports | Application modules |
 | `assets/js/modules/audit-log.js` | Plain script | Existing global audit API | `index.html`, `t.html` and shared services |
 | `assets/js/sw-register.js` | Plain script (`defer`) | Service-worker registration | `index.html`, `t.html` |
@@ -55,13 +52,10 @@ pages now consume named exports from `assets/js/core/utils.js`.
 The following files must remain plain scripts with their existing contracts:
 
 - `config.js`
-- `api-config.js`
 - `api.js`
 - `auth.js`
 - `offline.js`
 - `sync-panel.js`
-- `utils.js`
-- `core/coord-lazy.js`
 - vendor libraries
 
 The reason is compatibility with the runtime hook in `offline.js`:
@@ -92,10 +86,11 @@ their classic-script globals:
 - `pwaToast`
 - `L`
 - `DOMPurify`
-- `window.CoordLazy`
+- `window.CoordUtils` / `window.CoordLazy`（由 `core/coordinates.js` ESM 提供）
 
-The module entry does not convert `offline.js` or `core/coord-lazy.js`, so
-offline queueing and lazy `proj4` loading retain their existing behavior.
+The module entry does not convert `offline.js`, so offline queueing retains its
+existing behavior. Coordinate conversion is provided by the `coordinates.js`
+ES Module (which also exposes `CoordUtils`/`CoordLazy` globals).
 
 ## Phase status
 
@@ -109,7 +104,7 @@ offline queueing and lazy `proj4` loading retain their existing behavior.
   `t.html` loads the plain offline infrastructure before the module entry.
 - Phase 6.4: the unused `global-utils.js` compatibility bridge and its stale
   HTML/precache references were removed.
-- `nfc.html` keeps `config.js` and `api-config.js` before its module entry.
+- `nfc.html` keeps `config.js` before its module entry.
 - `index.html` keeps classic services and `offline.js` before `app.js`.
 
 ## Ordering rules
@@ -117,15 +112,13 @@ offline queueing and lazy `proj4` loading retain their existing behavior.
 For `t.html`, the page service／module order is:
 
 1. `config.js`
-2. `api-config.js`
-3. `audit-log.js`
-4. `api.js`
-5. `auth.js`
-6. `purify.min.js`
-7. `core/coord-lazy.js`
-8. `offline.js`
-9. `modules/sync-panel.js`
-10. `pages/t.js` (ES Module)
+2. `audit-log.js`
+3. `api.js`
+4. `auth.js`
+5. `purify.min.js`
+6. `offline.js`
+7. `modules/sync-panel.js`
+8. `pages/t.js` (ES Module)
 
 `sw-register.js` remains a separate deferred registration script; `leaflet.js`
 is a deferred vendor script declared before the page services in the HTML.
@@ -136,17 +129,16 @@ particular, `offline.js` and `sync-panel.js` must remain before `t.js` so the
 `ApiService` hook and sync panel initialization are ready before page logic
 runs.
 
-For `nfc.html`, `config.js` and `api-config.js` remain before the `nfc.js`
-module entry. `nfc.html` intentionally keeps its page CSS in an inline
-`<style>` block.
+For `nfc.html`, `config.js` remains before the `nfc.js` module entry.
+`nfc.html` intentionally keeps its page CSS in an inline `<style>` block.
 
-`core/coord-lazy.js` must remain a plain script because it lazily loads
-`proj4.js` on first coordinate conversion and exposes `window.CoordLazy`.
+`assets/js/core/coordinates.js` provides both `CoordUtils` and `CoordLazy`
+globals via ESM, so no separate plain-script forwarding layer is needed.
 
 ## Service Worker precache
 
-`sw.js` 目前版本係 `v2.8.4`，對應 static cache 名稱
-`static-v2.8.4`。`PRECACHE` 包含以下 10 個拆分 CSS：
+`sw.js` 目前版本係 `v1.0.0-beta`，對應 cache 名稱
+`precache-1.0.0-beta`、`runtime-1.0.0-beta`、`data-1.0.0-beta`、`tiles-1.0.0-beta`、`images-1.0.0-beta`。`PRECACHE` 包含以下 10 個拆分 CSS：
 
 ```text
 tokens.css, base.css, layout.css, map.css, ui.css,
@@ -181,4 +173,4 @@ claimed as passed by static analysis.
 
 ---
 
-> **最後核對**：2026-08-19。源碼檔案：`index.html`、`t.html`、`nfc.html`、`offline.js`、`sw.js`、`assets/js/api.js`、`assets/js/config.js`、`assets/js/api-config.js`、`assets/js/auth.js`、`assets/js/modules/audit-log.js`、`assets/js/modules/sync-panel.js`、`assets/js/sw-register.js`、`assets/js/app.js`、`assets/js/core/utils.js`、`assets/js/core/coord-lazy.js`、`assets/js/pages/t.js`、`assets/js/pages/nfc.js`、`assets/js/pages/tree-detail/td-utils.js`、`assets/js/pages/tree-detail/td-photos.js`、`assets/js/pages/tree-detail/td-logs.js`。`assets/js/core/global-utils.js`、`GAS/code.gs` 及實體 `assets/css/main.css` 均不存在。
+> **最後核對**：2026-08-24。源碼檔案：`index.html`、`t.html`、`nfc.html`、`offline.js`、`sw.js`、`assets/js/api.js`、`assets/js/config.js`、`assets/js/auth.js`、`assets/js/modules/audit-log.js`、`assets/js/modules/sync-panel.js`、`assets/js/sw-register.js`、`assets/js/app.js`、`assets/js/core/utils.js`、`assets/js/core/coordinates.js`、`assets/js/pages/t.js`、`assets/js/pages/nfc.js`、`assets/js/pages/tree-detail/td-utils.js`、`assets/js/pages/tree-detail/td-photos.js`、`assets/js/pages/tree-detail/td-logs.js`。`assets/js/api-config.js`、`assets/js/api-config.example.js`、`assets/js/utils.js` 及 `assets/js/core/coord-lazy.js` 已於 Phase 7 移除。`assets/js/core/global-utils.js`、`GAS/code.gs` 及實體 `assets/css/main.css` 均不存在。

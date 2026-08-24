@@ -8,18 +8,16 @@
 |---|---|---|---|
 | `assets/js/core/coordinates.js` | ES Module（統一真源） | `index.html`、`t.html`（type=module） | Named exports + `globalThis.CoordUtils`/`CoordLazy` 兼容 |
 | `assets/js/core/utils.js` | ES Module | `index.html`、`t.html`、`nfc.html` 及其他 module imports | Named exports；不掛載 `window`（`isValidHK80/format1/format5` 轉發至 coordinates） |
-| `assets/js/utils.js` | Plain Script（shim） | `index.html` | `window.CoordUtils`（已由 coordinates.js 覆蓋，僅 fallback） |
-| `assets/js/core/coord-lazy.js` | Plain Script（兼容轉發） | `t.html` | `window.CoordLazy`（優先委派至 coordinates.js） |
 
 `assets/js/core/global-utils.js` 已於 Phase 6.4 移除。全 repo 搜尋確認沒有剩餘 `window.TreeUtils` runtime consumer；現時只見 `assets/js/core/utils.js`、舊文件及少量源碼註解保留相關文字，module 頁面統一直接 import `assets/js/core/utils.js`。
 
 ## 實際載入依賴順序
 
-- `t.html`：`config.js` → `api-config.js` → `audit-log.js` → `api.js` → `auth.js` → `purify.min.js` → `core/coord-lazy.js` → `offline.js` → `modules/sync-panel.js` → module `pages/t.js`
-- `nfc.html`：`config.js` → `api-config.js` → module `pages/nfc.js`
+- `t.html`：`config.js` → `audit-log.js` → `api.js` → `auth.js` → `purify.min.js` → `offline.js` → `modules/sync-panel.js` → module `pages/t.js`（座標轉換由 `coordinates.js` ESM 統一提供）
+- `nfc.html`：`config.js` → module `pages/nfc.js`
 - `index.html`：shared classic scripts 及 vendor → module `app.js`，再由 module imports 載入其他 ES Modules
 
-`offline.js` 必須在 `t.js` module 之前執行，以便先完成 `ApiService.post`/`ApiService.get` hook；`core/coord-lazy.js` 必須維持 plain script，以保留按需載入 `proj4.js` 的設計。
+`offline.js` 必須在 `t.js` module 之前執行，以便先完成 `ApiService.post`/`ApiService.get` hook；`proj4.js` 由 `coordinates.js` 載入時確保已就緒。
 
 ## 共用工具 exports
 
@@ -41,7 +39,7 @@
 統一至 `assets/js/core/coordinates.js`（ESM）：投影字串、HK80/WGS84 範圍、LRU 2000、同步/非同步 API（`toHK80/toWGS84/toHK80Async/toWGS84Async/batchToHK80`）、格式化與驗證。
 
 - 載入：`index.html` 與 `t.html` 均以 `<script type="module" src="assets/js/core/coordinates.js">` 載入，並同時掛 `globalThis.CoordUtils`/`CoordLazy` 兼容舊呼叫（`CoordUtils.toHK80/toWGS84/batchToHK80/preheatCache/getCacheStats` 與 `CoordLazy.toHK/toWGS`）。
-- 舊檔：`assets/js/utils.js` 改為 shim（fallback，載入後被統一模組覆蓋）；`assets/js/core/coord-lazy.js` 改為薄轉發層（優先委派至統一模組，修正 `!lat` 誤判與 LRU 上限）。
+- 舊檔：`assets/js/utils.js` 及 `assets/js/core/coord-lazy.js` 已於 Phase 7 移除，統一由 `coordinates.js` 提供 `CoordUtils`/`CoordLazy` 全域。
 - 新代碼：`import { toHK80, toWGS84, toHK80Async, batchToHK80 } from '../core/coordinates.js'`。`assets/js/core/utils.js` 的 `isValidHK80/format1/format5` 已轉發至此。
 - 後端 `GAS/coordinates.gs` 抽 `COORD_HK80_BOUNDS_/COORD_WGS84_BOUNDS_` 並新增 `batchWgs84ToHk80_()` 對應前端批次，參數與 `proj4` 完全一致。
 
@@ -77,4 +75,4 @@
 
 ---
 
-> **最後核對**：2026-08-19。源碼檔案：`assets/js/core/utils.js`、`assets/js/pages/t.js`、`assets/js/pages/nfc.js`、`assets/js/pages/tree-detail/td-utils.js`、`assets/js/pages/tree-detail/td-photos.js`、`assets/js/pages/tree-detail/td-logs.js`、`assets/js/modules/forms.js`、`assets/js/utils.js`、`assets/js/core/coord-lazy.js`、`t.html`、`nfc.html`。全 repo 搜尋未發現 `window.TreeUtils` runtime 引用；`assets/js/core/global-utils.js` 實體不存在。
+> **最後核對**：2026-08-24。源碼檔案：`assets/js/core/utils.js`、`assets/js/pages/t.js`、`assets/js/pages/nfc.js`、`assets/js/pages/tree-detail/td-utils.js`、`assets/js/pages/tree-detail/td-photos.js`、`assets/js/pages/tree-detail/td-logs.js`、`assets/js/modules/forms.js`、`t.html`、`nfc.html`。全 repo 搜尋未發現 `window.TreeUtils` runtime 引用；`assets/js/utils.js` 及 `assets/js/core/coord-lazy.js` 已於 Phase 7 移除。`assets/js/core/global-utils.js` 實體不存在。

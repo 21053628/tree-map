@@ -3,8 +3,8 @@
  * - GML 解析
  * - DD/Lot 編號顯示
  * - LRU 快取
- * v2.49 - 修正 walk() 條件反轉 bug（之前跳過了資料 tag，導致 popup 只顯示「私人地段」）
- *       - 標題對齊航拍圖格式：「Lot 533 J,1」
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v2.49 - 修正 walk() 條件反轉 bug；v2.48 - 清洗 sublot 寫法
  */
 import { state, LOT_CACHE_MAX } from './state.js';
 import { $, escapeHtml, debounce, updateStatus } from './dom.js';

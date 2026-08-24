@@ -1,6 +1,7 @@
 /**
  * 樹木管理系統 - 狀態過濾模組
- * v1.0 - 按 Tree Status 過濾樹木（多選 chips）
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v1.0 - 按 Tree Status 過濾樹木（多選 chips）
  */
 import { state } from './state.js';
 import { setStatusFilter, getStatusFilter } from './trees.js';

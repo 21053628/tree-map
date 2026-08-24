@@ -1,10 +1,8 @@
 /**
- * 樹木管理系統 - API 服務模組（極致性能優化版 v2.3 - 極速無阻塞版）
+ * 樹木管理系統 - API 服務模組（極致性能優化版 v1.0.0-beta）
  * 
- * 🚀 v2.3 終極優化：
- * 1. [GET 不排隊] GET 請求直接並發，徹底移除隊列延遲
- * 2. [3秒極速放棄] 背景刷新 (bootstrap) 只等 3 秒，超時果斷放棄，秒切本地快取
- * 3. [寫入才排隊] 只有 POST 寫入請求才使用隊列，確保數據不衝突
+ * 🚀 v1.0.0-beta 統一版本號（正式發佈前整合）
+ * 歷史：v2.3 終極優化 → 1. GET 不排隊 2. 3秒極速放棄 3. 寫入才排隊
  */
 const ApiService = (function() {
   'use strict';
@@ -98,13 +96,24 @@ const ApiService = (function() {
       return null;
     }
     cacheHitCount++;
+    // 🔥 [P1 修復] 真正 LRU：讀取後將 key 移到 Map 尾（最近使用），
+    // 令 setCache 淘汰時刪走嘅一定係最耐冇用嘅 entry。
+    try {
+      responseCache.delete(key);
+      responseCache.set(key, cached);
+    } catch (e) {}
     return cached.data;
   }
 
   function setCache(key, data) {
+    // 🔥 [P1 修復] 真正 LRU：
+    // 1) key 若已存在先刪除（令之後 re-add 移到 Map 尾 = 最近使用）
+    // 2) 滿容量時刪最舊（access order 第一個）
+    // 3) 最後寫入
+    if (responseCache.has(key)) responseCache.delete(key);
     if (responseCache.size >= MAX_CACHE_SIZE) {
       const firstKey = responseCache.keys().next().value;
-      responseCache.delete(firstKey);
+      if (firstKey && firstKey !== key) responseCache.delete(firstKey);
     }
     responseCache.set(key, { data: data, timestamp: Date.now() });
   }
@@ -452,6 +461,12 @@ const ApiService = (function() {
       if (data && data.duplicate === true) {
         // 後端回報重複：這筆 client_id 早已成功處理，視為成功（避免重複 alert 失敗）
         data.ok = true;
+      }
+
+      // 🔥 [P0 修復] CSRF 旋轉：後端成功寫入回應會附帶新 csrf_token，
+      // 前端必須立即更新，否則下一次寫入會因舊 token 已被消耗而 CSRF_INVALID
+      if (data && data.csrf_token && typeof AuthService !== 'undefined' && AuthService.setCsrfToken) {
+        AuthService.setCsrfToken(data.csrf_token);
       }
 
       if (isAuthFailure(data)) {

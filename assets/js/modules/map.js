@@ -1,9 +1,7 @@
 /**
  * 地圖初始化模組
- * v2.62 - 整理手機版底圖控制：政府／官航／地段／航拍統一收納於 Layer FAB
- * v2.52 - 加入 🎚 狀態過濾按鈕（配合 filters.js）
- * v2.51 - 抽屜加入「建立地盤／新增樹木」動作按鈕
- * v2.50 - 手機版 layer bar 變身 FAB 抽屜
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v2.62 - 整理手機版底圖控制；v2.52 - 狀態過濾按鈕；v2.51 - 抽屜動作按鈕；v2.50 - FAB 抽屜
  */
 import { state } from './state.js';
 import { updateStatus, closePanel } from './dom.js';

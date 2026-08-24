@@ -1,7 +1,7 @@
 /**
  * 地盤標記與選擇模組
- * v2.44 - XSS 加固：buildSelect / drawProjects 改用 DOM API，移除 innerHTML 拼字串與 inline onchange
- * v2.43 - 修正「前往地盤」按鈕的 zoom 級別
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v2.44 - XSS 加固；v2.43 - 修正 zoom 級別
  */
 import { state } from './state.js';
 import { DOM } from './dom.js';
