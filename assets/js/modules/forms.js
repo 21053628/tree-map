@@ -4,7 +4,7 @@
  * 歷史：v5.0 - doCreateTree 改用新欄位名 + 補齊新增欄位
  */
 import { state } from './state.js';
-import { $, showPanel, closePanel, updateStatus, escapeHtml } from './dom.js';
+import { $, showPanel, closePanel, updateStatus, escapeHtml, showToast, formFieldError, enableAutoClearFieldErrors } from './dom.js';
 import { SpeciesRepository, loadTreeSpecies, fillSpeciesDatalist } from './species.js';
 import { bringTreeToFront } from './trees.js';
 import { startPick } from './draw.js'; // 🔥 [Phase1]
@@ -41,15 +41,29 @@ export async function doCreateProject() {
   const N = $('#pN').value;
   const E = $('#pE').value;
 
-  if (!name || !N || !E) { alert('請填寫完整'); return; }
+  // [Phase13] inline validation 取代 alert
+  if (!name || !N || !E) {
+    if (!name) formFieldError('#pName', '請填寫地盤名稱');
+    if (!N) formFieldError('#pN', '請輸入 HK80 N');
+    if (!E) formFieldError('#pE', '請輸入 HK80 E');
+    showToast('請填寫完整', 'warning');
+    return;
+  }
 
   if (!isValidHK80(N, E)) {
-    alert('⚠️ HK80 位置錯誤：請輸入香港範圍內的 HK80 N/E 座標。');
+    formFieldError('#pN', '請輸入香港範圍內的 HK80 N/E 座標');
+    formFieldError('#pE');
+    showToast('⚠️ HK80 位置錯誤', 'warning');
     return;
   }
 
   const w = CoordUtils.toWGS84(N, E);
-  if (!w) { alert('HK80 座標轉換失敗'); return; }
+  if (!w) {
+    formFieldError('#pN', '座標轉換失敗');
+    formFieldError('#pE');
+    showToast('HK80 座標轉換失敗', 'error');
+    return;
+  }
 
   try {
     const meta = ApiService.newClientMeta();
@@ -64,7 +78,7 @@ export async function doCreateProject() {
     });
 
     if (r.ok) {
-      alert('✅ 地盤已建立！\nID: ' + r.project_id + '\n（請將此 ID 寫入 NFC tag）');
+      showToast('✅ 地盤已建立！ID: ' + r.project_id, 'success', 4000);
       closePanel();
       state.projectMarkersCache = null;
       state.treesCache.clear();
@@ -73,15 +87,15 @@ export async function doCreateProject() {
       if (typeof ApiService !== 'undefined' && ApiService.clearCache) try{ ApiService.clearCache(); }catch(e){}
       try { await loadProjects(); } catch(e){ await load(); }
     } else {
-      alert('❌ ' + (typeof ErrorCodes !== 'undefined' ? ErrorCodes.messageForResponse(r, r.error) : r.error));
+      showToast('❌ ' + (typeof ErrorCodes !== 'undefined' ? ErrorCodes.messageForResponse(r, r.error) : r.error), 'error');
     }
   } catch (error) {
-    alert('❌ 請求失敗：' + error.message);
+    showToast('❌ 請求失敗：' + error.message, 'error');
   }
 }
 
 export async function openTreeForm(preset) {
-  if (!state.curProject) { alert('請先選擇地盤'); return; }
+  if (!state.curProject) { showToast('請先選擇地盤', 'warning'); return; }
 
   const authResult = _promptAuth();
   if (authResult instanceof Promise) { if (!await authResult) return; }
@@ -131,7 +145,7 @@ function snapshotTreeForm_() {
 }
 
 export function pickTreeLocation() {
-  if (!state.curProject) { alert('請先選擇地盤'); return; }
+  if (!state.curProject) { showToast('請先選擇地盤', 'warning'); return; }
   const snap = snapshotTreeForm_();
   const panelEl = document.getElementById('panel');
   // 🔥 [手機版修復] 暫時關閉 slide 動畫，避免「關→開」閃跳；0.9s 後自動恢復
@@ -140,7 +154,7 @@ export function pickTreeLocation() {
   closePanel();
   startPick(function (latlng) {
     const hk = CoordUtils.toHK80(latlng.lat, latlng.lng);
-    if (!hk) { alert('HK80 座標轉換失敗'); return; }
+    if (!hk) { showToast('HK80 座標轉換失敗', 'error'); return; }
     openTreeForm(Object.assign({}, snap, { N: CoordUtils.format1(hk.N), E: CoordUtils.format1(hk.E) }));
   }, '📍 按一下選擇樹木位置');
 }
@@ -153,7 +167,8 @@ export async function doCreateTree() {
       String(t.tree_id).trim() === inputId &&
       String(t.project_id) === String(state.curProject));
     if (dup) {
-      alert('⚠️ 樹木編號 ' + inputId + ' 已存在於此地盤，請改用其他編號（或留空自動編號）');
+      formFieldError('#tId', '樹木編號 ' + inputId + ' 已存在於此地盤');
+      showToast('⚠️ 樹木編號重複', 'warning');
       return;
     }
   }
@@ -161,16 +176,32 @@ export async function doCreateTree() {
   const N = $('#tN').value;
   const E = $('#tE').value;
 
-  if (!N || !E) { alert('請填寫 HK80 座標 N/E'); return; }
-
-  if (!isValidHK80(N, E)) {
-    alert('⚠️ HK80 位置錯誤：請輸入香港範圍內的 HK80 N/E 座標。');
+  if (!N || !E) {
+    if (!N) formFieldError('#tN', '請輸入 HK80 N');
+    if (!E) formFieldError('#tE', '請輸入 HK80 E');
+    showToast('請填寫 HK80 座標 N/E', 'warning');
     return;
   }
-  if (VALID_HEALTH.indexOf($('#tStatus').value) === -1) { alert('樹木狀態不合法：' + $('#tStatus').value); return; }
+
+  if (!isValidHK80(N, E)) {
+    formFieldError('#tN', '請輸入香港範圍內的 HK80 N/E 座標');
+    formFieldError('#tE');
+    showToast('⚠️ HK80 位置錯誤', 'warning');
+    return;
+  }
+  if (VALID_HEALTH.indexOf($('#tStatus').value) === -1) {
+    formFieldError('#tStatus', '樹木狀態不合法');
+    showToast('樹木狀態不合法：' + $('#tStatus').value, 'warning');
+    return;
+  }
 
   const w = CoordUtils.toWGS84(N, E);
-  if (!w) { alert('HK80 座標轉換失敗'); return; }
+  if (!w) {
+    formFieldError('#tN', '座標轉換失敗');
+    formFieldError('#tE');
+    showToast('HK80 座標轉換失敗', 'error');
+    return;
+  }
 
   try {
     // 🔥 [v5.0] 改用新欄位名 + 補齊新增欄位；[Phase2] 加 client_id/client_created_at
@@ -192,8 +223,8 @@ export async function doCreateTree() {
       lat: w.lat.toFixed(6), lng: w.lng.toFixed(6)
     });
 
-    alert(r.ok ? '✅ 樹木 ' + r.tree_id + ' 已建立' : '❌ ' + (typeof ErrorCodes !== 'undefined' ? ErrorCodes.messageForResponse(r, r.error) : r.error));
     if (r.ok) {
+      showToast('✅ 樹木 ' + r.tree_id + ' 已建立', 'success', 4000);
       closePanel();
       state.treesCache.clear();
       state.spatialIndexCache = null;
@@ -246,5 +277,5 @@ export async function doCreateTree() {
         }, 400);
       }
     }
-  } catch (error) { alert('❌ 請求失敗：' + error.message); }
+  } catch (error) { showToast('❌ 請求失敗：' + error.message, 'error'); }
 }

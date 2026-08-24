@@ -169,8 +169,8 @@
   max-height: 85vh; overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  transition: opacity 0.25s var(--ease-out), transform 0.25s var(--ease-out);
-  transform: translate(-50%, -50%) translateY(14px) scale(.97);
+  transition: opacity 0.35s var(--ease-out), transform 0.35s var(--ease-spring);
+  transform: translate(-50%, -50%) translateY(20px) scale(.95);
   opacity: 0; pointer-events: none;
   will-change: transform, opacity;
 }

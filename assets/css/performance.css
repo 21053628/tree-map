@@ -41,4 +41,6 @@
   .leaflet-popup-content button:hover, .leaflet-popup-content a:hover {
     transform: none !important;
   }
+  /* [Phase13] skeleton 停用 shimmer */
+  .skeleton { animation: none !important; }
 }

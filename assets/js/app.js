@@ -4,7 +4,7 @@
  */
 
 import { state } from './modules/state.js';
-import { DOM, closePanel } from './modules/dom.js';
+import { DOM, closePanel, enableAutoClearFieldErrors } from './modules/dom.js';
 import { initMap } from './modules/map.js';
 import { handleSearch, hideSearch } from './modules/search.js';
 import { SpeciesRepository } from './modules/species.js';
@@ -107,6 +107,9 @@ function init() {
   }
 
   if (!initMap()) return;
+
+  // [Phase13] 表單欄位自動清除錯誤（input/focus 時）
+  enableAutoClearFieldErrors();
 
   if ('requestIdleCallback' in window) {
     requestIdleCallback(() => CoordUtils.preheatCache());
