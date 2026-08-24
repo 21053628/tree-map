@@ -9,6 +9,75 @@ function getSheetByNameRobust_(name){
 }
 
 /**
+ * 🔥 [P0 修復] 傳回 inspection_id 對應的 tree_id（用於驗證相片歸屬）
+ */
+function getInspectionTreeId_(inspectionId) {
+  const sheet = getSheetByNameRobust_(SH_INS);
+  if (!sheet) return null;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return null;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(k){ return String(k||'').replace(/^\ufeff/, '').trim(); });
+  const insIdIdx = headers.indexOf('inspection_id');
+  const treeIdIdx = headers.indexOf('tree_id');
+  if (insIdIdx === -1 || treeIdIdx === -1) return null;
+  const ids = sheet.getRange(2, insIdIdx + 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(inspectionId)) {
+      return String(sheet.getRange(2 + i, treeIdIdx + 1).getValue() || '');
+    }
+  }
+  return null;
+}
+
+/**
+ * 🔥 [P0 修復] 傳回 inspection_id 對應的 project_id（用於驗證相片歸屬）
+ */
+function getInspectionProjectId_(inspectionId) {
+  const sheet = getSheetByNameRobust_(SH_INS);
+  if (!sheet) return null;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return null;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(k){ return String(k||'').replace(/^\ufeff/, '').trim(); });
+  const insIdIdx = headers.indexOf('inspection_id');
+  const prjIdIdx = headers.indexOf('project_id');
+  if (insIdIdx === -1 || prjIdIdx === -1) return null;
+  const ids = sheet.getRange(2, insIdIdx + 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(inspectionId)) {
+      return String(sheet.getRange(2 + i, prjIdIdx + 1).getValue() || '');
+    }
+  }
+  return null;
+}
+
+/**
+ * 🔥 [P0 修復] 確保 trees 表存在 updated_at 欄位（向後兼容舊表，缺欄時自動附加，唔影響現有資料）
+ * @returns {boolean} 欄位存在（或已建立）
+ */
+function ensureTreeUpdatedAtColumn_(){
+  try{
+    const sheet = getSheetByNameRobust_(SH_TREES);
+    if(!sheet) return false;
+    const lastCol = sheet.getLastColumn();
+    let headers = [];
+    if(lastCol > 0){
+      headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(k){ return String(k||'').replace(/^\ufeff/, '').trim(); });
+    }
+    if(headers.indexOf('updated_at') !== -1) return true;
+    // 喺表尾附加一欄（唔郁動現有資料）
+    sheet.getRange(1, lastCol + 1).setValue('updated_at');
+    return true;
+  }catch(e){
+    try{ console.warn('[ensureTreeUpdatedAtColumn_] failed: ' + e); }catch(_){}
+    return false;
+  }
+}
+
+/**
  * 批次更新樹木欄位（固定 Schema：未知欄忽略，不動態新增表頭）
  */
 function updateTreeFields_(treeId, prj, fieldUpdates) {
@@ -43,11 +112,26 @@ function updateTreeFields_(treeId, prj, fieldUpdates) {
     break;
   }
   if (rowIndex === -1) return;
-  Object.keys(updates).forEach(function(field) {
-    const colIdx = headers.indexOf(field);
-    if (colIdx !== -1) sheet.getRange(rowIndex, colIdx + 1).setValue(updates[field]);
-    else try { console.warn('[FIXED_SCHEMA] updateTreeFields_ skip missing col: ' + field); } catch(e) {}
-  });
+  // 🔥 [P1 修復] 批量寫入：更新欄位 >= 3 時用 setValues 一次過寫入整行，>1 次 Sheets API 呼叫
+  var updateKeys = Object.keys(updates);
+  if (updateKeys.length >= 3) {
+    // 讀取整行現有值，只覆蓋有變化的欄位，避免清空相鄰欄位（lastCol 已在上面宣告）
+    var existingRow = sheet.getRange(rowIndex, 1, 1, lastCol).getValues()[0];
+    for (var ui = 0; ui < updateKeys.length; ui++) {
+      var field = updateKeys[ui];
+      var colIdx = headers.indexOf(field);
+      if (colIdx !== -1) existingRow[colIdx] = updates[field];
+      else try { console.warn('[FIXED_SCHEMA] updateTreeFields_ skip missing col: ' + field); } catch(e) {}
+    }
+    sheet.getRange(rowIndex, 1, 1, lastCol).setValues([existingRow]);
+  } else {
+    // 更新欄位少（1-2 個），逐欄 setValue 更簡單
+    updateKeys.forEach(function(field) {
+      const colIdx = headers.indexOf(field);
+      if (colIdx !== -1) sheet.getRange(rowIndex, colIdx + 1).setValue(updates[field]);
+      else try { console.warn('[FIXED_SCHEMA] updateTreeFields_ skip missing col: ' + field); } catch(e) {}
+    });
+  }
 }
 
 /**
@@ -148,9 +232,11 @@ function getInspectionPhotoUrl_(inspectionId) {
   const photoUrlIdx = headers.indexOf('photo_url');
   if (insIdIdx === -1 || photoUrlIdx === -1) return '';
   const ids = sheet.getRange(2, insIdIdx + 1, lastRow - 1, 1).getValues();
+  // 🔥 [P1 修復] 一次過讀取整欄 photo_url，避免迴圈內逐 cell getValue() 造成 N+1 次 API 呼叫
+  const photoUrls = sheet.getRange(2, photoUrlIdx + 1, lastRow - 1, 1).getValues();
   for (let i = 0; i < ids.length; i++) {
     if (String(ids[i][0]) === String(inspectionId)) {
-      return String(sheet.getRange(2 + i, photoUrlIdx + 1).getValue() || '');
+      return String(photoUrls[i][0] || '');
     }
   }
   return '';

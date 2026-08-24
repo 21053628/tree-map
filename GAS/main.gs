@@ -7,17 +7,17 @@ function doGet(e){
       const v = validateGetParams_(action, p);
       if (v) return v;
     }
-    if(action === 'bootstrap'){ if(String(p.nocache)==='1'||String(p.bust)==='1'){ try{ CacheService.getScriptCache().remove(BOOTSTRAP_CACHE_KEY); }catch(e){} } return handleGetBootstrap_(p); }
+    if(action === 'bootstrap'){ if(String(p.nocache)==='1'||String(p.bust)==='1'){ try{ cacheRemoveChunked_(BOOTSTRAP_CACHE_KEY); }catch(e){} } return handleGetBootstrap_(p); }
     if(action === 'ping') return handleGetPing_();
     if(action === 'tree') return handleGetTree_(p);
     if(action === 'inspections') return handleGetInspections_(p);
     if(action === 'projects'){ 
       // support nocache=1 for projects too
-      if(String(p.nocache)==='1' || String(p.bust)==='1'){ try{ CacheService.getScriptCache().remove(PROJECTS_CACHE_KEY); }catch(e){} }
+      if(String(p.nocache)==='1' || String(p.bust)==='1'){ try{ cacheRemoveChunked_(PROJECTS_CACHE_KEY); }catch(e){} }
       return handleGetProjects_(); 
     }
     if(action === 'species') return handleGetSpecies_();
-    if(String(p.nocache)==='1'||String(p.bust)==='1'){ try{ CacheService.getScriptCache().remove(TREES_CACHE_KEY); }catch(e){} }
+    if(String(p.nocache)==='1'||String(p.bust)==='1'){ try{ cacheRemoveChunked_(TREES_CACHE_KEY); }catch(e){} }
     return handleGetTrees_(p);
   } catch (err) {
     var msg = err && err.message ? err.message : String(err);
@@ -67,8 +67,13 @@ function doPost(e){
   }
 
   // 🔐 CSRF 驗證：非 login 的寫入請求必須攜帶合法 CSRF Token（login 本身除外）
-  if(d.type !== 'login' && !isValidCsrfToken_(getCsrfTokenFromRequest_(e, d), d.token)){
-    return typeof errJson_ === 'function' ? errJson_(ERROR_CODES_.CSRF_INVALID) : json_({ok:false, error_code: ERROR_CODES_.CSRF_INVALID, error: ERROR_CODES_.CSRF_INVALID});
+  // 🔥 [P0 修復] 改用 peekCsrfToken_（唯讀檢查），成功後由 withCsrfRotation_ 在回傳時旋轉
+  var csrfTokenFromReq = '';
+  if(d.type !== 'login'){
+    csrfTokenFromReq = getCsrfTokenFromRequest_(e, d);
+    if(!peekCsrfToken_(csrfTokenFromReq, d.token)){
+      return typeof errJson_ === 'function' ? errJson_(ERROR_CODES_.CSRF_INVALID) : json_({ok:false, error_code: ERROR_CODES_.CSRF_INVALID, error: ERROR_CODES_.CSRF_INVALID});
+    }
   }
 
   // 🔥 提取前端傳來的冪等性鍵值
@@ -150,29 +155,71 @@ function doPost(e){
   }
 
   try {
+    // 🔥 [P0 修復] 鎖內重新驗證 CSRF Token（避免並發競爭：兩個請求在 lock 外 peek 都 pass，
+    // 但第一個 rotate 消耗後，第二個在 lock 內才能發現 token 已失效）。
+    if (d.type !== 'login' && csrfTokenFromReq) {
+      if (!peekCsrfToken_(csrfTokenFromReq, d.token)) {
+        return typeof errJson_ === 'function' ? errJson_(ERROR_CODES_.CSRF_INVALID) : json_({ok:false, error_code: ERROR_CODES_.CSRF_INVALID, error: ERROR_CODES_.CSRF_INVALID});
+      }
+    }
 
+    var _result = null;
     if(d.type === 'checkin'){
-      return handleCheckin_(d, clientId, clientCreatedAt);
+      _result = handleCheckin_(d, clientId, clientCreatedAt);
     }
     else if(d.type === 'inspection'){
-      return handleInspection_(d, clientId, clientCreatedAt, prePhotoUrls);
+      _result = handleInspection_(d, clientId, clientCreatedAt, prePhotoUrls);
+      // 🔥 [P0 修復] 鎖內發現重複（race）時清理孤兒相片
+      if(prePhotoUrls.length && _result && typeof _result.getContent === 'function'){
+        try{
+          var insRaw = _result.getContent();
+          var insObj = JSON.parse(insRaw);
+          if(insObj && insObj.duplicate === true) deleteDriveFilesByUrls_(prePhotoUrls);
+        }catch(e){}
+      }
     }
     else if(d.type === 'inspection_photo'){
-      return handleInspectionPhoto_(d, clientId, prePhotoUrl);
+      _result = handleInspectionPhoto_(d, clientId, prePhotoUrl);
     }
     else if(d.type === 'update_tree'){
-      return handleUpdateTree_(d, clientId);
+      _result = handleUpdateTree_(d, clientId);
     }
     else if(d.type === 'create_project'){
-      return handleCreateProject_(d, clientId, clientCreatedAt);
+      _result = handleCreateProject_(d, clientId, clientCreatedAt);
     }
     else if(d.type === 'create_tree'){
-      return handleCreateTree_(d, clientId, clientCreatedAt, prePhotoUrls, preTreeId);
+      _result = handleCreateTree_(d, clientId, clientCreatedAt, prePhotoUrls, preTreeId);
+      // 🔥 [P0 修復] 鎖內失敗（CONFLICT 等）時清理孤兒相片，避免 Drive 積累垃圾
+      if(prePhotoUrls.length && _result && typeof _result.getContent === 'function'){
+        try{
+          var ctRaw = _result.getContent();
+          var ctObj = JSON.parse(ctRaw);
+          if(!(ctObj && ctObj.ok === true)) deleteDriveFilesByUrls_(prePhotoUrls);
+        }catch(e){}
+      }
     }
 
     // 未支援的寫入型別：明確回報錯誤，不要靜默成功（避免前端誤以為成功）
-    if (typeof errJsonWithLog_ === 'function') console.error('[UNSUPPORTED_OPERATION] type=' + d.type);
-    return typeof errJson_ === 'function' ? errJson_(ERROR_CODES_.UNSUPPORTED_OPERATION, [{field:'type', code:'UNSUPPORTED'}]) : json_({ok:false, error_code: ERROR_CODES_.UNSUPPORTED_OPERATION, error: ERROR_CODES_.UNSUPPORTED_OPERATION, details:[{field:'type', code:'UNSUPPORTED'}]});
+    if (_result === null) {
+      if (typeof errJsonWithLog_ === 'function') console.error('[UNSUPPORTED_OPERATION] type=' + d.type);
+      return typeof errJson_ === 'function' ? errJson_(ERROR_CODES_.UNSUPPORTED_OPERATION, [{field:'type', code:'UNSUPPORTED'}]) : json_({ok:false, error_code: ERROR_CODES_.UNSUPPORTED_OPERATION, error: ERROR_CODES_.UNSUPPORTED_OPERATION, details:[{field:'type', code:'UNSUPPORTED'}]});
+    }
+
+    // 🔥 [P0 修復] 成功時旋轉 CSRF Token 並注入新 token 到回應，前端下次請求使用新 token
+    if (d.type !== 'login' && csrfTokenFromReq) {
+      try {
+        var resRaw = _result.getContent();
+        var resObj = JSON.parse(resRaw);
+        if (resObj && resObj.ok === true && typeof rotateCsrfToken_ === 'function') {
+          var newCsrf = rotateCsrfToken_(csrfTokenFromReq, d.token);
+          if (newCsrf) {
+            resObj.csrf_token = newCsrf;
+            return ContentService.createTextOutput(JSON.stringify(resObj)).setMimeType(ContentService.MimeType.JSON);
+          }
+        }
+      } catch(e) {}
+    }
+    return _result;
   } catch (error) {
     var wmsg = error && error.message ? error.message : String(error);
     if (typeof errJsonWithLog_ === 'function') return errJsonWithLog_(ERROR_CODES_.INTERNAL_WRITE_ERROR, wmsg);

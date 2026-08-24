@@ -53,7 +53,7 @@
 <!-- 🔥 環境注入（最優先） -->
 <script src="assets/js/env.js"></script>
 <!-- 🔥 [Phase6] 統一 services：config → audit-log → api → auth -->
-<!-- 註：coord-lazy.js 維持 plain script，首次轉換座標時才延遲載入 proj4。 -->
+<!-- 註：座標轉換由 coordinates.js（ESM）統一提供，無需 coord-lazy.js。 -->
 <script src="assets/js/core/cache-policy.js"></script>
 <script src="assets/js/core/cache-manager.js"></script>
 <script src="assets/js/config.js"></script>
@@ -62,9 +62,8 @@
 <script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/vendor/purify.min.js"></script>
-<!-- 統一座標工具（ESM 真源，plain-script 的 coord-lazy 為轉發層） -->
+<!-- 統一座標工具（ESM 真源，coordinates.js 提供 CoordUtils/CoordLazy 全域，無需 coord-lazy.js） -->
 <script type="module" src="assets/js/core/coordinates.js"></script>
-<script src="assets/js/core/coord-lazy.js"></script>
 
 <!-- 🔥 PWA 離線佇列必須先於 t.js module 執行，確保 ApiService hook 已建立。 -->
 <script src="offline.js"></script>

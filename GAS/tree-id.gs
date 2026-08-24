@@ -61,10 +61,13 @@ function nextTreeId_(projectId) {
   return max + 1;
 }
 
-/* 純數字寫入為 Number，保持 Sheet 欄位類型一致 */
+/* 純數字寫入為 Number（安全範圍內保持 Sheet 欄位類型一致，超出 Number.MAX_SAFE_INTEGER 時保留字串避免精度丟失） */
 function normalizeTreeId_(treeId) {
   const s = String(treeId == null ? '' : treeId).trim();
-  return /^\d+$/.test(s) ? Number(s) : s;
+  if(!/^\d+$/.test(s)) return s;
+  const n = Number(s);
+  // 🔥 [P1 修復] 超過 JavaScript Number 安全整數範圍（2^53）時保留字串，避免精度丟失
+  return (n <= Number.MAX_SAFE_INTEGER && n >= Number.MIN_SAFE_INTEGER) ? n : s;
 }
 
 /* [Phase10] 樹木編號改名支援 */

@@ -1,11 +1,11 @@
 /* sheet-schema.gs - 固定 Sheet Schema (Single Source of Truth) */
-/* v1.0.0 | 4 張表固定欄位，寫入不再動態新增表頭，未知欄忽略，額外欄保留 */
+/* App v1.0.0-beta | Schema v1.0.0 | 4 張表固定欄位，寫入不再動態新增表頭，未知欄忽略，額外欄保留 */
 
 const SCHEMA_VERSION_ = '1.0.0';
 
 // 固定欄位定義（順序即合約）
-// trees 22 欄 | inspections 14 欄 | checkins 8 欄 | projects 8 欄（航拍 6 欄不納入）
-const SCHEMA_TREES_  = ['tree_id','name','lat','lng','status','risk','photo_url','description','tree_height','crown_width','dbh','ground_diameter','stem_length','crown_area','crown_volume','project_id','level','hk80_n','hk80_e','client_id','client_created_at','last_client_id'];
+// trees 23 欄（+updated_at） | inspections 14 欄 | checkins 8 欄 | projects 8 欄（航拍 6 欄不納入）
+const SCHEMA_TREES_  = ['tree_id','name','lat','lng','status','risk','photo_url','description','tree_height','crown_width','dbh','ground_diameter','stem_length','crown_area','crown_volume','project_id','level','hk80_n','hk80_e','client_id','client_created_at','last_client_id','updated_at'];
 const SCHEMA_INS_    = ['inspection_id','time','staff','tree_id','project_id','health','note','photo_url','lat','lng','photos_total','client_id','client_created_at','photo_client_ids'];
 const SCHEMA_CHK_    = ['time','staff','tree_id','project_id','lat','lng','client_id','client_created_at'];
 const SCHEMA_PRJ_    = ['project_id','name','lat','lng','description','created_at','client_id','client_created_at'];
@@ -67,8 +67,11 @@ function stripUnknownFields_(sheetName, obj){
 function isValidHeader_(sheetName, headers){
   var schema = getSchema_(sheetName);
   if (!schema) return true;
-  if (!headers || headers.length < schema.length) return false;
-  for (var i = 0; i < schema.length; i++){
+  if (!headers || headers.length === 0) return false;
+  // 🔥 [P0 修復] 容許 schema 尾部新增欄位（如 trees.updated_at）尚未存在於舊表：
+  // 只驗證「雙方都存在」嘅欄位順序，避免舊表（少咗新欄位）每次讀取都誤報 header mismatch
+  var n = Math.min(headers.length, schema.length);
+  for (var i = 0; i < n; i++){
     if (String(headers[i] || '') !== schema[i]) return false;
   }
   return true;

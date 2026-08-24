@@ -1,17 +1,51 @@
 function handleGetBootstrap_(p){
   p = p || {};
   var bypass = (String(p.nocache)==='1' || String(p.bust)==='1');
-  if(bypass){ try{ CacheService.getScriptCache().remove(BOOTSTRAP_CACHE_KEY); }catch(e){} try{ CacheService.getScriptCache().remove(TREES_CACHE_KEY); }catch(e){} try{ CacheService.getScriptCache().remove(PROJECTS_CACHE_KEY); }catch(e){} }
+  if(bypass){ try{ cacheRemoveChunked_(BOOTSTRAP_CACHE_KEY); }catch(e){} try{ cacheRemoveChunked_(TREES_CACHE_KEY); }catch(e){} try{ cacheRemoveChunked_(PROJECTS_CACHE_KEY); }catch(e){} }
   const cache = CacheService.getScriptCache();
+  // 🔥 [P0 修復] 改為分段快取：projects / trees 分別存入獨立 cache key，
+  // 避免單一 bootstrap JSON 超過 GAS ScriptCache 100KB 上限時成個快取失效
+  // 🔥 [P1 修復] 改用 cacheGetChunked_ 支援分片快取（>100KB 資料）
+  var cachedProjects = null;
+  var cachedTrees = null;
+  try {
+    var cp = cacheGetChunked_(PROJECTS_CACHE_KEY);
+    if (cp !== null) cachedProjects = cp;
+  } catch(e) {}
+  try {
+    var ct = cacheGetChunked_(TREES_CACHE_KEY);
+    if (ct !== null) cachedTrees = ct;
+  } catch(e) {}
   const cached = cache.get(BOOTSTRAP_CACHE_KEY);
   if(cached && !bypass){
     return ContentService.createTextOutput(cached).setMimeType(ContentService.MimeType.JSON);
   }
-  const payload = {ok:true, data: { projects: rows_(SH_PRJ), trees: rows_(SH_TREES) }};
+  // 兼容舊格式：若 bootstrap 快取已失效，但分段快取仍在，則用分段快取組裝
+  if(!bypass && cachedProjects !== null && cachedTrees !== null){
+    var projectsFromCache = null, treesFromCache = null;
+    try{ projectsFromCache = JSON.parse(cachedProjects); }catch(e){}
+    try{ treesFromCache = JSON.parse(cachedTrees); }catch(e){}
+    if(projectsFromCache !== null && treesFromCache !== null){
+      const payload = {ok:true, data: { projects: projectsFromCache, trees: treesFromCache }};
+      const jsonStr = JSON.stringify(payload);
+      console.log('📦 bootstrap (cached parts) size:', jsonStr.length, 'bytes');
+      return ContentService.createTextOutput(jsonStr).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  const projects = rows_(SH_PRJ);
+  const trees = rows_(SH_TREES);
+  const payload = {ok:true, data: { projects: projects, trees: trees }};
   const jsonStr = JSON.stringify(payload);
   console.log('📦 bootstrap size:', jsonStr.length, 'bytes');
-  try { cache.put(BOOTSTRAP_CACHE_KEY, jsonStr, BOOTSTRAP_CACHE_TTL); }
-  catch(e) { console.warn('⚠️ 快取太大跳過（size=' + jsonStr.length + '）'); }
+  // 分段寫入：每段遠低於 100KB 上限（projects 通常 <1KB；trees 即使大，獨立 cache 也較易命中）
+  // 🔥 [P1 修復] 改用 cachePutChunked_ 支援大於 100KB 嘅 payload 分片快取
+  cachePutChunked_(PROJECTS_CACHE_KEY, JSON.stringify(projects), BOOTSTRAP_CACHE_TTL);
+  cachePutChunked_(TREES_CACHE_KEY, JSON.stringify(trees), BOOTSTRAP_CACHE_TTL);
+  // 保留舊 bootstrap 快取（若未超上限仍可用），但唔再依賴佢
+  if(jsonStr.length <= 100000){
+    try { cache.put(BOOTSTRAP_CACHE_KEY, jsonStr, BOOTSTRAP_CACHE_TTL); }
+    catch(e) { try{ console.warn('⚠️ 快取太大跳過（size=' + jsonStr.length + '）'); }catch(_){} }
+  }
   return ContentService.createTextOutput(jsonStr).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -20,16 +54,14 @@ function handleGetPing_(){
 }
 
 function handleGetTree_(p){
-  const trees = getCachedRows_(SH_TREES, TREES_CACHE_KEY, CACHE_TTL);
   var wantPrj = String(p.prj||'').trim();
   var wantId = String(p.id||'').trim();
+  if(!wantId) return json_({ok:true, data: null});
+  // 🔥 [P0 修復] 強制帶地盤參數，避免跨地盤回傳錯嘅樹木（tree_id 唔一定跨地盤唯一）
+  if(!wantPrj) return json_({ok:true, data: null});
+  const trees = getCachedRows_(SH_TREES, TREES_CACHE_KEY, CACHE_TTL);
   const list = trees.filter(function(r){ return String(r.tree_id||'').trim() === wantId; });
-  let t = null;
-  if(wantPrj){
-    t = list.find(function(r){ return String(r.project_id||'').trim() === wantPrj; }) || null;
-  } else {
-    t = list[0] || null;
-  }
+  const t = list.find(function(r){ return String(r.project_id||'').trim() === wantPrj; }) || null;
   return json_({ok:true, data: t});
 }
 
@@ -133,7 +165,7 @@ function handleGetSpecies_(){
 
 function handleGetTrees_(p){
   var bypass = (String(p.nocache)==='1' || String(p.bust)==='1' || String(p.nocache)==='true');
-  if(bypass){ try{ CacheService.getScriptCache().remove(TREES_CACHE_KEY); }catch(e){} try{ CacheService.getScriptCache().remove(BOOTSTRAP_CACHE_KEY); }catch(e){} }
+  if(bypass){ try{ cacheRemoveChunked_(TREES_CACHE_KEY); }catch(e){} try{ cacheRemoveChunked_(BOOTSTRAP_CACHE_KEY); }catch(e){} }
   let trees = getCachedRows_(SH_TREES, TREES_CACHE_KEY, CACHE_TTL, {nocache: bypass?'1':''});
   var wantProject = p.project ? String(p.project).replace(/^\ufeff/, '').trim() : '';
   var wantLower = wantProject.toLowerCase();

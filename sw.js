@@ -1,11 +1,11 @@
-/* 樹木管理系統 - Service Worker v3.0.0 (PWA 離線策略重構)
+/* 樹木管理系統 - Service Worker v1.0.0-beta (PWA 離線策略重構)
  * 方案 A - 手寫 Vanilla，無 Workbox
  * SSOT: importScripts 讀 CachePolicy.getSwMaxAge
  * 五桶: precache/runtime/data/tiles/images LRU+quota
  * 導航精準殼 + navigationPreload, 接管由前端 SKIP_WAITING
  */
 try { importScripts('./assets/js/core/cache-policy.js'); } catch (e) {}
-const VERSION = 'v3.0.2';
+const VERSION = '1.0.0-beta';
 const PRECACHE_NAME = 'precache-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const DATA_CACHE = 'data-' + VERSION;
@@ -19,7 +19,7 @@ const RUNTIME_MAX = 120; const RUNTIME_MAX_AGE = 30*24*60*60*1000;
 const DATA_MAX_ENTRIES = 200;
 const PRECACHE = [
   './','./index.html','./offline.html','./t.html','./nfc.html',
-  './manifest.webmanifest','./offline.js',
+  './manifest.webmanifest','./offline.js','./offline-pending.js',
   './assets/js/core/cache-policy.js','./assets/js/core/cache-manager.js','./assets/js/core/error-codes.js','./assets/js/core/coordinates.js','./assets/js/core/spatial-index.js',
   './assets/js/modules/sync-panel.js','./assets/js/modules/audit-log.js',
   './assets/css/tokens.css','./assets/css/base.css','./assets/css/layout.css',
@@ -28,9 +28,9 @@ const PRECACHE = [
   './assets/css/performance.css','./assets/css/utilities.css',
   './assets/css/pages/t.css','./assets/css/pages/nfc.css',
   './assets/js/env.js','./assets/js/sw-register.js',
-  './assets/js/config.js','./assets/js/utils.js',
+  './assets/js/config.js',
   './assets/js/api.js','./assets/js/auth.js','./assets/js/app.js',
-  './assets/js/core/utils.js','./assets/js/core/event-bus.js','./assets/js/core/coord-lazy.js',
+  './assets/js/core/utils.js','./assets/js/core/event-bus.js',
   './assets/js/modules/state.js','./assets/js/modules/ui-state.js','./assets/js/modules/dom.js',
   './assets/js/modules/map.js','./assets/js/modules/search.js','./assets/js/modules/species.js',
   './assets/js/modules/trees.js','./assets/js/modules/filters.js','./assets/js/modules/projects.js',
@@ -211,7 +211,12 @@ function handleStaticSWR(req){
         caches.match(req,{cacheName:PRECACHE_NAME}).then(function(inPre){ if(inPre) return; cacheWithTimestamp(cache,req,c).then(function(){ return trimCacheLRU(RUNTIME_CACHE,RUNTIME_MAX,RUNTIME_MAX_AGE); }).catch(function(){}); }).catch(function(){ cacheWithTimestamp(cache,req,c).catch(function(){}); });
       }).catch(function(){}); }
       return res;
-    }).catch(function(){ return cached||Response.error(); });
+    }).catch(function(){
+      // 🔥 [P1 修復] fetch 失敗時回傳 cached（即使過期都好過錯誤頁面）；
+      // 若兩者都無，回傳離線 fallback 頁面而非 Response.error()
+      if(cached) return cached;
+      return caches.match('./offline.html').then(function(fb){ return fb||Response.error(); });
+    });
     return cached||fp;
   });
 }

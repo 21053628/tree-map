@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'self';">
 <meta name="theme-color" content="#2e7d32">
 <title>離線中 - 樹木管理 GIS</title>
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
@@ -26,35 +27,11 @@
   <h1>📴 離線中</h1>
   <p>網絡暫時無法連線。你仍可查看已快取的樹木資料，巡查記錄會暫存，恢復連線後自動同步。</p>
   <div class="actions">
-    <button class="btn-primary" onclick="location.reload()">🔄 重試</button>
-    <button class="btn-sec" onclick="location.href='./index.html'">🏠 返回首頁</button>
+    <button class="btn-primary" id="btnRetry" type="button">🔄 重試</button>
+    <button class="btn-sec" id="btnHome" type="button">🏠 返回首頁</button>
   </div>
   <div class="pending" id="pendingInfo"></div>
 </div>
-<script>
-(function(){
-  try{
-    var count=0;
-    // 嘗試讀 IndexedDB pending 數（不阻塞）
-    var req=indexedDB.open('tree-offline');
-    req.onsuccess=function(e){
-      try{
-        var db=e.target.result;
-        if(!db.objectStoreNames.contains('outbox')) return;
-        var tx=db.transaction('outbox','readonly');
-        var store=tx.objectStore('outbox');
-        var all=store.getAll();
-        all.onsuccess=function(){
-          var list=all.result||[];
-          var pending=list.filter(function(r){return r.status==='queued'||r.status==='syncing';}).length;
-          var failed=list.filter(function(r){return r.status==='failed';}).length;
-          var el=document.getElementById('pendingInfo');
-          if(pending||failed) el.textContent='待同步：'+pending+' 筆'+(failed?'（失敗 '+failed+' 筆可重試）':'');
-        };
-      }catch(_e){}
-    };
-  }catch(_e){}
-})();
-</script>
+<script src="offline-pending.js"></script>
 </body>
 </html>

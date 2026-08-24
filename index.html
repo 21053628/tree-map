@@ -97,10 +97,9 @@
 <script defer src="assets/js/core/cache-manager.js"></script>
 <script defer src="assets/js/config.js"></script>
 <script defer src="assets/js/modules/audit-log.js"></script>
-<!-- 統一座標工具（ESM 提供 CoordUtils/CoordLazy 全域兼容，utils.js shim 自動被覆蓋） -->
+<!-- 統一座標工具（ESM 真源，coordinates.js 提供 CoordUtils/CoordLazy 全域，無需 utils.js shim） -->
 <!-- 注意：proj4.js 已喺上方 defer 載入，coordinates.js module 執行時 proj4 必定就緒 -->
 <script type="module" src="assets/js/core/coordinates.js"></script>
-<script defer src="assets/js/utils.js"></script>
 <script defer src="assets/js/core/error-codes.js"></script>
 <script defer src="assets/js/api.js"></script>
 <script defer src="assets/js/auth.js"></script>

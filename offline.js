@@ -1,6 +1,7 @@
 /**
  * 樹木管理系統 - 離線寫入佇列 (IndexedDB Outbox)
- * v2.0.0 - Phase 1：outbox 資料結構升級（可追蹤、不會無故消失）
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v2.0.0 - Phase 1：outbox 資料結構升級（可追蹤、不會無故消失）
  *   - 每筆記錄加入 client_id/uuid、type、tree_id、project_id、status、時間戳、lastError
  *   - MAX_RETRY 超過後不再丟棄，改為 status='failed' 並保留
  *   - 新增 helpers：getPendingCount/getFailedCount/markSyncing/markSynced/markFailed/retryOne/retryAllFailed
@@ -87,12 +88,21 @@
     var TOKEN_KEY = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.STORAGE_KEY)
       ? Config.AUTH.STORAGE_KEY
       : 'tree_staff_token';
+    // 🔥 [P0 修復] 先試 sessionStorage（安全優先），若無效則 fallback 至 localStorage（跨分頁持久）
+    // 避免用戶關閉分頁後離線佇列因 token 遺失而永鎖。
     try {
-      // token 改放 sessionStorage（與 AuthService 一致，XSS 洩漏面較小）
       var raw = window.sessionStorage.getItem(TOKEN_KEY);
-      if (!raw) return null;
-      var data = JSON.parse(raw);
-      if (data && data.token && data.until > Date.now()) return data.token;
+      if (raw) {
+        var data = JSON.parse(raw);
+        if (data && data.token && data.until > Date.now()) return data.token;
+      }
+    } catch (e) {}
+    try {
+      var rawLs = window.localStorage.getItem(TOKEN_KEY);
+      if (rawLs) {
+        var dataLs = JSON.parse(rawLs);
+        if (dataLs && dataLs.token && dataLs.until > Date.now()) return dataLs.token;
+      }
     } catch (e) {}
     return null;
   }
@@ -232,6 +242,33 @@
       pwaToast('⚠️ ' + vErr, 4000);
       return Promise.reject(new Error(vErr));
     }
+    // 🔥 [P0 修復] 寫入前檢查 IndexedDB 儲存配額：若可用空間 < 5MB 則拒絕佇列，避免 QuotaExceededError
+    return checkStorageQuota_().then(function(hasQuota) {
+      if (!hasQuota) {
+        pwaToast('⚠️ 儲存空間不足，無法離線暫存', 5000);
+        return Promise.reject(new Error('STORAGE_QUOTA_EXCEEDED'));
+      }
+      return doPush_(payload);
+    });
+  }
+
+  // 🔥 [P0 修復] 檢查 IndexedDB 剩餘儲存配額
+  function checkStorageQuota_() {
+    try {
+      if (navigator.storage && navigator.storage.estimate) {
+        return navigator.storage.estimate().then(function(est) {
+          if (est && est.quota && est.usage !== undefined) {
+            var remaining = est.quota - est.usage;
+            return remaining >= 5 * 1024 * 1024; // 最少保留 5MB
+          }
+          return true;
+        }).catch(function() { return true; });
+      }
+    } catch (e) {}
+    return Promise.resolve(true);
+  }
+
+  function doPush_(payload) {
     // 強制脫敏：任何呼叫路徑寫入 IndexedDB 前一律移除 token / csrf_token
     // 使用淺拷貝避免污染呼叫方原始物件；同步時 syncOutbox 會從 AuthService / sessionStorage 重新補上最新憑證
     var src = payload || {};
@@ -619,21 +656,44 @@
         }
         if (json && (json.ok || json.duplicate === true)) {
           if (json.duplicate === true) console.log('[Sync] 后端回报重复（client_id 已处理），视为成功:', item.id);
+          // 🔥 [P0 修復] CSRF 旋轉：同步成功後更新前端 CSRF Token
+          if (json.csrf_token && typeof AuthService !== 'undefined' && AuthService.setCsrfToken) {
+            AuthService.setCsrfToken(json.csrf_token);
+          }
           await markSynced(item.id);
           auditWrite(item.payload, 'sync', 'synced');
           synced++;
           networkStreak = 0;
         } else if (json && (function(j){var c=String(j.error_code||j.error||''); return c==='UNAUTHORIZED'||c==='CSRF_INVALID'||c==='CSRF_TOKEN_INVALID'||c==='AUTH_FAILED'; })(json)) {
           auditWrite(item.payload, 'sync', 'unauthorized', json.error);
-          await updateItem(item.id, { status: 'queued', lastError: '登入已过期' });
-          if (typeof AuthService !== 'undefined' && (AuthService.reauthenticate || AuthService.promptAuth)) {
-            var reOk = AuthService.reauthenticate ? await AuthService.reauthenticate('登入已过期，请重新输入工作人员密码以继续同步') : await AuthService.promptAuth('登入已过期，请重新输入工作人员密码以继续同步');
-            if (reOk) { reauthCount++; if (reauthCount >= 2) { shouldBreak = true; break; } i--; networkStreak = 0; continue; }
+          // 🔥 [P0 修復] 先檢查 AuthService 嘅 CSRF token 是否已被平行請求旋轉咗
+          // （另一個寫入成功後已更新 token，唔需要重新登入）
+          var csrfRetried = false;
+          if (typeof AuthService !== 'undefined' && AuthService.getCsrfToken) {
+            var newCsrf = AuthService.getCsrfToken();
+            if (newCsrf && newCsrf !== item.payload.csrf_token) {
+              item.payload.csrf_token = newCsrf;
+              // 更新 token（可能都更新咗）
+              if (typeof AuthService.getToken === 'function') {
+                var newToken = AuthService.getToken();
+                if (newToken) item.payload.token = newToken;
+              }
+              csrfRetried = true;
+              // 直接重試，唔打斷流程
+              i--; networkStreak = 0; continue;
+            }
           }
-          failed++;
-          networkStreak = 0;
-          shouldBreak = true;
-          break;
+          if (!csrfRetried) {
+            await updateItem(item.id, { status: 'queued', lastError: '登入已过期' });
+            if (typeof AuthService !== 'undefined' && (AuthService.reauthenticate || AuthService.promptAuth)) {
+              var reOk = AuthService.reauthenticate ? await AuthService.reauthenticate('登入已过期，请重新输入工作人员密码以继续同步') : await AuthService.promptAuth('登入已过期，请重新输入工作人员密码以继续同步');
+              if (reOk) { reauthCount++; if (reauthCount >= 2) { shouldBreak = true; break; } i--; networkStreak = 0; continue; }
+            }
+            failed++;
+            networkStreak = 0;
+            shouldBreak = true;
+            break;
+          }
         } else {
           var bizCode = json && String(json.error_code || json.error || 'UNKNOWN');
           var noRetryCodes = {VALIDATION_FAILED:true, CONFLICT:true, INVALID_LOCATION:true, INVALID_REQUEST:true, INVALID_JSON:true, UNSUPPORTED_OPERATION:true, UPLOAD_FAILED:true};
@@ -771,7 +831,9 @@
     var origGet = ApiService.get;
     ApiService.get = async function(action, params) {
       try {
-        var result = await origGet(action, params);
+        // 🔥 [P1 修復] shallow clone params，避免修改 origGet 內的 params 影響呼叫方（api.js 會 trim params.project）
+        var paramsClone = params ? Object.assign({}, params) : params;
+        var result = await origGet(action, paramsClone);
         // nocache/bust: never persist bypass result as snapshot, and warn
         try{ var _bp = params && (params.nocache==='1'||params.bust==='1'); if(_bp && result && Array.isArray(result.data) && result.data.length===0) console.warn('[OfflineGet] bypass returned 0 for '+action+' '+JSON.stringify(params)); }catch(e){}
         // 🔥 [Bugfix] bypass 請求的成功結果一律不寫入 localStorage 快取，
