@@ -7,7 +7,7 @@ const ALLOWED_IMAGE_MIME_SET_ = { 'image/jpeg': true, 'image/png': true, 'image/
 const MAX_IMAGE_BYTES_ = 10 * 1024 * 1024;
 const MAX_IMAGE_COUNT_ = 10;
 const RE_TREE_ID_SIMPLE_ = /^[\p{L}\p{N}._-]+$/u;
-const RE_PROJECT_ID_ = /^[A-Za-z0-9_-]+$/;
+const RE_PROJECT_ID_ = /^[\p{L}\p{N}._-]+$/u;
 const RE_UUID_ = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const RE_INSPECTION_ID_ = /^INS-\d+-[0-9a-fA-F]{1,12}$/;
 function isBlank_(v){return v===undefined||v===null||String(v).trim()==='';}
