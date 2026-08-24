@@ -426,6 +426,15 @@ export function initMap() {
     if (closeDrawerFn && layerWrap && layerWrap.classList.contains('open')) {
       closeDrawerFn();
     }
+    // 🔥 [A11y] 為 popup 關閉按鈕加 aria-label
+    setTimeout(function setPopupCloseAria() {
+      try {
+        var closeBtn = document.querySelector('.leaflet-popup-close-button');
+        if (closeBtn && !closeBtn.getAttribute('aria-label')) {
+          closeBtn.setAttribute('aria-label', '關閉');
+        }
+      } catch (e) {}
+    }, 50);
   });
 
   // 🔥 [v2.61] 桌面 filter 按鈕（#bar 搜尋框下方）

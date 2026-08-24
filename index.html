@@ -61,18 +61,38 @@
 <link rel="modulepreload" href="assets/js/core/spatial-index.js">
 </head>
 <body>
+<div id="progressBar" class="progress-bar" role="progressbar" aria-hidden="true"></div>
+<!-- 🔥 [UI] SVG Icon Sprite（零渲染開銷，display:none） -->
+<svg id="icon-sprite" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <svg id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <svg id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <svg id="icon-tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M8 9l4-4 4 4M6 14l6-6 6 6M4 19l8-8 8 8"/></svg>
+    <svg id="icon-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+    <svg id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    <svg id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    <svg id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    <svg id="icon-locate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+    <svg id="icon-sync" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+    <svg id="icon-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    <svg id="icon-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    <svg id="icon-nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0"/><path d="M8 8a4 4 0 0 1 8 0"/><circle cx="12" cy="8" r="2"/><path d="M12 10v6"/></svg>
+    <svg id="icon-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+    <svg id="icon-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  </defs>
+</svg>
 <div id="bar">
   <select id="projSel" aria-label="選擇地盤"></select>
 
   <!-- 🔥 樹木搜尋框 -->
   <div class="search-wrap">
-    <input type="search" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off" aria-label="搜尋當前地盤樹木">
-    <div id="searchResults" class="search-results"></div>
+    <input type="search" id="treeSearch" placeholder="🔍 搜尋當前地盤樹木（編號/樹種）..." autocomplete="off" aria-label="搜尋當前地盤樹木" role="combobox" aria-expanded="false" aria-controls="searchResults" aria-autocomplete="list">
+    <div id="searchResults" class="search-results" role="listbox" aria-label="搜尋結果" aria-live="polite"></div>
   </div>
 
   <div class="primary-actions" aria-label="主要操作">
-    <button class="blue" id="addProjectBtn" type="button">＋ 建立地盤</button>
-    <button id="addTreeBtn" class="ghost-hidden" type="button">🌳 新增樹木</button>
+    <button class="blue" id="addProjectBtn" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg> 建立地盤</button>
+    <button id="addTreeBtn" class="ghost-hidden" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-tree"></use></svg> 新增樹木</button>
   </div>
 
   <!-- 🔥 桌面過濾（圖層）按鈕：放在搜尋框下方 -->
@@ -103,6 +123,8 @@
 <!-- 注意：proj4.js 已喺上方 defer 載入，coordinates.js module 執行時 proj4 必定就緒 -->
 <script type="module" src="assets/js/core/coordinates.js"></script>
 <script defer src="assets/js/core/error-codes.js"></script>
+<script defer src="assets/js/ui-progress.js"></script>
+<script defer src="assets/js/ui-icons.js"></script>
 <script defer src="assets/js/api.js"></script>
 <script defer src="assets/js/auth.js"></script>
 <script defer src="offline.js"></script>

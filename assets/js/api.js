@@ -282,6 +282,7 @@ const ApiService = (function() {
     const timeout = isBackground ? BACKGROUND_TIMEOUT : DEFAULT_TIMEOUT;
     
     // 直接 fetch，不需經 enqueueRequest
+    if (typeof ProgressBar !== 'undefined' && ProgressBar.start) ProgressBar.start();
     return withRetry(() =>
       fetchWithTimeout(url, { method: 'GET' }, timeout)
         .then(response => parseApiResponse(response, 'GET ' + action))
@@ -289,7 +290,8 @@ const ApiService = (function() {
           if(!isBypass) setCache(cacheKey, data); 
           return data; 
         })
-    );
+    ).then(function(d){ if(typeof ProgressBar!=='undefined'&&ProgressBar.stop) ProgressBar.stop(); return d; },
+           function(e){ if(typeof ProgressBar!=='undefined'&&ProgressBar.stop) ProgressBar.stop(); throw e; });
   }
 
   // ---- 依 project / viewport 按需載入便捷封裝 ----
@@ -409,6 +411,7 @@ const ApiService = (function() {
       auditWrite(payload, 'attempt');
     }
 
+    if (typeof ProgressBar !== 'undefined' && ProgressBar.start) ProgressBar.start();
     return enqueuePost(async () => {
       // POST 可能在佇列中等待；真正發送前重新讀取認證資料，
       // 避免沿用排隊前已失效或已被另一個請求更新的 token。
@@ -490,7 +493,8 @@ const ApiService = (function() {
         invalidateCache(payload.type, payload);
       }
       return data;
-    });
+    }).then(function(d){ if(typeof ProgressBar!=='undefined'&&ProgressBar.stop) ProgressBar.stop(); return d; },
+            function(e){ if(typeof ProgressBar!=='undefined'&&ProgressBar.stop) ProgressBar.stop(); throw e; });
   }
 
   function invalidateCache(type, payload) {

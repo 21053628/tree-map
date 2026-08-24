@@ -182,20 +182,20 @@ export function handleSearch(query) {
     if (!box) return;
     const raw = String(query || '').trim();
     if (!state.curProject) {
-      box.innerHTML = '<div class="sr-item sr-hint">👉 請先選擇地盤才能搜尋</div>';
+      box.innerHTML = '<div class="empty-state" role="status" aria-live="polite"><span class="empty-icon">🎯</span><span class="empty-title">請先選擇地盤</span><span class="empty-hint">揀選地盤後就可以搜尋該地盤嘅樹木</span></div>';
       box.classList.add('is-visible');
       return;
     }
     if (!raw) { hideSearch(); return; }
     const results = searchWithTokens(raw, { projectId: state.curProject, limit: MAX_RESULTS });
     if (!results.length) {
-      box.innerHTML = '<div class="sr-item sr-hint">🤷 找不到「' + escapeHtml(raw) + '」</div>';
+      box.innerHTML = '<div class="empty-state" role="status" aria-live="polite"><span class="empty-icon">🔍</span><span class="empty-title">搵唔到「' + escapeHtml(raw) + '」</span><span class="empty-hint">試吓用樹木編號、樹種名稱或健康狀態搜尋</span></div>';
       box.classList.add('is-visible');
       return;
     }
     box.innerHTML = results.map((t) => {
       const color = (typeof Config !== 'undefined' && Config.TREE_STATUS_COLORS) ? (Config.TREE_STATUS_COLORS[t.status] || Config.TREE_STATUS_COLORS.Unknown) : '#757575';
-      return '<div class="sr-item" data-id="' + escapeHtml(t.tree_id) + '">' +
+      return '<div class="sr-item" data-id="' + escapeHtml(t.tree_id) + '" role="option" aria-selected="false">' +
         '<span class="sr-dot" data-c="' + color + '"></span>' +
         '<span class="sr-id">' + escapeHtml(t.tree_id) + '</span>' +
         '<span class="sr-name">' + escapeHtml(t.name || '') + '</span>' +
@@ -203,6 +203,8 @@ export function handleSearch(query) {
     }).join('');
     box.querySelectorAll('.sr-dot').forEach(function(el){ if(el.dataset.c) el.style.background = el.dataset.c; });
     box.classList.add('is-visible');
+    // 🔥 [A11y] 更新 search input aria-expanded
+    if (DOM.treeSearch) DOM.treeSearch.setAttribute('aria-expanded', 'true');
   }, 150);
 }
 
@@ -214,4 +216,6 @@ export function hideSearch() {
   }
   const box = DOM.searchResults;
   if (box) { box.classList.remove('is-visible'); box.innerHTML = ''; }
+  // 🔥 [A11y] 更新 search input aria-expanded
+  if (DOM.treeSearch) DOM.treeSearch.setAttribute('aria-expanded', 'false');
 }

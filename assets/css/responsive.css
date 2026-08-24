@@ -462,6 +462,8 @@
     box-shadow: 0 -4px 30px rgba(0, 0, 0, .2);
     z-index: 1300;
     transform: translateY(100%);
+    touch-action: pan-y; /* 🔥 [UI] Bottom sheet 支援垂直拖拽手勢 */
+    overscroll-behavior: contain;
   }
 
   /* 🔥 [手機版修復] layout.css 的 #panel.is-visible 是「居中 modal」transform；
@@ -484,9 +486,12 @@
     width: 40px;
     height: 4px;
     margin: 0 auto 12px;
-    background: #ccc;
+    background: #bbb;
     border-radius: 2px;
+    cursor: grab;
+    transition: background 0.2s ease, transform 0.2s var(--ease-out);
   }
+  #panel:active::before { cursor: grabbing; transform: scaleX(1.15); }
 
   #panel input,
   #panel select,

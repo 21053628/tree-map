@@ -28,6 +28,7 @@ const PRECACHE = [
   './assets/css/performance.css','./assets/css/skeleton.css','./assets/css/animations.css','./assets/css/utilities.css',
   './assets/css/pages/t.css','./assets/css/pages/nfc.css',
   './assets/js/env.js','./assets/js/sw-register.js',
+  './assets/js/ui-progress.js','./assets/js/ui-icons.js',
   './assets/js/config.js',
   './assets/js/api.js','./assets/js/auth.js','./assets/js/app.js',
   './assets/js/core/utils.js','./assets/js/core/event-bus.js',

@@ -164,15 +164,23 @@ export function formFieldError(el, message) {
   if (!field) return false;
 
   field.classList.add('field-error');
+  field.setAttribute('aria-invalid', 'true');
 
   // 移除舊錯誤訊息（同欄位）
   const oldMsg = field.parentNode ? field.parentNode.querySelector('.form-error-msg') : null;
   if (oldMsg) oldMsg.remove();
+  if (field.id) field.removeAttribute('aria-describedby');
 
   if (message) {
     const msg = document.createElement('span');
     msg.className = 'form-error-msg';
     msg.textContent = message;
+    if (field.id) {
+      const msgId = field.id + '-error';
+      msg.id = msgId;
+      field.setAttribute('aria-describedby', msgId);
+      msg.setAttribute('role', 'alert');
+    }
     if (field.parentNode) {
       field.parentNode.appendChild(msg);
     }
@@ -187,6 +195,8 @@ export function clearFieldError(el) {
   const field = typeof el === 'string' ? document.querySelector(el) : el;
   if (!field) return;
   field.classList.remove('field-error');
+  field.removeAttribute('aria-invalid');
+  if (field.id) field.removeAttribute('aria-describedby');
   const oldMsg = field.parentNode ? field.parentNode.querySelector('.form-error-msg') : null;
   if (oldMsg) oldMsg.remove();
 }
