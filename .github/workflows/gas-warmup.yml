@@ -12,5 +12,5 @@ jobs:
       - name: Ping GAS (follow redirects)
         run: |
           curl -sL -o /dev/null -w "最終狀態: HTTP %{http_code}｜耗時 %{time_total}s\n" \
-            'https://script.google.com/macros/s/AKfycbzNvSomlr1LmAvfA3rByDii9TISFs-HooX2iD5yJkK3QWI59sGhKYpqQyan2HRwgPwC/exec?action=ping' \
+            'https://script.google.com/macros/s/AKfycbxlwiMM1CW7tV4ljwU0GDJoM4CfDjqc7iS-yp65TzOX4DVsj4FD1BgVVlAhu2jegvn3/exec?action=ping' \
             || true
