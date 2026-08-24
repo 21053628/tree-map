@@ -243,9 +243,8 @@ const ApiService = (function() {
       return await requestFn();
     } catch (error) {
       errorCount++;
-      // 離線、超時及部署/格式錯誤直接放棄，不再空等
-      if (retries > 0 && !error.noRetry &&
-          error.message !== 'OFFLINE' && error.message !== 'TIMEOUT') {
+      // 離線直接放棄，不再空等；超時（TIMEOUT）則重試一次（冷啟動或短暫網路波動後可恢復）
+      if (retries > 0 && !error.noRetry && error.message !== 'OFFLINE') {
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
         return withRetry(requestFn, retries - 1, attempt + 1);
       }
@@ -278,8 +277,8 @@ const ApiService = (function() {
     requestCount++;
     const url = apiEndpoint + '?action=' + action + (queryString ? '&' + queryString : '');
     
-    // 🔥 bootstrap 背景刷新用較長超時；超時後由 offline.js 回退本地快取
-    const isBackground = (action === 'bootstrap');
+    // 🔥 bootstrap/projects 冷啟動用較長超時（GAS 冷啟動可達 20-25s）；超時後由 offline.js 回退本地快取
+    const isBackground = (action === 'bootstrap' || action === 'projects');
     const timeout = isBackground ? BACKGROUND_TIMEOUT : DEFAULT_TIMEOUT;
     
     // 直接 fetch，不需經 enqueueRequest

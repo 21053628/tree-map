@@ -289,6 +289,8 @@ async function migrateLegacyMain(){
 }
 export async function load(){
   updateStatus('🗺️ 載入中…');
+  // 🔥 提前暖機 GAS（與快照讀取並行），降低冷啟動導致 projects 超時風險
+  try { if (typeof globalThis.warmGAS === 'function') globalThis.warmGAS(); } catch (e) {}
   let hasLocal = false;
   // 1) projects 快照 → 立即渲染地盤
   try{
