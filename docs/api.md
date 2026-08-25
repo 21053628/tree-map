@@ -2,7 +2,7 @@
 
 ## 1. 範圍與傳輸格式
 
-本文記錄目前 GAS 後端實作嘅前後端合約。入口係 `GAS/main.gs` 嘅 `doGet(e)`／`doPost(e)`；GET 分派到 `GAS/handlers-get.gs`，POST 寫入分派到 `GAS/handlers-post.gs`。GET 全部公開；POST 除 `login` 外均須 Token 及 CSRF Token。現時 repo 內冇 `GAS/code.gs`。
+本文記錄目前 GAS 後端實作嘅前後端合約。入口係 `GAS/main.gs` 嘅 `doGet(e)`／`doPost(e)`；GET 分派到 `GAS/handlers-get.gs`，POST 寫入分派到 `GAS/handlers-post.gs`。`doGet` 會先經 `GAS/validation.gs` 嘅 `validateGetParams_()` 校驗查詢參數，`doPost` 會先經 `validatePostPayload_()` 校驗 body（login 亦校驗但不消耗 rate-limit）。GET 全部公開；POST 除 `login` 外均須 Token 及 CSRF Token。現時 repo 內冇 `GAS/code.gs`。
 
 - `<API_ENDPOINT>` 代表 `Config.API_ENDPOINT`。
 - GET：`GET <API_ENDPOINT>?action=...`。
@@ -29,7 +29,7 @@ GET <API_ENDPOINT>?action=bootstrap
 { "ok": true, "data": { "projects": [], "trees": [] } }
 ```
 
-`projects` 及 `trees` 分別係 `projects`、`trees` Sheet 全部資料列。服務端使用 `CacheService` key `bootstrap_data` 快取 300 秒（`BOOTSTRAP_CACHE_TTL = 300`）。
+`projects` 及 `trees` 分別係 `projects`、`trees` Sheet 全部資料列。服務端採用**分段快取**：projects 與 trees 分別存入 `PROJECTS_CACHE_KEY`（`projects_all`）／`TREES_CACHE_KEY`（`trees_all`），TTL 300 秒（`BOOTSTRAP_CACHE_TTL`），避免單一 JSON 超過 ScriptCache 100KB 上限；舊 `bootstrap_data` key 僅作相容保留。超過 90KB 嘅 payload 會經 `cachePutChunked_()`／`cacheGetChunked_()` 分片存取（每片 ≤90KB）。`?nocache=1`／`?bust=1` 會清除 `bootstrap_data`、`projects_all`、`trees_all` 三段快取。
 
 ### 2.2 `ping`
 
@@ -50,25 +50,25 @@ GET <API_ENDPOINT>?action=ping
 | Query 參數 | 必填 | 說明 |
 |---|---:|---|
 | `action` | 是 | `tree` |
-| `id` | 是（程式未顯式拒絕缺少值） | 樹木編號 `tree_id` |
-| `prj` | 否 | 地盤 ID `project_id`；提供時只在該地盤內查找（同名異地盤不再跨盤回退） |
+| `id` | 是 | 樹木編號 `tree_id`；缺少／空白由 `validateGetParams_` 回 `VALIDATION_FAILED`；格式限 Unicode 字母數字 `._-` 或全數字，≤64 字元 |
+| `prj` | 否 | 地盤 ID `project_id`；提供時只在該地盤內查找（同名異地盤不再跨盤回退）；格式同 `id`，≤64 字元 |
 
 ```http
 GET <API_ENDPOINT>?action=tree&id=T001&prj=PROJECT-A
 ```
 
-返回：`{ "ok": true, "data": <樹木物件或 null> }`。找不到時 `data` 為 `null`。
+返回：`{ "ok": true, "data": <樹木物件或 null> }`。找不到時 `data` 為 `null`。現版 `handleGetTree_()` 強制要求 `prj`——缺少 `prj` 時直接回 `data:null`，避免 `tree_id` 跨地盤回錯樹。
 
 ### 2.4 `inspections`（cursor 分頁）
 
 | Query 參數 | 必填 | 說明 |
 |---|---:|---|
 | `action` | 是 | `inspections` |
-| `id` | 是 | 樹木編號 `tree_id` |
-| `prj` | 否 | 按 `project_id` 再過濾 |
-| `limit` | 否 | 單頁筆數，1-50，預設 20；不傳時為相容模式回全量 |
-| `cursor` | 否 | 不透明分頁游標（`next_cursor`），首頁不傳；錯誤時回 `VALIDATION_FAILED` + `INVALID_CURSOR` |
-| `order` | 否 | 保留參數，目前僅支援 `desc`（`time DESC, inspection_id ASC` 穩定排序），`asc` 预留 |
+| `id` | 是 | 樹木編號 `tree_id`；缺少／空白回 `VALIDATION_FAILED`，≤64 字元 |
+| `prj` | 否 | 按 `project_id` 再過濾；≤64 字元 |
+| `limit` | 否 | 單頁筆數，1-50，預設 20；不傳時為相容模式回全量；超出範圍由 `validateGetParams_` 回 `VALIDATION_FAILED` |
+| `cursor` | 否 | 不透明分頁游標（`next_cursor`），首頁不傳；解碼失敗或格式不符（過長 >2048）回 `VALIDATION_FAILED` |
+| `order` | 否 | 保留參數，目前僅支援 `desc`（`time DESC, inspection_id ASC` 穩定排序），`asc` 预留；非 `asc`/`desc` 回 `VALIDATION_FAILED` |
 
 **相容**：舊版不帶 `limit`/`cursor` 仍回 `{ "ok": true, "data": [...] }` 全量（已按 `time DESC, inspection_id ASC` 排序）；新版帶 `limit` 或 `cursor` 走 cursor 分頁。
 
@@ -101,11 +101,27 @@ GET <API_ENDPOINT>?action=projects
 | Query 參數 | 必填 | 說明 |
 |---|---:|---|
 | `action` | 否 | 缺少時預設 `trees`；未知 action 亦落入此分支 |
-| `project` | 否 | 按 `project_id` 過濾（前後端均 `String(...).trim()` 歸一，容許空白誤差） |
-| `bbox` | 否 | `south,west,north,east`（viewport 按需載入） |
-| `nocache` | 否 | `1` 時強制旁路 `CacheService` / `DATA_CACHE` / `ApiService` 記憶體快取 |
+| `project` | 否 | 按 `project_id` 過濾（前後端均 `String(...).trim()` 歸一，容許空白誤差）；格式限 `A-Za-z0-9_-`，≤64 字元 |
+| `bbox` | 否 | `south,west,north,east`（viewport 按需載入）；亦支援獨立 `south`/`west`/`north`/`east` 參數；必須為 4 個有效數值 |
+| `limit` | 否 | 分頁單頁筆數，1-5000；配合 `offset` 使用 |
+| `offset` | 否 | 分頁起始偏移，預設 0 |
+| `nocache` | 否 | `1`（或 `true`）時強制旁路 `CacheService` / `DATA_CACHE` / `ApiService` 記憶體快取；`bust=1` 同效 |
 
-返回：`{ "ok": true, "data": <樹木陣列> }`。服務端一般快取 TTL 為 300 秒。
+返回：`{ "ok": true, "data": <樹木陣列> }`。服務端一般快取 TTL 為 300 秒（`CACHE_TTL`，可被 `GAS/cache-policy.gs` 嘅 `CACHE_POLICY.trees` 覆蓋）。
+
+### 2.7 `species`
+
+| Query 參數 | 必填 | 說明 |
+|---|---:|---|
+| `action` | 是 | `species` |
+| `id` | 否 | 物種 ID；過長（>64）或格式不符回 `VALIDATION_FAILED` |
+| `name` | 否 | 物種名稱；過長（>200）回 `VALIDATION_FAILED` |
+
+```http
+GET <API_ENDPOINT>?action=species
+```
+
+返回：`{ "ok": true, "data": [{ "id": 1, "name": "..." }] }`。只回 `id`＋`name` 必要欄位；若 `species` Sheet 唔存在（`SH_SPECIES` 未設定）或讀取失敗，回空陣列讓前端 fallback 靜態 JSON。服務端快取 key `species_all`，TTL 86400 秒（`SPECIES_TTL`）。
 
 > **後端回 `[]` 疑難排查**（`ShingMunRiver` 0 棵同類）：優先在 GAS 編輯器執行 `debugTrees_()`（見 `GAS/sheets-repo.gs`）檢查 `SH_TREES` 表頭/綁定/快取；前端已加 `?nocache=1` / `SW handleApi` / `ApiService` 記憶體三層旁路；若用 `https://script.google.com/macros/s/.../u/4/...` 報 `API_HTML_RESPONSE`，請改用 `*/exec?action=...` 直連（去 `/u/N/`）並加 `&nocache=1` 清 `trees_all` / `bootstrap_data`（GAS 內 `clearDataCache_()`）。
 
@@ -113,7 +129,7 @@ GET <API_ENDPOINT>?action=projects
 
 ### 3.1 Body 及認證
 
-Body 必須係有效 JSON。除 `login` 外，body 應包含：
+Body 必須係有效 JSON，且會先經 `validatePostPayload_()`（`GAS/validation.gs`）做 type 白名單與欄位限制校驗；唔識別嘅 type 回 `UNSUPPORTED_OPERATION`。除 `login` 外，body 應包含：
 
 ```json
 { "token": "<session token>", "csrf_token": "<CSRF token>" }
@@ -172,7 +188,7 @@ Apps Script 無法依賴自訂 HTTP header，所以現行前端將 CSRF 放喺 J
 
 `prj` 寫入表內會對應為 `project_id`；`lat`／`lng` 係 WGS84。成功：`{ "ok": true }`。
 
-重複：`{ "ok": true, "duplicate": true, "message": "簽到記錄已存在" }`。
+重複：`{ "ok": true, "duplicate": true, "message": "OK_DUPLICATE" }`。
 
 ### 3.4 `inspection`
 
@@ -195,6 +211,7 @@ Apps Script 無法依賴自訂 HTTP header，所以現行前端將 CSRF 放喺 J
 - 當 `photo_base64` 留空而 `photos_total > 0`，後端先建立 metadata，之後用 `inspection_photo` 逐張上傳。
 - `photos_pending` 目前由前端傳送，但 `GAS/handlers-post.gs` 未使用；後端實際按 `photos_total` 記錄相片總數。
 - `lat`／`lng` 係可選欄位；後端支援，現行 `t.js` 巡查請求未傳。
+- 建立巡查時若有相片或 `health`，會一併更新對應 `trees.photo_url`／`trees.status`，並 bump `trees.updated_at`（配合版本衝突檢測）。
 
 成功：
 
@@ -220,15 +237,17 @@ Apps Script 無法依賴自訂 HTTP header，所以現行前端將 CSRF 放喺 J
 }
 ```
 
-成功：`{ "ok": true, "photo_url": "https://lh3.googleusercontent.com/d/...=w1200" }`。
+成功：`{ "ok": true, "photo_url": "https://lh3.googleusercontent.com/d/...=w1200" }`。上傳檔名為 `<tree_id>_<time>_<index>.jpg`，相片設為 anyone-with-link 可讀。
 
 重複：`{ "ok": true, "duplicate": true, "message": "OK_DUPLICATE" }`（舊文檔中文 `相片已存在` 已統一為代碼）。
+
+若請求帶 `tree_id`／`prj` 而與 `inspection_id` 對應嘅記錄不符，回 `VALIDATION_FAILED` + `INVALID_VALUE`（跨樹防錯配）；`inspection_id` 缺少或格式不符（`^INS-\d+-[0-9a-fA-F]{1,12}$`）回 `VALIDATION_FAILED`。
 
 缺少巡查 ID：`{ "ok": false, "error_code": "VALIDATION_FAILED", "error": "VALIDATION_FAILED", "details": [{"field":"inspection_id","code":"REQUIRED"}] }`。
 
 ### 3.6 `update_tree`
 
-部分更新樹木資料。定位欄位係 `tree_id`，`prj` 可選用於限定 `project_id`。
+部分更新樹木資料。定位欄位係 `tree_id`，`prj` 可選用於限定 `project_id`。目標樹木唔存在時回 `CONFLICT` + `{field:'tree_id', code:'NOT_FOUND'}`（避免離線同步誤標記成功）。
 
 必備／共通欄位：`type`、`token`、`csrf_token`、`client_id`、`client_created_at`、`tree_id`；`prj` 可選。
 
@@ -257,7 +276,9 @@ crown_area, crown_volume, level, lat, lng, hk80_n, hk80_e
 
 後端只套用存在且唔係空字串嘅欄位。提供 `lat` + `lng` 會重算 HK80；只提供 `hk80_n` + `hk80_e` 會嘗試重算 WGS84。
 
-成功：`{ "ok": true }`。若目標列嘅 `last_client_id` 已等於今次 `client_id`，返回 `{ "ok": true, "duplicate": true, "message": "樹木更新已存在" }`。
+成功：`{ "ok": true }`。若目標列嘅 `last_client_id` 已等於今次 `client_id`，返回 `{ "ok": true, "duplicate": true, "message": "OK_DUPLICATE" }`。
+
+每次成功更新都會 bump `trees.updated_at`；若請求帶 `base_updated_at`（編輯前睇到嘅版本）而與伺服器當前 `updated_at` 不一致，回 `CONFLICT` + `details:[{field:'tree_id', code:'VERSION_CONFLICT', current_updated_at:'...'}]`，前端應提示用戶重新載入最新資料。
 
 ### 3.7 `create_project`
 
@@ -283,7 +304,7 @@ tree_height, crown_width, dbh, ground_diameter, stem_length,
 crown_area, crown_volume
 ```
 
-可選 `description`、`risk`、`hk80_n`、`hk80_e`、`photo_base64`。缺少或留空 `tree_id` 時，後端會喺 Script Lock 內生成該地盤目前最大純數字 `tree_id`＋1；無純數字編號時由 `1` 開始。缺少 `status` 時預設 `Normal`。自動生成及指定嘅純數字編號會以 `Number` 寫入 `trees`；非數字編號則保留字串。
+可選 `description`、`risk`、`hk80_n`、`hk80_e`、`photo_base64`。`project_id` 必填且必須存在於 `projects` 表（否則回 `VALIDATION_FAILED` + `INVALID_VALUE`，避免建立孤兒樹木）。指定 `tree_id` 格式只容許 Unicode 字母數字 `._-`（≤64 字元），否則回 `VALIDATION_FAILED` + `INVALID_FORMAT`。缺少或留空 `tree_id` 時，後端會喺 Script Lock 內生成該地盤目前最大純數字 `tree_id`＋1；無純數字編號時由 `1` 開始。缺少 `status` 時預設 `Normal`。自動生成及指定嘅純數字編號會以 `Number` 寫入 `trees`；非數字編號則保留字串。建立時會初始寫入 `updated_at`（ISO 時間戳）作為版本基線。
 
 同一 `project_id` 內 `tree_id` 必須唯一。若指定編號已存在，返回：
 
@@ -309,12 +330,17 @@ crown_area, crown_volume
 | 相片上傳（鎖外）失敗 | `{ "ok": false, "error_code": "UPLOAD_FAILED", "error": "UPLOAD_FAILED" }` |
 | 位置超出香港 | `{ "ok": false, "error_code": "INVALID_LOCATION", "error": "INVALID_LOCATION" }` |
 | 校驗失敗 | `{ "ok": false, "error_code": "VALIDATION_FAILED", "error": "VALIDATION_FAILED", "details": [{"field":"...","code":"REQUIRED|INVALID_FORMAT|TOO_LONG..."}] }` |
-| 樹木編號衝突 | `{ "ok": false, "error_code": "CONFLICT", "error": "CONFLICT", "details": [{"field":"tree_id","code":"ALREADY_EXISTS"}] }` |
+| 樹木編號衝突（create_tree） | `{ "ok": false, "error_code": "CONFLICT", "error": "CONFLICT", "details": [{"field":"tree_id","code":"ALREADY_EXISTS"}] }` |
+| 改名衝突（update_tree new_tree_id 已被佔用） | `CONFLICT` + `details:[{field:'new_tree_id', code:'ALREADY_EXISTS'}]` |
+| 目標樹木唔存在（update_tree） | `CONFLICT` + `details:[{field:'tree_id', code:'NOT_FOUND'}]` |
+| 版本衝突（update_tree base_updated_at 不符） | `CONFLICT` + `details:[{field:'tree_id', code:'VERSION_CONFLICT', current_updated_at:'...'}]` |
 
 GET 例外返回 `{ "ok": false, "error_code": "INTERNAL_READ_ERROR", "error": "INTERNAL_READ_ERROR" }`。錯誤以 JSON body 為主，`GAS/main.gs` 未定義一套業務錯誤對應 HTTP status 嘅合約。所有錯誤對外僅回 `error_code`（`error` 雙寫相容），`details` 僅 `field+code`；前端由 `assets/js/core/error-codes.js` 查表轉譯。
 
 
 ### 4.2 Token 及 CSRF
+
+CSRF 採用同步器 one-time token 模式：`doPost` 鎖外先以 `peekCsrfToken_()` 唯讀檢查，鎖內再驗證一次（防並發消耗）；成功時 `rotateCsrfToken_()` 刪除舊 token、簽發新 token，並注入回應 `csrf_token` 欄位，前端下次請求使用新 token。
 
 除 `login` 外，後端依次驗證：
 
@@ -337,6 +363,19 @@ GET 例外返回 `{ "ok": false, "error_code": "INTERNAL_READ_ERROR", "error": "
 ```
 
 成功登入會清除失敗計數。舊中文 `嘗試太頻繁，請稍後再試` 已改為 `RATE_LIMITED`（前端 `ErrorCodes` 轉譯）。
+
+### 4.4 中央校驗規則（GAS/validation.gs）
+
+`validatePostPayload_()` 對所有 POST type 做白名單及欄位限制，失敗時回 `VALIDATION_FAILED`（或 type 唔識別回 `UNSUPPORTED_OPERATION`）：
+
+- 長度限制 `LIMITS_`：`staff` 100、`tree_id` 64、`project_id` 64、`custom_id` 64、`inspection_id` 80、`name` 200、`description`/`note`/`risk` 2000、`level` 100、`client_id` 128、數值欄位 50。
+- `status`／`health` 白名單：`Normal` / `Fair` / `Poor` / `Very Poor` / `Dead`。
+- `tree_id`／`project_id`／`new_tree_id` 格式：Unicode 字母數字 `._-`（`RE_TREE_ID_SIMPLE_`／`RE_PROJECT_ID_`）。
+- `inspection_id` 格式：`^INS-\d+-[0-9a-fA-F]{1,12}$`（`RE_INSPECTION_ID_`）。
+- 相片：最多 10 張（`MAX_IMAGE_COUNT_`），單張 base64 ≤15MB、解碼後 ≤10MB，MIME 限 jpeg/png/webp。
+- `client_id`：UUID 或 8-128 字元 `[A-Za-z0-9_-]`。
+- 位置：`lat/lng` 或 `hk80_n/hk80_e` 必須成對提供；WGS84 lat ∈ [-90,90]、lng ∈ [-180,180]。
+- `create_aerial`／`update_project`／`delete_project`／`delete_tree` 只做 type 白名單，唔做欄位校驗（後端亦冇對應 handler，見第 6 節）。
 
 ## 5. 冪等及 duplicate
 
@@ -385,9 +424,10 @@ create_aerial, update_project, delete_project, delete_tree
 - `health`／`status` 五值係前端表單驗證契約，後端目前未做同等白名單驗證。
 - `create_project` 前端以 HK80 N/E 輸入，轉成 WGS84 後只傳 `lat`／`lng`；航拍欄位由 `assets/js/modules/map.js` 讀取，但建立 API 不會寫入。
 - `GAS/main.gs` 對未知 GET action 不會返回 unsupported error，而係落入 `handleGetTrees_()` 嘅預設 `trees` 查詢。
+- `GAS/validation.gs` 嘅 `validateGetParams_` 對 `tree`/`inspections`/`trees` action 校驗參數；未知 action 仍落入 `trees` 預設分支。
 - `assets/js/modules/forms.js` 會先做同地盤字串相等嘅即時重複提示；`GAS/tree-id.gs` 會喺後端鎖內再檢查，純數字會按數值比較（例如 `07` 同 `7` 視為重複）。
 - `GAS/drive-photos.gs` 嘅多張相片上傳逐張容錯；單張 `inspection_photo` 上傳失敗則回報錯誤。
 
 ---
 
-> **最後核對**：2026-08-19。源碼檔案：`GAS/main.gs`、`GAS/handlers-get.gs`、`GAS/handlers-post.gs`、`GAS/sheets-repo.gs`、`GAS/idempotency.gs`、`GAS/drive-photos.gs`、`GAS/config.gs`、`GAS/auth.gs`、`GAS/csrf.gs`、`GAS/coordinates.gs`、`GAS/cache.gs`、`GAS/project-utils.gs`、`GAS/utils.gs`、`GAS/backfill.gs`、`GAS/tree-id.gs`、`assets/js/api.js`、`assets/js/pages/t.js`、`assets/js/modules/forms.js`、`assets/js/modules/map.js`。`GAS/code.gs` 不存在。
+> **最後核對**：2026-08-25。源碼檔案：`GAS/main.gs`、`GAS/handlers-get.gs`、`GAS/handlers-post.gs`、`GAS/sheets-repo.gs`、`GAS/idempotency.gs`、`GAS/drive-photos.gs`、`GAS/validation.gs`、`GAS/error-codes.gs`、`GAS/cache-policy.gs`、`GAS/config.gs`、`GAS/auth.gs`、`GAS/csrf.gs`、`GAS/coordinates.gs`、`GAS/cache.gs`、`GAS/project-utils.gs`、`GAS/utils.gs`、`GAS/backfill.gs`、`GAS/tree-id.gs`、`assets/js/api.js`、`assets/js/pages/t.js`、`assets/js/modules/forms.js`、`assets/js/modules/map.js`、`assets/js/core/error-codes.js`。`GAS/code.gs` 不存在。

@@ -39,6 +39,8 @@ IndexedDB 以 version 3 開啟。`outbox` 使用 `id`（autoIncrement）作 keyP
 
 `normalize()` 讀取舊 queue item 時會補齊上述 metadata。任務描述使用 `pending`，但目前源碼實際使用 `queued`；`getPendingCount()` 計算 `queued`／`syncing`。
 
+GET 快取（localStorage `tree_cache_`）最長有效期優先取自 `CachePolicy.POLICY.snapshot.ttl`（24 小時），未載入 `cache-policy.js` 時回退硬編碼 24h；IndexedDB `snapshot` store 另由 `CachePolicy.snapshot.maxAgeDays = 7` 控制。
+
 ## 3. 狀態流轉
 
 ```text
@@ -80,7 +82,7 @@ csrf_token
 
 每筆同步先標記 `syncing`，再：
 
-1. 從 `sessionStorage` 嘅 `Config.AUTH.STORAGE_KEY`（目前 `tree_staff_token`）讀取最新未過期 Token。
+1. 從 `getCurrentToken()` 讀取最新未過期 Token：優先 `sessionStorage` 嘅 `Config.AUTH.STORAGE_KEY`（目前 `tree_staff_token`），無效時 fallback 至 `localStorage`（跨分頁持久，避免關閉分頁後 token 遺失令離線佇列永鎖）。
 2. 從 `AuthService.getCsrfToken()` 讀取最新 CSRF Token。
 3. 只在記憶體 payload 補回 `token`／`csrf_token`。
 4. 用 POST JSON body 送出，唔使用自訂 header。
@@ -100,10 +102,15 @@ csrf_token
 
 ### GET hook
 
-- 成功而有 `result.data`：寫入 localStorage cache，key prefix 為 `tree_cache_`。
-- `OFFLINE`、`TIMEOUT` 或離線：返回 cache，並加 `offline: true, stale: true`。
+- 先 shallow clone `params`（避免修改呼叫方嘅物件）。
+- 成功而有 `result.data`：寫入 localStorage cache，key prefix 為 `tree_cache_`；但 `nocache`／`bust` 旁路請求嘅成功結果**一律唔寫入**快取（避免「強制刷新」污染離線快取）。
+- 離線判斷包含 `OFFLINE`、`TIMEOUT`、**SW 回 503**、`backendError === 'OFFLINE'` 或離線時 `API_` 開頭錯誤碼：返回 cache，並加 `offline: true, stale: true`。
 - 冇 cache：返回 `{ data: [], offline: true, stale: true }`。
 - 其他錯誤：重新 throw。
+
+### clearCache hook
+
+`offline.js` 亦包裝 `ApiService.clearCache`：先清除 `ApiService` 記憶體 `responseCache`（`origClearCache`），再清除 localStorage GET cache，並通知 Service Worker 失效 `DATA_CACHE`。
 
 localStorage GET cache 最長 24 小時；`ApiService` 另有 60 秒記憶體 response cache。
 
@@ -122,11 +129,11 @@ localStorage GET cache 最長 24 小時；`ApiService` 另有 60 秒記憶體 re
 
 ### 觸發時機
 
-- `online`：先 `warmGAS()`，約 800ms 後 `syncOutbox(true)`。
+- `online`：`warmGAS()` 與 `syncOutbox(true)` 並行啟動（`setTimeout(..., 0)`，不再固定等 800ms，避免恢復連線後白等近一秒）。
 - `visibilitychange`：頁面恢復可見時 `warmGAS()` 及 `syncOutbox(false)`。
 - 手動 `syncNow()`：在線時強制同步；離線返回 0 並提示無法同步。
 
-`window.OfflineQueue`、`window.syncOutbox`、`window.syncNow`、`window.TreeSnapshot` 由 `offline.js` 暴露。
+`globalThis.OfflineQueue`、`globalThis.pwaToast`、`globalThis.syncOutbox`、`globalThis.syncNow`、`globalThis.warmGAS`、`globalThis.TreeSnapshot` 由 `offline.js` 暴露。SW 層失效通知優先經 `CacheManager.notifySwInvalidate`，否則 `navigator.serviceWorker.controller.postMessage`。
 
 ## 7. 錯誤分類
 
@@ -157,7 +164,10 @@ tree_audit_log
 - `MAX_AGE_DAYS=30`、`MAX_RETRY=5`、`SYNC_BATCH_SIZE=10` 與要求一致。
 - 即時 POST hook 對 5xx 使用 `err.status >= 500`；但 `api.js` 將非 2xx 轉成 `Error('HTTP <status>')`，未必保留 `status`，同步階段直接 fetch 則仍按 `!res.ok` retry。
 - `t.js` 有路徑會直接呼叫 `OfflineQueue.push()`，其他呼叫由 `ApiService` hook 攔截；兩者共用同一 outbox。
+- GET 快取最大有效期 24h 優先讀 `CachePolicy.POLICY.snapshot.ttl`；`CACHE_MAX_AGE` 變數在 `offline.js` 初始化時決定。
+- 後端 `checkDuplicateFast_()`／`markDuplicateFast_()` 喺 ScriptCache 層做 600 秒快速防重，鎖外上傳相片前先檢查，減少孤兒檔案。
+- `notifySwInvalidateOffline_` 優先使用 `CacheManager.notifySwInvalidate`（若 `cache-manager.js` 已載入），否則 `postMessage`。
 
 ---
 
-> **最後核對**：2026-08-19。源碼檔案：`offline.js`、`assets/js/api.js`、`assets/js/config.js`、`assets/js/auth.js`、`assets/js/modules/audit-log.js`、`assets/js/pages/t.js`、`t.html`、`sw.js`。
+> **最後核對**：2026-08-25。源碼檔案：`offline.js`、`assets/js/api.js`、`assets/js/config.js`、`assets/js/auth.js`、`assets/js/core/cache-policy.js`、`assets/js/core/cache-manager.js`、`assets/js/modules/audit-log.js`、`assets/js/pages/t.js`、`t.html`、`sw.js`。

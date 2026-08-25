@@ -2,7 +2,7 @@
 
 ## 1. 拆分檔及來源 Section
 
-`assets/css/` 現時有 10 個拆分檔，係由原本 `main.css` 的 section 分拆而成。每個檔案頂部註解仍保留原始 section 對應：
+`assets/css/` 現時有 13 個正式載入嘅拆分檔（原 10 個 section 拆分 ＋ `skeleton.css`／`animations.css`／`utilities.css`），加上 2 個頁面 CSS（`pages/t.css`、`pages/nfc.css`）。原 13 檔由原本 `main.css` 的 section 分拆（`utilities.css` 等屬共用工具類，非 section 拆分）。每個拆分檔頂部註解仍保留原始 section 對應：
 
 | 載入次序 | CSS 檔案 | 來源 Section |
 |---:|---|---|
@@ -16,6 +16,9 @@
 | 8 | `filters.css` | Sections 15–17：狀態過濾面板及桌面過濾按鈕 |
 | 9 | `gis.css` | Section 18：GIS 工具 |
 | 10 | `performance.css` | Section 19：效能及微互動 |
+| 11 | `skeleton.css` | 骨架屏（Skeleton）載入佔位 |
+| 12 | `animations.css` | 動畫／過渡 |
+| 13 | `utilities.css` | 共用工具類（`is-hidden/is-visible`、`offline-toast`、`filter-panel--mobile`、`cluster-badge`、`sk--*` 等），三個頁面共用 |
 
 ## 2. Cascade 載入順序
 
@@ -32,19 +35,22 @@ tokens.css
 → filters.css
 → gis.css
 → performance.css
+→ skeleton.css
+→ animations.css
+→ utilities.css
 ```
 
-呢個順序係 cascade 合約，不可單獨調亂任何一個檔案；後載入的規則可能依賴或覆蓋前面 section 的 tokens、layout、map 及 UI 規則。`sw.js` 的 `PRECACHE` 亦按同一組 10 個拆分檔預快取。
+呢個順序係 cascade 合約，不可單獨調亂任何一個檔案；後載入的規則可能依賴或覆蓋前面 section 的 tokens、layout、map 及 UI 規則。`sw.js` 的 `PRECACHE` 按 13 個拆分檔＋2 個頁面 CSS（`pages/t.css`、`pages/nfc.css`）預快取。
 
 ## 3. `main.css` 現況
 
-目前 repo 的 `assets/css/` 實際清單冇 `main.css` 實體檔案；`index.html` 亦冇引用它，`sw.js` 的 `PRECACHE` 亦冇包含它。現存拆分檔頂部註解只保留「由 `main.css` Section n 拆出」的歷史來源記錄。
+目前 repo 的 `assets/css/main.css` 實體**存在**（約 30KB），但係歷史來源／備份——`index.html` 冇引用它、`sw.js` 的 `PRECACHE` 亦冇包含它。現存拆分檔頂部註解保留「由 `main.css` Section n 拆出」的歷史來源記錄。
 
 因此：
 
 - 不可重新將 `main.css` 加入 HTML `<link>` 或 Service Worker `PRECACHE`。
-- 如果部署工作區或其他工作副本仍保留一份未引用的歷史 `main.css` 備份，應先完成視覺測試，再確認無需回溯後刪除；本 repo 當前並無可刪除的 `main.css` 實體檔案。
-- 拆分檔係目前唯一正式載入的主頁 CSS 來源。
+- 如果想清理，應先完成視覺測試，再確認無需回溯後先刪除；現階段僅屬未引用備份，不影響載入。
+- 13 個拆分檔＋2 個頁面 CSS 係目前唯一正式載入的 CSS 來源。
 
 ## 4. 其他頁面的遷移（已完成）
 
@@ -54,10 +60,10 @@ tokens.css
 - `nfc.html` → `assets/css/pages/nfc.css`
 - 兩頁共用工具類 → `assets/css/utilities.css`（`is-hidden/is-visible`, `offline-toast`, `filter-panel--mobile`, `cluster-badge`, `sk--*` 等）
 
-`index.html` 主 cascade 維持 `tokens→...→performance` 10 檔不變；`utilities.css` / `pages/*.css` 僅由對應頁面載入，不插入主 cascade。`sw.js` PRECACHE 已補齊上述 3 檔。
+`index.html` 主 cascade 係 `tokens→...→performance→skeleton→animations→utilities` 13 檔；`utilities.css` 由三個頁面共用，`pages/*.css` 僅由對應頁面載入，唔插入主 cascade 嘅 section 表。`sw.js` PRECACHE 已補齊上述 3 檔＋2 個頁面 CSS。
 
 所有 `style=""` 及 `el.style.*` / `cssText` 已改為 class 切換或 `style.setProperty('--x', ...)` / `style.color = ...`（僅保留 CSS 變數與動態顏色寫入），Leaflet pane `zIndex` 仍保留於 JS。
 
 ---
 
- > **最後核對**：2026-08-23。源碼檔案：`index.html`、`t.html`、`nfc.html`、`sw.js`、`assets/css/tokens.css`、`assets/css/base.css`、`assets/css/layout.css`、`assets/css/map.css`、`assets/css/ui.css`、`assets/css/responsive.css`、`assets/css/dark.css`、`assets/css/filters.css`、`assets/css/gis.css`、`assets/css/performance.css`。目前未發現實體 `assets/css/main.css`。
+ > **最後核對**：2026-08-25。源碼檔案：`index.html`、`t.html`、`nfc.html`、`sw.js`、`assets/css/tokens.css`、`assets/css/base.css`、`assets/css/layout.css`、`assets/css/map.css`、`assets/css/ui.css`、`assets/css/responsive.css`、`assets/css/dark.css`、`assets/css/filters.css`、`assets/css/gis.css`、`assets/css/performance.css`、`assets/css/skeleton.css`、`assets/css/animations.css`、`assets/css/utilities.css`、`assets/css/pages/t.css`、`assets/css/pages/nfc.css`。`assets/css/main.css` 實體存在但未被引用。

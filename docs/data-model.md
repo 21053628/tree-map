@@ -2,7 +2,7 @@
 
 ## 1. 範圍及共通規則
 
-本文根據 `GAS/sheets-repo.gs` 嘅 `appendByHeader_()`／更新函式、`GAS/handlers-post.gs` 實際寫入物件，以及 `assets/js/modules/map.js` 嘅 `refreshAerial()` 記錄四張 Google Sheet。後端入口係 `GAS/main.gs`；repo 內冇 `GAS/code.gs`。Sheet 名稱：
+本文根據 `GAS/sheets-repo.gs` 嘅 `appendByHeader_()`／更新函式、`GAS/handlers-post.gs` 實際寫入物件，以及 `assets/js/modules/map.js` 嘅 `refreshAerial()` 記錄五張 Google Sheet。後端入口係 `GAS/main.gs`；repo 內冇 `GAS/code.gs`。Sheet 名稱：
 
 | 常數 | Sheet |
 |---|---|
@@ -10,6 +10,7 @@
 | `SH_INS` | `inspections` |
 | `SH_CHK` | `checkins` |
 | `SH_PRJ` | `projects` |
+| `SH_SPECIES` | `species` |
 
 `appendByHeader_()` 按 `GAS/sheet-schema.gs` 固定 Schema（`SCHEMA_VERSION_ = 1.0.0`）寫入，未知欄忽略，不再動態新增欄位；額外欄（如 `projects` 航拍 `aerial_*`）保留但不納入固定合約。本文係固定合約欄位，唔代表 Google Sheets 原生 UNIQUE constraint。
 
@@ -46,7 +47,7 @@ Normal / Fair / Poor / Very Poor / Dead
 tree_id, name, lat, lng, status, risk, photo_url, description,
 tree_height, crown_width, dbh, ground_diameter, stem_length,
 crown_area, crown_volume, project_id, level, hk80_n, hk80_e,
-client_id, client_created_at, last_client_id
+client_id, client_created_at, last_client_id, updated_at
 ```
 
 | 欄位 | 說明／識別角色 |
@@ -63,17 +64,20 @@ client_id, client_created_at, last_client_id
 | `client_id` | `create_tree` 冪等 key。 |
 | `client_created_at` | 建立請求時間。 |
 | `last_client_id` | `update_tree` 冪等 key／最後更新標記。 |
+| `updated_at` | 版本時間戳（ISO 格式）；`create_tree` 初始寫入，`update_tree`／巡查時 bump，用於前端版本衝突檢測（`base_updated_at`）。 |
 
-`update_tree` 成功後寫入 `last_client_id`；固定 Schema 建表即包含 `last_client_id`（初次 `create_tree` 留空）。程式以 `tree_id` 定位，提供 `prj` 時再比對 `project_id`；跨地盤整合宜以 `(project_id, tree_id)` 作穩妥組合識別。`updateTreeFields_()` 及 `updateInspectionFields_()` 固定 Schema 下不再動態新增 header，未知欄忽略。
+`update_tree` 成功後寫入 `updated_at` 及 `last_client_id`；固定 Schema 建表即包含 `updated_at`（`ensureTreeUpdatedAtColumn_()` 會向舊表自動附加欄位）。程式以 `tree_id` 定位，提供 `prj` 時再比對 `project_id`；跨地盤整合宜以 `(project_id, tree_id)` 作穩妥組合識別。`updateTreeFields_()` 及 `updateInspectionFields_()` 固定 Schema 下不再動態新增 header，未知欄忽略。
 
 ### `tree_id` 編號約定
 
 - 編號唯一性係以同一 `project_id` 內嘅 `(project_id, tree_id)` 配對判斷；唔係 Google Sheets 原生 UNIQUE constraint。
-- 指定編號如同地盤已有相同編號，後端返回 `ok: false` 及「樹木編號 X 已存在於此地盤，請改用其他編號（或留空自動編號）」。
+- 指定編號如同地盤已有相同編號，後端返回 `ok: false` 及「樹木編號 X 已存在於此地盤，請改用其他編號（或留空自動編號）」。純數字編號會按數值比較（例如 `07` 同 `7` 視為相同）。
+- 指定 `tree_id` 格式只容許 Unicode 字母、數字、`._-`（`RE_TREE_ID_SIMPLE_`），≤64 字元；格式不符回 `VALIDATION_FAILED` + `INVALID_FORMAT`。
 - `tree_id` 留空時，`GAS/tree-id.gs` 嘅 `nextTreeId_()` 會喺 Script Lock 內找同地盤最大純數字編號再加一；冇純數字時由 `1` 開始。
 - 自動接號只計算符合純數字格式嘅編號；舊有 `T`＋timestamp 或其他非數字編號會保留，但唔會參與最大值計算。
 - 指定及自動生成嘅純數字編號會由 `normalizeTreeId_()` 轉成 `Number` 寫入 Sheet；純數字 `07` 同 `7` 會視為同一編號。非數字編號保留字串。
 - `GAS/handlers-post.gs` 會先喺鎖外預檢，再喺鎖內作最終重複確認，避免並發新增撞號。
+- `update_tree` 支援 `new_tree_id` 改名：`treeIdTaken_()` 檢查同地盤唯一性，`renameTreeReferences_()` 會 cascade 更新 `inspections` 同 `checkins` 內相同地盤及原編號嘅 `tree_id`。
 
 ## 3. `inspections` 表
 
@@ -100,7 +104,7 @@ photo_client_ids
 | `client_created_at` | 客戶端建立時間。 |
 | `photo_client_ids` | `inspection_photo` 冪等集合，以逗號分隔。 |
 
-兩階段模式會先以 `photos_total > 0` 及空 `photo_base64` 建立 metadata，再由 `inspection_photo` append `photo_url` 及 `photo_client_ids`。建立巡查時只要有一張以上已成功上傳相片，後端會把第一條 URL 更新到對應 `trees.photo_url`；分階段上傳時，第一張追加相片亦會更新該欄位。
+兩階段模式會先以 `photos_total > 0` 及空 `photo_base64` 建立 metadata，再由 `inspection_photo` append `photo_url` 及 `photo_client_ids`。建立巡查時只要有一張以上已成功上傳相片，後端會把第一條 URL 更新到對應 `trees.photo_url`，並將 `health` 同步到 `trees.status`、 bump `trees.updated_at`；分階段上傳時，第一張追加相片亦會更新該欄位。
 
 ## 4. `checkins` 表
 
@@ -153,7 +157,22 @@ aerial_url, aerial_n1, aerial_e1, aerial_n2, aerial_e2, aerial_type
 
 前端會將兩組 HK80 邊界轉成 WGS84 後建立 Leaflet bounds。`create_project` 目前唔會寫入航拍欄位；呢六欄係表內預留／人工或其他流程配置。
 
-## 6. 主鍵及唯一性總結
+## 6. `species` 表
+
+欄位：
+
+```text
+id, name
+```
+
+| 欄位 | 說明 |
+|---|---|
+| `id` | 物種 ID（Number）。 |
+| `name` | 物種名稱。 |
+
+後端 `handleGetSpecies_()` 只回 `id`＋`name` 必要欄位；若 `species` Sheet 唔存在（`SH_SPECIES` 未設定）或讀取失敗，回空陣列讓前端 fallback 靜態 JSON。前端 `SpeciesRepository` 維持記憶體快取及 `fillDatalist` 搜尋。
+
+## 7. 主鍵及唯一性總結
 
 | 表 | 主鍵／邏輯識別 | Idempotency |
 |---|---|---|
@@ -161,16 +180,18 @@ aerial_url, aerial_n1, aerial_e1, aerial_n2, aerial_e2, aerial_type
 | `inspections` | `inspection_id` | `client_id`、`photo_client_ids` |
 | `checkins` | 無獨立 ID；`client_id` | `client_id` |
 | `projects` | `project_id` | `client_id` |
+| `species` | `id` | 無（唯讀） |
 
-`checkDuplicate_()` 係掃描欄位值，並非試算表資料庫級 constraint；`photo_client_ids` 亦係逗號分隔字串掃描。
+`checkDuplicate_()` 係掃描欄位值，並非試算表資料庫級 constraint；`photo_client_ids` 亦係逗號分隔字串掃描。另有 `checkDuplicateFast_()`／`markDuplicateFast_()` 喺 ScriptCache 層做 600 秒快速防重，避免鎖外相片上傳造成孤兒檔案。
 
-## 7. 核對備註
+## 8. 核對備註
 
-- 固定 Schema（`GAS/sheet-schema.gs v1.0.0`）：`trees` 22 欄 / `inspections` 14 欄 / `checkins` 8 欄 / `projects` 8 欄；寫入不再動態新增欄位，未知欄忽略，額外欄（如航拍 `aerial_*`）保留但不屬固定合約。
+- 固定 Schema（`GAS/sheet-schema.gs v1.0.0`）：`trees` 23 欄（含 `updated_at`）/ `inspections` 14 欄 / `checkins` 8 欄 / `projects` 8 欄 / `species` 2 欄；寫入不再動態新增欄位，未知欄忽略，額外欄（如航拍 `aerial_*`）保留但不屬固定合約。
 - 航拍欄位由 `map.js` 讀取，但不納入 `projects` 固定 Schema、建立地盤 API 亦不寫入。
-- `status`／`health` 嘅五值係前端驗證契約，後端目前未重複驗證。
-- `trees.last_client_id` 只由 `update_tree` 寫入，固定 Schema 建表即預留空欄。
+- `status`／`health` 嘅五值係前端驗證契約，後端 `GAS/validation.gs` 有 `VALID_STATUS_`／`VALID_HEALTH_` 白名單與 `LIMITS_` 長度限制（`staff` 100、`tree_id` 64、`project_id` 64、`name` 200、`description`/`note`/`risk` 2000、`level` 100、`client_id` 128、數值欄位 50、相片 ≤10 張且單張 base64 ≤15MB）。
+- `trees.updated_at`／`last_client_id` 只由 `update_tree` 寫入（`updated_at` 亦喺 `create_tree` 及巡查時寫入），固定 Schema 建表即預留。
+- `create_tree` 會驗證 `project_id` 存在於 `projects` 表，避免孤兒樹木。
 
 ---
 
-> **最後核對**：2026-08-19。源碼檔案：`GAS/main.gs`、`GAS/handlers-post.gs`、`GAS/sheets-repo.gs`、`GAS/idempotency.gs`、`GAS/tree-id.gs`、`GAS/drive-photos.gs`、`GAS/config.gs`、`GAS/coordinates.gs`、`GAS/cache.gs`、`GAS/project-utils.gs`、`GAS/utils.gs`、`GAS/backfill.gs`、`assets/js/modules/forms.js`、`assets/js/modules/map.js`。`GAS/code.gs` 不存在。
+> **最後核對**：2026-08-25。源碼檔案：`GAS/main.gs`、`GAS/handlers-post.gs`、`GAS/sheets-repo.gs`、`GAS/idempotency.gs`、`GAS/tree-id.gs`、`GAS/drive-photos.gs`、`GAS/validation.gs`、`GAS/sheet-schema.gs`、`GAS/config.gs`、`GAS/coordinates.gs`、`GAS/cache.gs`、`GAS/project-utils.gs`、`GAS/utils.gs`、`GAS/backfill.gs`、`assets/js/modules/forms.js`、`assets/js/modules/map.js`、`assets/js/modules/species.js`。`GAS/code.gs` 不存在。
