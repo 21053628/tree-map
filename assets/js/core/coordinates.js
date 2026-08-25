@@ -92,5 +92,4 @@ try{ const g=typeof globalThis!=='undefined'?globalThis:null; if(g){
   g.CoordUtils={ toHK80,toWGS84,toHK:toHK80,toWGS:toWGS84,toHK80Async,toWGS84Async,toHKAsync:toHK80Async,toWGSAsync:toWGS84Async,batchToHK80,batchToHK80Async,isValidHK80,isValidWGS84,isValidHK80Range,isValidWgs84HongKong,format1,format5,clearCache,getCacheStats,preheatCache,PROJECTIONS,HK80_BOUNDS,WGS84_BOUNDS };
   if(!g.CoordLazy) g.CoordLazy={}; g.CoordLazy.toHK=toHK80Async; g.CoordLazy.toWGS=toWGS84Async; g.CoordLazy.toHK80Async=toHK80Async; g.CoordLazy.toWGS84Async=toWGS84Async; g.CoordLazy.toHK80=toHK80; g.CoordLazy.toWGS84=toWGS84;
 }}catch(e){}
-if(typeof module!=='undefined'&&module.exports){ module.exports={PROJECTIONS,HK80_BOUNDS,WGS84_BOUNDS,toHK80,toWGS84,toHK80Async,toWGS84Async,batchToHK80,isValidHK80,isValidWGS84,format1,format5,clearCache,getCacheStats,preheatCache};}
 

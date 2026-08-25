@@ -1,11 +1,11 @@
 import { escapeHtml, sanitizeId, isSafeBackUrl } from '../core/utils.js';
+import { Config } from '../config.js';
+import { ApiService } from '../api.js';
 
-// 依賴：config.js（Config）維持 plain script 全域
-const API = (typeof Config !== 'undefined' && Config.API_ENDPOINT)
-  ? Config.API_ENDPOINT
-  : '';
+// 依賴：config.js / api.js 現由 ESM import 提供
+const API = Config.API_ENDPOINT || '';
 
-if (typeof ApiService !== 'undefined' && API) {
+if (ApiService && API) {
   ApiService.init(API);
 }
 

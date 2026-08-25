@@ -1,14 +1,17 @@
+import { AuthService } from '../../auth.js';
+import { ApiService } from '../../api.js';
+import { toHK80Async } from '../../core/coordinates.js';
 import { escapeHtml } from '../../core/utils.js';
 import * as TDPhotos from './td-photos.js';
 const TD = globalThis.TD;
-const toHK = globalThis.CoordLazy ? globalThis.CoordLazy.toHK : function(){ return Promise.resolve(null); };
+const toHK = toHK80Async;
 const f1 = function(n){ return Number(n).toFixed(1); };
 let staffInitialized = false;
 let staffInitPromise = null;
 export async function staffOk(){
-  if (typeof AuthService !== 'undefined' && AuthService.isAuthenticated()) return true;
+  if (AuthService.isAuthenticated()) return true;
   if(!navigator.onLine){ alert('📴 離線模式：登入已過期，請連接網路後重新驗證。'); return false; }
-  if (typeof AuthService !== 'undefined') return await AuthService.promptAuth('🔒 請輸入工作人員密碼：');
+  if (AuthService) return await AuthService.promptAuth('🔒 請輸入工作人員密碼：');
   return false;
 }
 export function isStaffInitialized(){ return staffInitialized; }
@@ -38,7 +41,7 @@ export async function staffMode(){
     sv('eDbh', TD.TREE.dbh || ''); sv('eGroundDia', TD.TREE.ground_diameter || ''); sv('eStemLen', TD.TREE.stem_length || '');
     sv('eCrownArea', TD.TREE.crown_area || ''); sv('eCrownVol', TD.TREE.crown_volume || ''); sv('eN', hk ? f1(hk.N) : ''); sv('eE', hk ? f1(hk.E) : '');
     sv('eLevel', TD.TREE.level || ''); sv('eDesc', TD.TREE.description || '');
-    if (typeof ApiService !== 'undefined') {
+    if (ApiService) {
       ApiService.get('projects').then(function(res){
         const opts=(res.data||[]).map(function(p){ return '<option value="' + escapeHtml(p.project_id) + '">🚩 ' + escapeHtml(p.name) + '</option>'; }).join('');
         const eP=document.getElementById('eProject'); if(eP){ eP.innerHTML='<option value="">（不屬任何地盤）</option>'+opts; eP.value=TD.TREE.project_id||''; }

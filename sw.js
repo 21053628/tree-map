@@ -1,11 +1,11 @@
-/* 樹木管理系統 - Service Worker v1.0.0-beta (PWA 離線策略重構)
+/* 樹木管理系統 - Service Worker v2.0.0-esm (PWA 離線策略重構，ESM 遷移版)
  * 方案 A - 手寫 Vanilla，無 Workbox
- * SSOT: importScripts 讀 CachePolicy.getSwMaxAge
+ * SSOT: ESM import 讀 CachePolicy.getSwMaxAge
  * 五桶: precache/runtime/data/tiles/images LRU+quota
  * 導航精準殼 + navigationPreload, 接管由前端 SKIP_WAITING
  */
-try { importScripts('./assets/js/core/cache-policy.js'); } catch (e) {}
-const VERSION = '1.0.0-beta';
+import { CachePolicy } from './assets/js/core/cache-policy.js';
+const VERSION = '2.0.0-esm';
 const PRECACHE_NAME = 'precache-' + VERSION;
 const RUNTIME_CACHE = 'runtime-' + VERSION;
 const DATA_CACHE = 'data-' + VERSION;

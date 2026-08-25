@@ -4,7 +4,11 @@
  * 🚀 v1.0.0-beta 統一版本號（正式發佈前整合）
  * 歷史：v2.3 終極優化 → 1. GET 不排隊 2. 3秒極速放棄 3. 寫入才排隊
  */
-const ApiService = (function() {
+import { CacheManager } from './core/cache-manager.js';
+import { ErrorCodes } from './core/error-codes.js';
+import { ProgressBar } from './ui-progress.js';
+import { AuditLog } from './modules/audit-log.js';
+export const ApiService = (function() {
   'use strict';
 
   // 🔥 [v2.3] 極限超時設定
@@ -73,9 +77,9 @@ const ApiService = (function() {
 
   // [Phase6] 本地審計記錄（若有載入 audit-log.js）
   function auditWrite(payload, status, error) {
-    if (typeof window === 'undefined' || !globalThis.AuditLog) return;
+    if (typeof window === 'undefined' || !AuditLog) return;
     try {
-      globalThis.AuditLog.log({
+      AuditLog.log({
         action: 'write',
         type: payload.type || null,
         tree_id: payload.tree_id || payload.treeId || null,
@@ -614,6 +618,5 @@ const ApiService = (function() {
   };
 })();
 
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = ApiService;
-}
+// 🔥 向後相容橋接：module 消費端（app.js / tree-detail 等以裸識別字存取）仍經 globalThis 讀取；待 Phase 8 消費者 import 化後移除
+try { if (typeof globalThis !== 'undefined') globalThis.ApiService = ApiService; } catch (e) {}

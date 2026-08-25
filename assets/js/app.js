@@ -3,6 +3,10 @@
  * v1.0.0-beta - 統一版本號（正式發佈前整合）
  */
 
+import { ApiService } from './api.js';
+import { AuthService } from './auth.js';
+import { Config } from './config.js';
+import { getCacheStats, preheatCache } from './core/coordinates.js';
 import { state } from './modules/state.js';
 import { DOM, closePanel, enableAutoClearFieldErrors } from './modules/dom.js';
 import { initMap } from './modules/map.js';
@@ -21,7 +25,7 @@ import {
 import { load } from './modules/loader.js';
 import { getSpatialStats } from './core/spatial-index.js';
 
-// 全域依賴注入（剩餘：AuthService 尚未轉 ESM）
+// 全域依賴注入
 ApiService.init(Config.API_ENDPOINT);
 setPromptAuth(() => AuthService.promptAuth());
 
@@ -32,7 +36,7 @@ function getPerfMetrics() {
     totalRenders: state.perfMetrics.totalRenders,
     spatialIndex: getSpatialStats(),
     apiStats: ApiService.getStats(),
-    coordCacheStats: CoordUtils.getCacheStats()
+    coordCacheStats: getCacheStats()
   };
 }
 
@@ -112,9 +116,9 @@ function init() {
   enableAutoClearFieldErrors();
 
   if ('requestIdleCallback' in window) {
-    requestIdleCallback(() => CoordUtils.preheatCache());
+    requestIdleCallback(() => preheatCache());
   } else {
-    setTimeout(() => CoordUtils.preheatCache(), 100);
+    setTimeout(() => preheatCache(), 100);
   }
 
   SpeciesRepository.load().catch(function(){});

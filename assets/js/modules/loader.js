@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 資料載入服務（依 project / viewport 按需載入）
  * - 啟動僅載 projects；tree 按 pid 懶載
  * - 支援 viewport bbox（由 map.js 按需呼叫）
@@ -10,12 +10,15 @@ import { hideSearch, buildTokenSearchIndex } from './search.js';
 import { drawTrees } from './trees.js';
 import { drawProjects, buildSelect } from './projects.js';
 import { buildAllSpatialIndexes } from '../core/spatial-index.js';
+import { Config } from '../config.js';
+import { ApiService } from '../api.js';
+import { TreeSnapshot } from '../../../offline.js';
 
 function normalizeTree(t){
   const n = Object.assign({}, t);
   if (typeof n.lat === 'string') n.lat = +n.lat;
   if (typeof n.lng === 'string') n.lng = +n.lng;
-  n._color = (typeof Config !== 'undefined' && Config.TREE_STATUS_COLORS) ? (Config.TREE_STATUS_COLORS[n.status] || Config.TREE_STATUS_COLORS.Unknown) : '#757575';
+  n._color = (Config.TREE_STATUS_COLORS) ? (Config.TREE_STATUS_COLORS[n.status] || Config.TREE_STATUS_COLORS.Unknown) : '#757575';
   return n;
 }
 function snapKeyForProject(pid){ return 'trees:' + String(pid); }
@@ -65,6 +68,8 @@ function isNoCacheOpts_(opts){ try{ return String((opts&&opts.nocache)||'').trim
  * 但 existing 有而 incoming 冇嘅樹木保留（避免 bootstrap 快取較舊時意外刪除本地較新資料）。
  * @returns {{ list: Array, changed: boolean }}
  */
+// 🔥 [v2.5] 已廢棄：reconcileFromBootstrap_ 改用伺服器真源取代，不再使用 merge 邏輯
+// 保留函數定義以防外部或舊版程式碼引用，但 reconcile 已不再呼叫。
 function mergeTreeLists_(existing, incoming) {
   // 🔥 [Bugfix] key 以 project_id + '_' + tree_id 組成，避免跨地盤同 tree_id 互相覆蓋（防禦性；目前呼叫方已按地盤分組）
   var map = new Map();
@@ -85,7 +90,11 @@ function mergeTreeLists_(existing, incoming) {
   var changed = merged.length !== existing.length || incomingCount > 0;
   return { list: merged, changed: changed };
 }
-function reconcileFromBootstrap_(bt){
+function reconcileFromBootstrap_(bt, opts){
+  opts = opts || {};
+  // 🔥 [v2.5] forceEmptyApply：由 fresh revalidate (nocache:1) 呼叫時先設為 true，
+  // 容許伺服器明確回空列表時清空本地資料（全部樹木被刪除的情況）。
+  var forceEmptyApply = opts.forceEmptyApply === true || hasBypass_();
   if(!Array.isArray(bt)) return 0;
   var byPid=new Map();
   for(var i=0;i<bt.length;i++){
@@ -100,20 +109,27 @@ function reconcileFromBootstrap_(bt){
     if(!pid2) continue;
     var incoming=byPid.get(pid2)||[];
     var existing=state.treeSearchIndex.get(pid2)||[];
-    if(!existing.length && incoming.length){
-      // 本地無資料 → 直接採用
-      applyTreesForProject(pid2,incoming,{saveSnapshot:true});
-      changed++;
-    } else if(existing.length && incoming.length){
-      // 兩邊都有 → 保守合併（保留本地專有樹木，incoming 覆蓋共同樹木嘅欄位）
-      var merged = mergeTreeLists_(existing, incoming);
-      if(merged.changed){
-        applyTreesForProject(pid2, merged.list, {saveSnapshot:true});
-        changed++;
+    // 🔥 [v2.5 修復] 伺服器為真源：有返到列表就直接取代，唔再保守合併。
+    // 保守合併 (mergeTreeLists_) 會保留 existing 有而 incoming 冇嘅樹木，
+    // 導致已刪樹木從快照/本地快取中復活，永遠唔會消失。
+    if(incoming.length>0){
+      // 快速比對 key set：完全相同就跳過，避免無謂重繪
+      if(existing.length===incoming.length){
+        var existingKeys=new Set();
+        for(var e=0;e<existing.length;e++) existingKeys.add(String(existing[e].tree_id||''));
+        var allMatch=true;
+        for(var f=0;f<incoming.length;f++){ if(!existingKeys.has(String(incoming[f].tree_id||''))){ allMatch=false; break; } }
+        if(allMatch) continue;
       }
+      applyTreesForProject(pid2, incoming, {saveSnapshot:true, authoritative:true});
+      changed++;
+    } else if(existing.length>0 && forceEmptyApply){
+      // fresh 伺服器回應明確回空列表 → 直接清空（全部樹木已刪）
+      applyTreesForProject(pid2, incoming, {saveSnapshot:true, authoritative:true});
+      var after=(state.treeSearchIndex.get(pid2)||[]).length;
+      if(after!==existing.length) changed++;
     }
-    // existing.length && !incoming.length → 保留本地（避免 bootstrap 快取較舊時清空資料）
-    // 本地已有資料但後端回 0 時，applyTreesForProject 嘅空陣列保護已處理
+    // incoming 空且 !forceEmptyApply → 保留本地（避免快取/表頭問題誤清）
   }
   if(changed){
     if(state.isLocating){
@@ -152,9 +168,12 @@ export function applyTreesForProject(pid, trees, opts){
   if (!pid) return;
   const incoming = Array.isArray(trees) ? trees.map(normalizeTree) : [];
   // 🛡️ 空陣列保護：後端回 0 但本地/快照已有該地盤數據時，不覆蓋並保留舊快照
+  // 🔥 [v2.5 修復] bypass（nocache=1/bust=1）或 authoritative（伺服器真源回應）時允許清空，
+  // 適用於全部樹木被刪除的情況，避免已刪樹木永遠顯示。
   if (!appendViewport && incoming.length===0) {
     const existing = state.treeSearchIndex.get(pid) || [];
-    if (existing.length>0) {
+    const bypassing = hasBypass_() || opts.authoritative === true;
+    if (existing.length>0 && !bypassing) {
       console.warn('[loader] backend returned 0 for '+pid+', keep '+existing.length+' cached trees (header/cache suspected)');
       updateStatus('⚠️ 後端回 0 棵，已保留本地 '+existing.length+' 棵｜請檢查 GAS 表頭/快取後重刷');
       return;
@@ -184,7 +203,12 @@ export function applyTreesForProject(pid, trees, opts){
     }
   }
   rebuildAllIndexes();
-  if (opts.saveSnapshot !== false && globalThis.TreeSnapshot && !appendViewport && incoming.length>0) globalThis.TreeSnapshot.save(snapKeyForProject(pid), incoming).catch(function(){});
+  // 🔥 [v2.5 修復] authoritative 清空時都要 save snapshot，避免下次 reload 再讀到舊快照
+  if (opts.saveSnapshot !== false && TreeSnapshot && !appendViewport) {
+    if (incoming.length>0 || opts.authoritative === true) {
+      TreeSnapshot.save(snapKeyForProject(pid), incoming).catch(function(){});
+    }
+  }
   if (!appendViewport) { state.treesCache.clear(); state.coordGroupsCache = null; }
   hideSearch(); drawTrees(); drawProjects();
 }
@@ -224,14 +248,14 @@ export async function loadTreesForProject(pid, opts){
           }
         } catch(_e) {}
       }
-      applyTreesForProject(pid, trees, { merge:true, appendViewport: !!opts.appendViewport, saveSnapshot: !opts.appendViewport });
+      applyTreesForProject(pid, trees, { merge:true, appendViewport: !!opts.appendViewport, saveSnapshot: !opts.appendViewport, authoritative: true });
       updateStatus('✅ 已載入 ' + trees.length + ' 棵樹');
       return trees;
     } catch(e){
       console.warn('[loadTreesForProject] failed', pid, e);
-      if (!opts.appendViewport && globalThis.TreeSnapshot) {
+      if (!opts.appendViewport && TreeSnapshot) {
         try{
-          const snap = await globalThis.TreeSnapshot.load(snapKeyForProject(pid));
+          const snap = await TreeSnapshot.load(snapKeyForProject(pid));
           if (Array.isArray(snap) && snap.length){
             applyTreesForProject(pid, snap, { merge:true, saveSnapshot:false });
             updateStatus('📴 顯示本地快取（' + snap.length + ' 棵）');
@@ -247,11 +271,11 @@ export async function loadTreesForProject(pid, opts){
 }
 export async function loadProjects(opts){
   opts = opts || {};
-  if (globalThis.TreeSnapshot) {
+  if (TreeSnapshot) {
     try{
-      let snap = await globalThis.TreeSnapshot.load(SNAP_PROJECTS);
+      let snap = await TreeSnapshot.load(SNAP_PROJECTS);
       if (!snap && !opts.skipLegacy) {
-        const legacy = await globalThis.TreeSnapshot.load('main');
+        const legacy = await TreeSnapshot.load('main');
         if (legacy && Array.isArray(legacy.projects) && legacy.projects.length) snap = legacy.projects;
       }
       if (Array.isArray(snap) && snap.length){ applyProjects(snap, { render:true }); if (opts.snapshotOnly) return snap; }
@@ -265,7 +289,7 @@ export async function loadProjects(opts){
       const projects = (res && res.data) ? res.data : (Array.isArray(res) ? res : []);
       if (!projects.length) throw new Error('EMPTY_RESPONSE');
       applyProjects(projects, { render:true });
-      if (globalThis.TreeSnapshot) globalThis.TreeSnapshot.save(SNAP_PROJECTS, projects).catch(function(){});
+      if (TreeSnapshot) TreeSnapshot.save(SNAP_PROJECTS, projects).catch(function(){});
       return projects;
     }catch(e){
       lastErr = e;
@@ -278,13 +302,13 @@ export async function loadProjects(opts){
 // 依 project/viewport 的新 load：僅拉 projects，tree 懶載
 // 會遷移舊 'main' 快照為分區快照
 async function migrateLegacyMain(){
-  if (!globalThis.TreeSnapshot) return;
+  if (!TreeSnapshot) return;
   try{
-    const legacy = await globalThis.TreeSnapshot.load('main');
+    const legacy = await TreeSnapshot.load('main');
     if (!legacy || !Array.isArray(legacy.trees) || !legacy.trees.length) return;
     const byPid = new Map();
     for (const t of legacy.trees){ const pid=String(t.project_id||''); if(!byPid.has(pid)) byPid.set(pid,[]); byPid.get(pid).push(t); }
-    for (const [pid, arr] of byPid){ await globalThis.TreeSnapshot.save(snapKeyForProject(pid), arr).catch(function(){}); }
+    for (const [pid, arr] of byPid){ await TreeSnapshot.save(snapKeyForProject(pid), arr).catch(function(){}); }
   }catch(e){}
 }
 export async function load(){
@@ -294,11 +318,11 @@ export async function load(){
   let hasLocal = false;
   // 1) projects 快照 → 立即渲染地盤
   try{
-    if (globalThis.TreeSnapshot){
-      const snap = await globalThis.TreeSnapshot.load(SNAP_PROJECTS);
+    if (TreeSnapshot){
+      const snap = await TreeSnapshot.load(SNAP_PROJECTS);
       if (Array.isArray(snap) && snap.length){ applyProjects(snap,{render:true}); hasLocal=true; }
       else {
-        const legacy = await globalThis.TreeSnapshot.load('main');
+        const legacy = await TreeSnapshot.load('main');
         if (legacy && Array.isArray(legacy.projects) && legacy.projects.length){ applyProjects(legacy.projects,{render:true}); hasLocal=true; }
       }
     }
@@ -308,10 +332,10 @@ export async function load(){
   // 嘗試從已有的 per-project 快照預熱當前地盤（若 URL 帶 project_id 或已有 curProject）
   const urlPid = new URLSearchParams(location.search).get('project_id') || new URLSearchParams(location.search).get('prj') || '';
   const preloadPid = urlPid || state.curProject || '';
-  if(hasBypass_() && globalThis.TreeSnapshot){ try{ await globalThis.TreeSnapshot.delete(SNAP_PROJECTS); }catch(e){} if(preloadPid){ try{ await globalThis.TreeSnapshot.delete(snapKeyForProject(preloadPid)); }catch(e){} } }
-  if (preloadPid && globalThis.TreeSnapshot){
+  if(hasBypass_() && TreeSnapshot){ try{ await TreeSnapshot.delete(SNAP_PROJECTS); }catch(e){} if(preloadPid){ try{ await TreeSnapshot.delete(snapKeyForProject(preloadPid)); }catch(e){} } }
+  if (preloadPid && TreeSnapshot){
     try{
-      const snap = await globalThis.TreeSnapshot.load(snapKeyForProject(preloadPid));
+      const snap = await TreeSnapshot.load(snapKeyForProject(preloadPid));
       if (Array.isArray(snap) && snap.length){ applyTreesForProject(preloadPid, snap, { saveSnapshot:false }); hasLocal=true; }
     }catch(e){}
   }
@@ -320,10 +344,10 @@ export async function load(){
     await loadProjects({ skipLegacy:true });
     updateStatus('✅ 地盤已更新');
     // 快照秒開 + bootstrap 對帳（快且準，刪樹亦即時）
-    if (globalThis.TreeSnapshot && Array.isArray(state.PROJECTS) && state.PROJECTS.length) {
+    if (TreeSnapshot && Array.isArray(state.PROJECTS) && state.PROJECTS.length) {
       (async function hydrateFast(){
         try{
-          var jobs=state.PROJECTS.map(function(pp){ var pid=normalizePid(pp.project_id); if(!pid||state.treeSearchIndex.has(pid)) return null; return globalThis.TreeSnapshot.load(snapKeyForProject(pid)).then(function(snap){ if(Array.isArray(snap)&&snap.length) applyTreesForProject(pid, snap, {saveSnapshot:false}); }).catch(function(){}); });
+          var jobs=state.PROJECTS.map(function(pp){ var pid=normalizePid(pp.project_id); if(!pid||state.treeSearchIndex.has(pid)) return null; return TreeSnapshot.load(snapKeyForProject(pid)).then(function(snap){ if(Array.isArray(snap)&&snap.length) applyTreesForProject(pid, snap, {saveSnapshot:false}); }).catch(function(){}); });
           await Promise.all(jobs.filter(Boolean));
           drawProjects();
         }catch(_){ drawProjects(); }
@@ -341,7 +365,7 @@ export async function load(){
           (function scheduleRevalidate(attempt){ attempt = attempt || 0; var _d=1200; try{ _d=(typeof state!=='undefined' && state.isLocating)?2600:1200; }catch(e){}
             if(attempt > 8){ return; }
             setTimeout(async function(){ try{ if(typeof state!=='undefined' && state.isLocating){ scheduleRevalidate(attempt+1); return; } }catch(e){}
-              try{ var bf=await ApiService.get('bootstrap', {nocache:'1'}); var btf=(bf&&bf.data&&bf.data.trees)?bf.data.trees:[]; _bootstrapFallbackCache={data:btf, ts:Date.now()}; var ch2=reconcileFromBootstrap_(btf); try{ console.warn('[loader] revalidate changed='+ch2+' total='+btf.length); }catch(e){} }catch(e){}
+              try{ var bf=await ApiService.get('bootstrap', {nocache:'1'}); var btf=(bf&&bf.data&&bf.data.trees)?bf.data.trees:[]; _bootstrapFallbackCache={data:btf, ts:Date.now()}; var ch2=reconcileFromBootstrap_(btf, {forceEmptyApply:true}); try{ console.warn('[loader] revalidate changed='+ch2+' total='+btf.length); }catch(e){} }catch(e){}
             }, _d);
           })(0);
         }
@@ -358,10 +382,10 @@ export async function load(){
         const projects = res.data.projects || [];
         const trees = res.data.trees || [];
         applyData(projects, trees);
-        if (globalThis.TreeSnapshot){
-          globalThis.TreeSnapshot.save(SNAP_PROJECTS, projects).catch(function(){});
+        if (TreeSnapshot){
+          TreeSnapshot.save(SNAP_PROJECTS, projects).catch(function(){});
           const byPid=new Map(); for(const t of trees){ const pid=String(t.project_id||''); if(!byPid.has(pid)) byPid.set(pid,[]); byPid.get(pid).push(t); }
-          for(const [pid,arr] of byPid) globalThis.TreeSnapshot.save(snapKeyForProject(pid), arr).catch(function(){});
+          for(const [pid,arr] of byPid) TreeSnapshot.save(snapKeyForProject(pid), arr).catch(function(){});
         }
         updateStatus('✅ 資料已載入（兼容模式）');
         return;

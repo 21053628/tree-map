@@ -52,25 +52,25 @@
 <script src="assets/vendor/leaflet.js" defer></script>
 
 <!-- 🔥 環境注入（最優先） -->
-<script src="assets/js/env.js"></script>
+<script type="module" src="assets/js/env.js"></script>
 <!-- 🔥 [Phase6] 統一 services：config → audit-log → api → auth -->
 <!-- 註：座標轉換由 coordinates.js（ESM）統一提供，無需 coord-lazy.js。 -->
-<script src="assets/js/core/cache-policy.js"></script>
-<script src="assets/js/core/cache-manager.js"></script>
-<script src="assets/js/config.js"></script>
-<script src="assets/js/modules/audit-log.js"></script>
-<script src="assets/js/core/error-codes.js"></script>
-<script src="assets/js/api.js"></script>
-<script src="assets/js/auth.js"></script>
-<script src="assets/vendor/purify.min.js"></script>
+<script type="module" src="assets/js/core/cache-policy.js"></script>
+<script type="module" src="assets/js/core/cache-manager.js"></script>
+<script type="module" src="assets/js/config.js"></script>
+<script type="module" src="assets/js/modules/audit-log.js"></script>
+<script type="module" src="assets/js/core/error-codes.js"></script>
+<script type="module" src="assets/js/api.js"></script>
+<script type="module" src="assets/js/auth.js"></script>
+<script defer src="assets/vendor/purify.min.js"></script>
 <!-- 統一座標工具（ESM 真源，coordinates.js 提供 CoordUtils/CoordLazy 全域，無需 coord-lazy.js） -->
 <script type="module" src="assets/js/core/coordinates.js"></script>
 
 <!-- 🔥 PWA 離線佇列必須先於 t.js module 執行，確保 ApiService hook 已建立。 -->
-<script src="offline.js"></script>
-<script src="assets/js/modules/sync-panel.js"></script>
+<script type="module" src="offline.js"></script>
+<script type="module" src="assets/js/modules/sync-panel.js"></script>
 <script type="module" src="assets/js/pages/t.js"></script>
 
-<script defer src="assets/js/sw-register.js"></script>
+<script type="module" src="assets/js/sw-register.js"></script>
 </body>
 </html>

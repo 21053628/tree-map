@@ -4,7 +4,10 @@
  * - 成功後取得 Token，存 4 小時，過期自動重新詢問
  * - CSRF Token 與會話 Token 一同存儲，每次請求需攜帶
  */
-const AuthService = (function() {
+import { Config } from './config.js';
+import { ApiService } from './api.js';
+import { ErrorCodes } from './core/error-codes.js';
+export const AuthService = (function() {
   'use strict';
 
   const TOKEN_KEY = (typeof Config !== 'undefined' && Config.AUTH && Config.AUTH.STORAGE_KEY)
@@ -220,6 +223,5 @@ const AuthService = (function() {
   };
 })();
 
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = AuthService;
-}
+// 🔥 向後相容橋接：module 消費端（app.js / tree-detail 等以裸識別字存取）及經典腳本仍經 globalThis 讀取
+try { if (typeof globalThis !== 'undefined') globalThis.AuthService = AuthService; } catch (e) {}

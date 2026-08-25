@@ -3,6 +3,10 @@
  * TTL 86400s, memoryTtl 3600000ms, snapshot 'species', backend GET ?action=species fallback to data/trees_data.json
  */
 import { state } from './state.js';
+import { CacheManager } from '../core/cache-manager.js';
+import { CachePolicy } from '../core/cache-policy.js';
+import { ApiService } from '../api.js';
+import { TreeSnapshot } from '../../../offline.js';
 
 let _cache = null;
 let _mapById = new Map();
@@ -14,9 +18,8 @@ const STATIC_URL = 'data/trees_data.json';
 
 function _resolveMemoryTtl(){
   try{
-    var g = typeof globalThis!=='undefined'?globalThis:null;
-    if(g&&g.CacheManager&&g.CacheManager.resolveMemoryTtl) return g.CacheManager.resolveMemoryTtl('species');
-    if(g&&g.CachePolicy&&g.CachePolicy.getMemoryTtl) return g.CachePolicy.getMemoryTtl('species');
+    if (CacheManager.resolveMemoryTtl) return CacheManager.resolveMemoryTtl('species');
+    if (CachePolicy.getMemoryTtl) return CachePolicy.getMemoryTtl('species');
   }catch(e){}
   return 3600*1000;
 }
@@ -57,17 +60,16 @@ function scoreSpecies(sp,qTokens){
   return score;
 }
 function snapshotLoad(){
-  try{ var g=typeof globalThis!=='undefined'?globalThis:null; if(g&&g.TreeSnapshot&&g.TreeSnapshot.load) return g.TreeSnapshot.load(SNAP_KEY); }catch(e){}
+  try{ if(TreeSnapshot&&TreeSnapshot.load) return TreeSnapshot.load(SNAP_KEY); }catch(e){}
   return Promise.resolve(null);
 }
 function snapshotSave(list){
-  try{ var g=typeof globalThis!=='undefined'?globalThis:null; if(g&&g.TreeSnapshot&&g.TreeSnapshot.save) g.TreeSnapshot.save(SNAP_KEY,list).catch(function(){}); }catch(e){}
+  try{ if(TreeSnapshot&&TreeSnapshot.save) TreeSnapshot.save(SNAP_KEY,list).catch(function(){}); }catch(e){}
 }
 async function fetchViaApi(){
   try{
-    var g=typeof globalThis!=='undefined'?globalThis:null;
-    if(!g||!g.ApiService||!g.ApiService.get) return null;
-    var res=await g.ApiService.get('species');
+    if(!ApiService||!ApiService.get) return null;
+    var res=await ApiService.get('species');
     if(res&&Array.isArray(res.data)&&res.data.length) return res.data;
     if(Array.isArray(res)&&res.length) return res;
   }catch(e){}
@@ -143,10 +145,9 @@ export async function refresh(opts){ opts=opts||{}; opts.force=true; return load
 export function clear(){
   _cache=null; _mapById.clear(); _mapByLower.clear(); _loadedAt=0; _promise=null; _syncState(null,null);
   try{
-    var g=typeof globalThis!=='undefined'?globalThis:null;
-    if(g&&g.TreeSnapshot){ if(g.TreeSnapshot.remove) g.TreeSnapshot.remove(SNAP_KEY).catch(function(){}); else if(g.TreeSnapshot.save) g.TreeSnapshot.save(SNAP_KEY,[]).catch(function(){}); }
-    if(g&&g.CacheManager&&g.CacheManager.notifySwInvalidate) g.CacheManager.notifySwInvalidate('species');
-    if(g&&g.ApiService&&g.ApiService.clearCache){ try{ g.ApiService.clearCache(); }catch(e2){} }
+    if (TreeSnapshot) { if (TreeSnapshot.remove) TreeSnapshot.remove(SNAP_KEY).catch(function(){}); else if (TreeSnapshot.save) TreeSnapshot.save(SNAP_KEY,[]).catch(function(){}); }
+    if (CacheManager.notifySwInvalidate) CacheManager.notifySwInvalidate('species');
+    if (ApiService.clearCache) { try { ApiService.clearCache(); } catch (e2) {} }
   }catch(e){}
 }
 export function getStats(){ return { count:_cache?_cache.length:0, loadedAt:_loadedAt, fresh:_isFresh(), hasPromise:!!_promise }; }

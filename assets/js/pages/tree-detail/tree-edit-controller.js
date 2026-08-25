@@ -1,9 +1,12 @@
+import { ApiService } from '../../api.js';
+import { ErrorCodes } from '../../core/error-codes.js';
+import { toWGS84Async } from '../../core/coordinates.js';
 import * as TDUtils from './td-utils.js';
 import { post } from './inspection-controller.js';
 import { TD } from './route.js';
 import { updateUrlOnRename } from './route.js';
 const $ = function(s){ return document.querySelector(s); };
-const toWGS = globalThis.CoordLazy ? globalThis.CoordLazy.toWGS : function(){ return Promise.resolve(null); };
+const toWGS = toWGS84Async;
 function requireTreeId(){ if(!TD.id){ alert('⚠️ 缺少樹木編號（tree_id），請由地圖選擇樹木'); return false; } return true; }
 export async function saveTreeInfo(){
   if (!requireTreeId()) return;
@@ -46,7 +49,7 @@ export async function saveTreeInfo(){
         setTimeout(function(){ location.reload(); }, 600);
         return;
       }
-      alert('❌ 失敗：' + (typeof ErrorCodes !== 'undefined' ? ErrorCodes.messageForResponse(r, r.error) : r.error));
+      alert('❌ 失敗：' + ErrorCodes.messageForResponse(r, r.error));
     }
   }catch(err){ alert('❌ 連線錯誤：' + err.message); }
 }

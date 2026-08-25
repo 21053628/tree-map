@@ -10,6 +10,10 @@ import { bringTreeToFront } from './trees.js';
 import { startPick } from './draw.js'; // 🔥 [Phase1]
 import { load, loadProjects, loadTreesForProject, bustBootstrapCache, applyTreesForProject } from './loader.js'; // 依 project 按需載入
 import { VALID_HEALTH, isValidHK80 } from '../core/utils.js';
+import { ApiService } from '../api.js';
+import { ErrorCodes } from '../core/error-codes.js';
+import { CacheManager } from '../core/cache-manager.js';
+import { toWGS84, toHK80, format1 } from '../core/coordinates.js';
 
 // ========== [Phase4] 提交前驗證 ==========
 
@@ -57,7 +61,7 @@ export async function doCreateProject() {
     return;
   }
 
-  const w = CoordUtils.toWGS84(N, E);
+  const w = toWGS84(N, E);
   if (!w) {
     formFieldError('#pN', '座標轉換失敗');
     formFieldError('#pE');
@@ -84,10 +88,10 @@ export async function doCreateProject() {
       state.treesCache.clear();
       state.spatialIndexCache = null;
       state.coordGroupsCache = null;
-      if (typeof ApiService !== 'undefined' && ApiService.clearCache) try{ ApiService.clearCache(); }catch(e){}
+      if (ApiService.clearCache) try{ ApiService.clearCache(); }catch(e){}
       try { await loadProjects(); } catch(e){ await load(); }
     } else {
-      showToast('❌ ' + (typeof ErrorCodes !== 'undefined' ? ErrorCodes.messageForResponse(r, r.error) : r.error), 'error');
+      showToast('❌ ' + ErrorCodes.messageForResponse(r, r.error), 'error');
     }
   } catch (error) {
     showToast('❌ 請求失敗：' + error.message, 'error');
@@ -153,9 +157,9 @@ export function pickTreeLocation() {
   setTimeout(function () { if (panelEl) panelEl.classList.remove('no-anim'); }, 900);
   closePanel();
   startPick(function (latlng) {
-    const hk = CoordUtils.toHK80(latlng.lat, latlng.lng);
+    const hk = toHK80(latlng.lat, latlng.lng);
     if (!hk) { showToast('HK80 座標轉換失敗', 'error'); return; }
-    openTreeForm(Object.assign({}, snap, { N: CoordUtils.format1(hk.N), E: CoordUtils.format1(hk.E) }));
+    openTreeForm(Object.assign({}, snap, { N: format1(hk.N), E: format1(hk.E) }));
   }, '📍 按一下選擇樹木位置');
 }
 
@@ -195,7 +199,7 @@ export async function doCreateTree() {
     return;
   }
 
-  const w = CoordUtils.toWGS84(N, E);
+  const w = toWGS84(N, E);
   if (!w) {
     formFieldError('#tN', '座標轉換失敗');
     formFieldError('#tE');
@@ -230,8 +234,8 @@ export async function doCreateTree() {
       state.spatialIndexCache = null;
       state.coordGroupsCache = null;
       try{ bustBootstrapCache(); }catch(e){}
-      if (typeof ApiService !== 'undefined' && ApiService.clearCache) try{ ApiService.clearCache(state.curProject); }catch(e){}
-      try{ if (typeof CacheManager!=='undefined' && CacheManager.notifySwInvalidate) CacheManager.notifySwInvalidate('create_tree', {project_id: state.curProject}); }catch(e){}
+      if (ApiService.clearCache) try{ ApiService.clearCache(state.curProject); }catch(e){}
+      try{ if (CacheManager.notifySwInvalidate) CacheManager.notifySwInvalidate('create_tree', {project_id: state.curProject}); }catch(e){}
       let loaded = null;
       for(let attempt=0; attempt<2; attempt++){
         try{ loaded = await loadTreesForProject(state.curProject, {nocache:'1'}); break; }catch(e){ if(attempt===0) await new Promise(function(rr){ setTimeout(rr, 900); }); else try{ await load(); }catch(_2){} }

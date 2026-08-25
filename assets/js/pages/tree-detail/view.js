@@ -1,8 +1,9 @@
+import { toHK80Async } from '../../core/coordinates.js';
 import { escapeHtml, format1, format5 } from '../../core/utils.js';
 import * as TDUtils from './td-utils.js';
 const $ = function (s) { return document.querySelector(s); };
 const f1 = format1; const f5 = format5;
-const toHK = globalThis.CoordLazy ? globalThis.CoordLazy.toHK : function () { return Promise.resolve(null); };
+const toHK = toHK80Async;
 export function setupImageLoadingStates(root) {
   if (!root) return;
   root.querySelectorAll('.image-shell').forEach(function (shell) {

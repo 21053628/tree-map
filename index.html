@@ -107,33 +107,33 @@
 <div id="map"></div>
 
 <!-- 0️⃣ 環境注入（最優先，runtime 注入 API_ENDPOINT） -->
-<script src="assets/js/env.js"></script>
+<script type="module" src="assets/js/env.js"></script>
 <!-- 自托管第三方函式庫（defer，按順序載入：proj4 需喺 coordinates.js module 之前就緒） -->
 <script defer src="assets/vendor/leaflet.js"></script>
 <script defer src="assets/vendor/leaflet.markercluster.js"></script>
 <script defer src="assets/vendor/proj4.js"></script>
 <script defer src="assets/vendor/purify.min.js"></script>
 
-<!-- 1️⃣ 自家全域腳本（defer：不阻塞 HTML 首屏解析，仍按順序執行） -->
-<script defer src="assets/js/core/cache-policy.js"></script>
-<script defer src="assets/js/core/cache-manager.js"></script>
-<script defer src="assets/js/config.js"></script>
-<script defer src="assets/js/modules/audit-log.js"></script>
-<!-- 統一座標工具（ESM 真源，coordinates.js 提供 CoordUtils/CoordLazy 全域，無需 utils.js shim） -->
+<!-- 1️⃣ 自家模組腳本（ES Module，按文件順序執行，無需手動 defer） -->
+<script type="module" src="assets/js/core/cache-policy.js"></script>
+<script type="module" src="assets/js/core/cache-manager.js"></script>
+<script type="module" src="assets/js/config.js"></script>
+<script type="module" src="assets/js/modules/audit-log.js"></script>
+<!-- 統一座標工具（ESM 真源，coordinates.js 提供 CoordUtils/CoordLazy 全域） -->
 <!-- 注意：proj4.js 已喺上方 defer 載入，coordinates.js module 執行時 proj4 必定就緒 -->
 <script type="module" src="assets/js/core/coordinates.js"></script>
-<script defer src="assets/js/core/error-codes.js"></script>
-<script defer src="assets/js/ui-progress.js"></script>
-<script defer src="assets/js/ui-icons.js"></script>
-<script defer src="assets/js/api.js"></script>
-<script defer src="assets/js/auth.js"></script>
-<script defer src="offline.js"></script>
-<script defer src="assets/js/modules/sync-panel.js"></script>
+<script type="module" src="assets/js/core/error-codes.js"></script>
+<script type="module" src="assets/js/ui-progress.js"></script>
+<script type="module" src="assets/js/ui-icons.js"></script>
+<script type="module" src="assets/js/api.js"></script>
+<script type="module" src="assets/js/auth.js"></script>
+<script type="module" src="offline.js"></script>
+<script type="module" src="assets/js/modules/sync-panel.js"></script>
 
 <!-- 3️⃣ 主入口（module 本身即 defer） -->
 <script type="module" src="assets/js/app.js"></script>
 
 <!-- 🔥 PWA Service Worker 註冊（外部化，避免 CSP 擋掉 inline script） -->
-<script defer src="assets/js/sw-register.js"></script>
+<script type="module" src="assets/js/sw-register.js"></script>
 </body>
 </html>

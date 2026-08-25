@@ -1,13 +1,10 @@
 /**
- * 樹木管理系統 - Sync Center 同步狀態面板 (Phase 3)
- * 純 plain script（IIFE），依賴 offline.js 暴露的：
- *   globalThis.OfflineQueue / globalThis.syncNow / globalThis.pwaToast
+ * 樹木管理系統 - Sync Center 同步狀態面板 (Phase 3, ES Module)
+ * 依賴 offline.js / audit-log.js 的 ESM 導出
  * 用途：前線人員不需開啟 devtools 都知道同步狀態、可重試／匯出失敗記錄
  */
-(function () {
-  'use strict';
-
-  if (typeof globalThis.OfflineQueue === 'undefined') return; // offline.js 未載入就不顯示
+import { OfflineQueue, pwaToast, syncNow } from '../../../offline.js';
+import { AuditLog } from './audit-log.js';
 
   var BADGE_ID = 'syncBadge';
   var PANEL_ID = 'syncPanel';
@@ -232,7 +229,7 @@
 
     _refreshPromise = (async function () {
       var items = [];
-      try { items = await globalThis.OfflineQueue.all(); } catch (e) { items = []; }
+      try { items = await OfflineQueue.all(); } catch (e) { items = []; }
 
       var pending = 0, failed = 0, lastSync = 0, failedItems = [];
       items.forEach(function (it) {
@@ -328,7 +325,7 @@
 
     _manualSyncPromise = (async function () {
       try {
-        await globalThis.syncNow();
+        await syncNow();
       } finally {
         await refresh();
       }
@@ -342,29 +339,29 @@
   }
 
   async function doRetryOne(id) {
-    var r = await globalThis.OfflineQueue.retryOne(id);
-    if (r && r.ok === false) { if (globalThis.pwaToast) globalThis.pwaToast('⚠️ ' + r.error); }
+    var r = await OfflineQueue.retryOne(id);
+    if (r && r.ok === false) { if (pwaToast) pwaToast('⚠️ ' + r.error); }
     refresh();
   }
 
   async function doRetryAll() {
-    var n = await globalThis.OfflineQueue.retryAllFailed();
-    if (globalThis.pwaToast) {
-      globalThis.pwaToast(navigator.onLine ? ('🔁 已重排 ' + n + ' 筆失敗記錄') : ('🔁 已重排 ' + n + ' 筆，連線後自動同步'));
+    var n = await OfflineQueue.retryAllFailed();
+    if (pwaToast) {
+      pwaToast(navigator.onLine ? ('🔁 已重排 ' + n + ' 筆失敗記錄') : ('🔁 已重排 ' + n + ' 筆，連線後自動同步'));
     }
     refresh();
   }
 
   async function doDelete(id) {
     if (!confirm('確定刪除此失敗記錄？刪除後無法復原。')) return;
-    await globalThis.OfflineQueue.remove(id);
+    await OfflineQueue.remove(id);
     refresh();
   }
 
   async function doExport() {
-    var items = await globalThis.OfflineQueue.all();
+    var items = await OfflineQueue.all();
     var failed = items.filter(function (it) { return it.status === 'failed'; });
-    if (!failed.length) { if (globalThis.pwaToast) globalThis.pwaToast('沒有失敗記錄可匯出'); return; }
+    if (!failed.length) { if (pwaToast) pwaToast('沒有失敗記錄可匯出'); return; }
 
     var data = failed.map(function (it) {
       var p = {};
@@ -399,9 +396,9 @@
   }
 
   async function doExportLog() {
-    if (typeof globalThis.AuditLog === 'undefined') { if (globalThis.pwaToast) globalThis.pwaToast('⚠️ 診斷記錄未啟用'); return; }
-    var n = globalThis.AuditLog.exportJSON();
-    if (globalThis.pwaToast) globalThis.pwaToast('🧾 已匯出 ' + n + ' 筆診斷記錄');
+    if (typeof AuditLog === 'undefined') { if (pwaToast) pwaToast('⚠️ 診斷記錄未啟用'); return; }
+    var n = AuditLog.exportJSON();
+    if (pwaToast) pwaToast('🧾 已匯出 ' + n + ' 筆診斷記錄');
   }
 
   function startPolling() {
@@ -440,5 +437,4 @@
   } else {
     init();
   }
-})();
 

@@ -1,5 +1,5 @@
 /**
- * 樹木管理系統 - 配置模組（ESM，零 window 橋接）
+ * 樹木管理系統 - 配置模組（ES Module，零 window 橋接）
  *
  * 環境注入優先級（高 → 低）：
  * 1. ENV.API_ENDPOINT  (assets/js/env.js - ESM 注入，CI 生成)
@@ -44,25 +44,25 @@ function isValidGasExecEndpointFallback_(endpoint) {
 const Config = {
   // API 端點配置 - 由 resolveApiEndpoint_() 環境注入解析，避免硬編碼
   API_ENDPOINT: null,
-  
+
   // 認證配置
   AUTH: {
     SESSION_DURATION: 4 * 60 * 60 * 1000, // 4 小時（縮短以降低 token 洩漏風險）
     STORAGE_KEY: 'tree_staff_token'
   },
-  
+
   // 座標系統定義（單一真源：assets/js/core/coordinates.js → Config.PROJECTIONS 唯讀映射；此處保留硬編碼作為未載入統一模組時的 fallback）
-  PROJECTIONS: (function(){
-    try{
-      var g=typeof globalThis!=='undefined'?globalThis:null;
-      if(g&&g.CoordUtils&&g.CoordUtils.PROJECTIONS) return g.CoordUtils.PROJECTIONS;
-    }catch(e){}
+  PROJECTIONS: (function () {
+    try {
+      var g = typeof globalThis !== 'undefined' ? globalThis : null;
+      if (g && g.CoordUtils && g.CoordUtils.PROJECTIONS) return g.CoordUtils.PROJECTIONS;
+    } catch (e) {}
     return {
       HK80: '+proj=tmerc +lat_0=22.31213333333334 +lon_0=114.1785555555556 +k=1 +x_0=836694.05 +y_0=819069.8 +ellps=intl +towgs84=-162.619,-276.959,-161.764,0.067753,-2.243649,-1.158827,-1.094246 +units=m +no_defs',
       WGS84: '+proj=longlat +datum=WGS84 +no_defs'
     };
   })(),
-  
+
   // 🎨 樹木狀態顏色（v2.32 更新）
   TREE_STATUS_COLORS: {
     Normal: '#2E7D32',     // 翡翠綠
@@ -72,7 +72,7 @@ const Config = {
     Dead: '#000000',       // 純黑色
     Unknown: '#757575'     // 未知（灰色）
   },
-  
+
   // 地圖配置
   MAP: {
     DEFAULT_CENTER: [22.40, 114.18],
@@ -89,8 +89,8 @@ const Config = {
 
   // 📷 圖片上傳限制（前後端一致）
   UPLOAD: {
-    ALLOWED_MIMES: ['image/jpeg','image/png','image/webp'],
-    ALLOWED_EXTS: ['jpg','jpeg','png','webp'],
+    ALLOWED_MIMES: ['image/jpeg', 'image/png', 'image/webp'],
+    ALLOWED_EXTS: ['jpg', 'jpeg', 'png', 'webp'],
     ACCEPT: 'image/jpeg,image/png,image/webp',
     MAX_BYTES: 10 * 1024 * 1024, // 10MB 解碼後
     MAX_COUNT: 10, // 單次/單筆最多 10 張
@@ -131,11 +131,10 @@ function initConfig(apiEndpoint) {
   if (resolved) Config.API_ENDPOINT = resolved;
 })();
 
-// 匯出至全域（零 window 橋接，透過 globalThis）
+export { Config, initConfig };
+
+// 🔥 向後相容橋接：經典腳本消費端（api.js / auth.js / offline.js）及 module 消費端（app.js 裸識別字）仍經 globalThis 讀取
 try {
   var _gCfg = typeof globalThis !== 'undefined' ? globalThis : null;
   if (_gCfg) { _gCfg.Config = Config; _gCfg.initConfig = initConfig; }
 } catch (e) {}
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { Config, initConfig };
-}

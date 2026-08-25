@@ -1,3 +1,5 @@
+import { ApiService } from '../../api.js';
+import { Config } from '../../config.js';
 import { escapeHtml } from '../../core/utils.js';
 import * as TDLogs from './td-logs.js';
 import { initRoute, TD } from './route.js';
@@ -10,7 +12,7 @@ import { removePhoto } from './photo-controller.js';
 import { initNfcNavigation } from './nfc-navigation.js';
 
 // expose globals for auth-gate / HTML bindings
-if (typeof ApiService !== 'undefined' && typeof Config !== 'undefined' && Config.API_ENDPOINT) {
+if (Config.API_ENDPOINT) {
   try { ApiService.init(Config.API_ENDPOINT); } catch (e) {}
 }
 initNfcNavigation();

@@ -5,9 +5,9 @@
  *       v3.0.1 - [修復] 自動更新：檢測到新版本 → 自動清空快取（SW CacheStorage + localStorage tree_cache_*）→ SKIP_WAITING → 自動 reload
  *               （舊版「點擊重新載入」因 CSS .offline-toast{pointer-events:none} 令 toast 無法點擊而失效，改為全自動免點擊）
  */
-(function () {
-  'use strict';
-  if (!('serviceWorker' in navigator)) return;
+import { pwaToast } from '../../offline.js';
+
+if ('serviceWorker' in navigator) {
 
   var _autoUpdating = false;
 
@@ -58,7 +58,7 @@
   }
 
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+    navigator.serviceWorker.register('sw.js', { type: 'module', updateViaCache: 'none' }).then(function (reg) {
       // 已有 waiting 的 SW：自動更新
       if (reg.waiting) autoUpdate(reg);
       reg.addEventListener('updatefound', function () {
@@ -81,4 +81,4 @@
       window.location.reload();
     });
   });
-})();
+}

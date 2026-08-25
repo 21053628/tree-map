@@ -1,7 +1,8 @@
+import { Config } from '../../config.js';
 const $ = function (s) { return document.querySelector(s); };
 
 function getUploadLimits(){
-  const up = (typeof Config !== 'undefined' && Config.UPLOAD) ? Config.UPLOAD : null;
+  const up = Config.UPLOAD ? Config.UPLOAD : null;
   return {
     allowedMimes: (up && up.ALLOWED_MIMES) || ['image/jpeg','image/png','image/webp'],
     accept: (up && up.ACCEPT) || 'image/jpeg,image/png,image/webp',

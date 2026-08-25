@@ -9,8 +9,11 @@
  *   - cleanupExpired 只清理已同步(synced)且過期記錄，不再刪除 pending/failed
  *   - 保留既有：修正 IndexedDB 交易 Promise 包裝、逐筆同步、warmGAS no-cors、finally 重置 _syncing
  */
-(function() {
-  'use strict';
+import { ApiService } from './assets/js/api.js';
+import { Config } from './assets/js/config.js';
+import { CacheManager } from './assets/js/core/cache-manager.js';
+import { ErrorCodes } from './assets/js/core/error-codes.js';
+import { AuditLog } from './assets/js/modules/audit-log.js';
 
   // ========== 設定 ==========
   // 🔥 [Phase1] 統一由 Config.API_ENDPOINT 管理，移除硬編碼 fallback
@@ -69,10 +72,10 @@
 
   // [Phase6] 本地審計記錄（若有載入 audit-log.js）
   function auditWrite(payload, action, status, error) {
-    if (typeof window === 'undefined' || !globalThis.AuditLog) return;
+    if (typeof window === 'undefined' || !AuditLog) return;
     var p = payload || {};
     try {
-      globalThis.AuditLog.log({
+      AuditLog.log({
         action: action,
         type: p.type || null,
         tree_id: p.tree_id || p.treeId || null,
@@ -542,7 +545,24 @@
     return openDB().then(function(db) {
       return new Promise(function(resolve) {
         var req = db.transaction(SNAPSHOT_STORE, 'readonly').objectStore(SNAPSHOT_STORE).get(key);
-        req.onsuccess = function() { resolve(req.result ? req.result.data : null); };
+        req.onsuccess = function() {
+          var result = req.result;
+          if (!result) { resolve(null); return; }
+          // 🔥 [v2.5 修復] 快照 TTL 過期檢查：超過 CACHE_MAX_AGE (預設 24h) 嘅快照視為無效，
+          // 強制下次從伺服器重新載入，避免已刪樹木因快照無限期有效而永遠唔消失。
+          if (Date.now() - (result.ts || 0) > CACHE_MAX_AGE) {
+            // 非同步刪除過期快照，唔阻塞 resolve
+            try {
+              var delTx = db.transaction(SNAPSHOT_STORE, 'readwrite');
+              delTx.objectStore(SNAPSHOT_STORE).delete(key);
+              delTx.oncomplete = function(){};
+              delTx.onerror = function(){};
+            } catch(e) {}
+            resolve(null);
+            return;
+          }
+          resolve(result.data);
+        };
         req.onerror = function() { resolve(null); };
       });
     });
@@ -883,15 +903,22 @@
 
   setTimeout(warmGAS, 2000);
 
-  // ========== 全域暴露 ==========
-  globalThis.OfflineQueue = OfflineQueue;
-  globalThis.pwaToast = pwaToast;
-  globalThis.syncOutbox = syncOutbox;
-  globalThis.syncNow = syncNow;
-  globalThis.warmGAS = warmGAS;
-  globalThis.TreeSnapshot = { save: snapSave, load: snapLoad, remove: snapRemove };
+  // ========== ESM 導出 ==========
+  export const TreeSnapshot = { save: snapSave, load: snapLoad, remove: snapRemove };
+  export { OfflineQueue, pwaToast, syncOutbox, syncNow, warmGAS };
 
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     setTimeout(cleanupExpired, 3000);
   }
-})();
+
+  // 🔥 向後相容橋接：tree-detail 頁 module 消費端（inspection-controller.js / loader.js / species.js）仍經 globalThis 讀取；待 Phase 8 消費者 import 化後移除
+  try {
+    if (typeof globalThis !== 'undefined') {
+      globalThis.OfflineQueue = OfflineQueue;
+      globalThis.pwaToast = pwaToast;
+      globalThis.syncOutbox = syncOutbox;
+      globalThis.syncNow = syncNow;
+      globalThis.warmGAS = warmGAS;
+      globalThis.TreeSnapshot = TreeSnapshot;
+    }
+  } catch (e) {}

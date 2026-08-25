@@ -1,3 +1,5 @@
+import { ApiService } from '../../api.js';
+import { ErrorCodes } from '../../core/error-codes.js';
 import { escapeHtml } from '../../core/utils.js';
 import {
   fmtTime,
@@ -124,7 +126,7 @@ export function loadLogs(opts) {
       removePaginationUI(); return;
     }
     if (res && res.ok === false) {
-      const msg = (typeof ErrorCodes !== 'undefined' && ErrorCodes.messageForResponse) ? ErrorCodes.messageForResponse(res, res.error) : (res.error || '載入失敗');
+      const msg = (ErrorCodes.messageForResponse) ? ErrorCodes.messageForResponse(res, res.error) : (res.error || '載入失敗');
       if (!isAppend) logsEl.innerHTML = '<div class="log">載入失敗：' + escapeHtml(msg) + '</div>';
       if (res.error_code === 'VALIDATION_FAILED' && res.details && res.details.some(function(d){return d.field==='cursor';})) { nextCursor=null; hasMore=true; }
       ensureLoadMoreUI(); return;
