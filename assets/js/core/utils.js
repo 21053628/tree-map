@@ -1,7 +1,7 @@
 import { isValidHK80 as _isValidHK80, format1 as _format1, format5 as _format5 } from './coordinates.js';
 /**
  * 共用工具模組 [Phase0]（零業務依賴，可獨立測試）
- * ES Module 版，與 core/global-utils.js 互為對應；兩處需同步維護
+ * ES Module 版（統一真源）；core/global-utils.js 歷史兼容橋已於 2026-08-25 移除
  * 統一 escapeHtml / debounce / throttle / format 等重複到各檔案的功能
  */
 

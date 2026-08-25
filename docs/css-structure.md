@@ -42,14 +42,13 @@ tokens.css
 
 呢個順序係 cascade 合約，不可單獨調亂任何一個檔案；後載入的規則可能依賴或覆蓋前面 section 的 tokens、layout、map 及 UI 規則。`sw.js` 的 `PRECACHE` 按 13 個拆分檔＋2 個頁面 CSS（`pages/t.css`、`pages/nfc.css`）預快取。
 
-## 3. `main.css` 現況
+## 3. `main.css` 已移除
 
-目前 repo 的 `assets/css/main.css` 實體**存在**（約 30KB），但係歷史來源／備份——`index.html` 冇引用它、`sw.js` 的 `PRECACHE` 亦冇包含它。現存拆分檔頂部註解保留「由 `main.css` Section n 拆出」的歷史來源記錄。
+歷史來源／備份檔 `assets/css/main.css`（約 30KB）已於 2026-08-25 清理移除——`index.html` 冇引用它、`sw.js` 的 `PRECACHE` 亦冇包含它。現存拆分檔頂部註解保留「由 `main.css` Section n 拆出」的歷史來源記錄。
 
 因此：
 
-- 不可重新將 `main.css` 加入 HTML `<link>` 或 Service Worker `PRECACHE`。
-- 如果想清理，應先完成視覺測試，再確認無需回溯後先刪除；現階段僅屬未引用備份，不影響載入。
+- 不可重新建立 `main.css` 或將佢加入 HTML `<link>`／Service Worker `PRECACHE`。
 - 13 個拆分檔＋2 個頁面 CSS 係目前唯一正式載入的 CSS 來源。
 
 ## 4. 其他頁面的遷移（已完成）
@@ -66,4 +65,4 @@ tokens.css
 
 ---
 
- > **最後核對**：2026-08-25。源碼檔案：`index.html`、`t.html`、`nfc.html`、`sw.js`、`assets/css/tokens.css`、`assets/css/base.css`、`assets/css/layout.css`、`assets/css/map.css`、`assets/css/ui.css`、`assets/css/responsive.css`、`assets/css/dark.css`、`assets/css/filters.css`、`assets/css/gis.css`、`assets/css/performance.css`、`assets/css/skeleton.css`、`assets/css/animations.css`、`assets/css/utilities.css`、`assets/css/pages/t.css`、`assets/css/pages/nfc.css`。`assets/css/main.css` 實體存在但未被引用。
+ > **最後核對**：2026-08-25。源碼檔案：`index.html`、`t.html`、`nfc.html`、`sw.js`、`assets/css/tokens.css`、`assets/css/base.css`、`assets/css/layout.css`、`assets/css/map.css`、`assets/css/ui.css`、`assets/css/responsive.css`、`assets/css/dark.css`、`assets/css/filters.css`、`assets/css/gis.css`、`assets/css/performance.css`、`assets/css/skeleton.css`、`assets/css/animations.css`、`assets/css/utilities.css`、`assets/css/pages/t.css`、`assets/css/pages/nfc.css`。`assets/css/main.css` 已於 2026-08-25 移除。

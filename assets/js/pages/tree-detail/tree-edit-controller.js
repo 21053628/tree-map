@@ -1,6 +1,7 @@
 import { ApiService } from '../../api.js';
 import { ErrorCodes } from '../../core/error-codes.js';
 import { toWGS84Async } from '../../core/coordinates.js';
+import { ProgressBar } from '../../ui-progress.js';
 import * as TDUtils from './td-utils.js';
 import { post } from './inspection-controller.js';
 import { TD } from './route.js';
@@ -23,6 +24,8 @@ export async function saveTreeInfo(){
     lat = w.lat.toFixed(6); lng = w.lng.toFixed(6);
   }
   const meta = ApiService.newClientMeta();
+  ProgressBar.showModal();
+  ProgressBar.setMessage('正在更新樹木資料...');
   try{
     const r = await post({type:'update_tree', tree_id:TD.id, new_tree_id:newId, prj:TD.prj,
       // 🔥 [P0 修復] 版本衝突檢測：帶上用戶編輯前睇到嘅 updated_at（base version）
@@ -36,20 +39,23 @@ export async function saveTreeInfo(){
       lat:lat, lng:lng, description:(document.getElementById('eDesc')?document.getElementById('eDesc').value:''),
       client_id: meta.client_id, client_created_at: meta.client_created_at});
     if (r.ok && !r.queued){
+      ProgressBar.hideModal();
       if (newId !== TD.id){ updateUrlOnRename(newId); alert('✅ 已更新！樹木編號已改為 ' + newId + '。\n⚠️ 如該樹已寫入 NFC 標籤，請重新寫入新編號。'); }
       else alert('✅ 已更新！');
       setTimeout(function(){ location.reload(); }, 800);
-    } else if (r.ok && r.queued){ alert('📥 已離線暫存（編號改名會於連線同步後生效）'); }
+    } else if (r.ok && r.queued){ ProgressBar.hideModal(); alert('📥 已離線暫存（編號改名會於連線同步後生效）'); }
     else {
       // 🔥 [P0 修復] 版本衝突：明確提示用戶並刷新，唔好靜默失敗
       var isVersionConflict = r && r.error_code === 'CONFLICT' &&
         r.details && r.details.some && r.details.some(function(dt){ return dt && dt.code === 'VERSION_CONFLICT'; });
       if (isVersionConflict){
+        ProgressBar.hideModal();
         alert('⚠️ 版本衝突：呢棵樹已被其他人更新過。\n你嘅資料唔會覆蓋對方嘅改動。\n\n按「確定」後會重新載入最新資料，請再修改一次。');
         setTimeout(function(){ location.reload(); }, 600);
         return;
       }
+      ProgressBar.hideModal();
       alert('❌ 失敗：' + ErrorCodes.messageForResponse(r, r.error));
     }
-  }catch(err){ alert('❌ 連線錯誤：' + err.message); }
+  }catch(err){ ProgressBar.hideModal(); alert('❌ 連線錯誤：' + err.message); }
 }

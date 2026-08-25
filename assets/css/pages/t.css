@@ -68,6 +68,79 @@
   @media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;transition-duration:0.01ms!important}.sk{animation:none!important}}
   @media (hover:none){.photo-preview-item:hover,.inspection-photo-item:hover,.zoomable-img:hover{transform:none!important;box-shadow:var(--shadow-1)!important}}
 
+/* ---------- 🔄 提交進度面板（ProgressBar.showModal / ui-progress.js 動態建立） ---------- */
+.progress-modal{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:20000;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+}
+.progress-modal.is-active{display:flex}
+.progress-modal__overlay{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.45);
+  -webkit-backdrop-filter:blur(2px);
+  backdrop-filter:blur(2px);
+}
+.progress-modal__panel{
+  position:relative;
+  background:var(--card-bg,#fff);
+  border-radius:var(--radius-lg,16px);
+  padding:28px 24px 24px;
+  width:100%;
+  max-width:320px;
+  text-align:center;
+  box-shadow:0 12px 40px rgba(0,0,0,.25);
+  animation:progressModalIn .22s var(--ease-in-out,ease-in-out);
+}
+@keyframes progressModalIn{
+  from{transform:translateY(10px) scale(.97);opacity:0}
+  to{transform:translateY(0) scale(1);opacity:1}
+}
+.progress-modal__icon{
+  font-size:38px;
+  line-height:1;
+  margin-bottom:14px;
+  color:var(--color-accent,#00897b);
+  display:inline-block;
+  animation:progressSpin 1s linear infinite;
+}
+@keyframes progressSpin{100%{transform:rotate(360deg)}}
+.progress-modal__message{
+  font-size:16px;
+  font-weight:600;
+  color:var(--text,#222);
+  margin-bottom:16px;
+  min-height:24px;
+}
+.progress-modal__bar-track{
+  height:8px;
+  background:#e0e0e0;
+  border-radius:999px;
+  overflow:hidden;
+}
+.progress-modal__bar-fill{
+  height:100%;
+  width:0%;
+  border-radius:999px;
+  background:var(--grad-primary,linear-gradient(135deg,#43a047,#1b5e20));
+  transition:width .3s ease;
+}
+.progress-modal__detail{
+  font-size:13px;
+  color:var(--muted,#666);
+  margin-top:10px;
+  min-height:18px;
+}
+@media (prefers-reduced-motion:reduce){
+  .progress-modal__icon{animation:none}
+  .progress-modal__panel{animation:none}
+}
+
 /* --- 頁面專屬 helpers（其餘共用工具類已統一由 utilities.css 提供） --- */
 .mt-8{margin-top:8px}
 .mt-6{margin-top:6px}

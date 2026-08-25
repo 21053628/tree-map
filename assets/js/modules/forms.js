@@ -14,6 +14,7 @@ import { ApiService } from '../api.js';
 import { ErrorCodes } from '../core/error-codes.js';
 import { CacheManager } from '../core/cache-manager.js';
 import { toWGS84, toHK80, format1 } from '../core/coordinates.js';
+import { ProgressBar } from '../ui-progress.js';
 
 // ========== [Phase4] 提交前驗證 ==========
 
@@ -70,6 +71,8 @@ export async function doCreateProject() {
   }
 
   try {
+    ProgressBar.showModal();
+    ProgressBar.setMessage('正在建立地盤...');
     const meta = ApiService.newClientMeta();
     const r = await ApiService.post({
       type: 'create_project',
@@ -82,6 +85,7 @@ export async function doCreateProject() {
     });
 
     if (r.ok) {
+      ProgressBar.hideModal();
       showToast('✅ 地盤已建立！ID: ' + r.project_id, 'success', 4000);
       closePanel();
       state.projectMarkersCache = null;
@@ -91,11 +95,10 @@ export async function doCreateProject() {
       if (ApiService.clearCache) try{ ApiService.clearCache(); }catch(e){}
       try { await loadProjects(); } catch(e){ await load(); }
     } else {
+      ProgressBar.hideModal();
       showToast('❌ ' + ErrorCodes.messageForResponse(r, r.error), 'error');
     }
-  } catch (error) {
-    showToast('❌ 請求失敗：' + error.message, 'error');
-  }
+  } catch (error) { ProgressBar.hideModal(); showToast('❌ 請求失敗：' + error.message, 'error'); }
 }
 
 export async function openTreeForm(preset) {
@@ -209,6 +212,8 @@ export async function doCreateTree() {
 
   try {
     // 🔥 [v5.0] 改用新欄位名 + 補齊新增欄位；[Phase2] 加 client_id/client_created_at
+    ProgressBar.showModal();
+    ProgressBar.setMessage('正在建立樹木...');
     const meta = ApiService.newClientMeta();
     const r = await ApiService.post({
       type: 'create_tree',
@@ -228,6 +233,7 @@ export async function doCreateTree() {
     });
 
     if (r.ok) {
+      ProgressBar.hideModal();
       showToast('✅ 樹木 ' + r.tree_id + ' 已建立', 'success', 4000);
       closePanel();
       state.treesCache.clear();
@@ -280,6 +286,9 @@ export async function doCreateTree() {
           }, 900);
         }, 400);
       }
+    } else {
+      ProgressBar.hideModal();
+      showToast('❌ ' + ErrorCodes.messageForResponse(r, r.error), 'error');
     }
-  } catch (error) { showToast('❌ 請求失敗：' + error.message, 'error'); }
+  } catch (error) { ProgressBar.hideModal(); showToast('❌ 請求失敗：' + error.message, 'error'); }
 }

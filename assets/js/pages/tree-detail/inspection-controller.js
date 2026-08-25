@@ -2,6 +2,7 @@ import { ApiService } from '../../api.js';
 import { ErrorCodes } from '../../core/error-codes.js';
 import { OfflineQueue, pwaToast } from '../../../../offline.js';
 import { Config } from '../../config.js';
+import { ProgressBar } from '../../ui-progress.js';
 import * as TDUtils from './td-utils.js';
 const TD = globalThis.TD;
 const $ = function(s){ return document.querySelector(s); };
@@ -43,29 +44,34 @@ export async function checkin(){
   if (!requireTreeId()) return;
   const staff = prompt('工作人員姓名：');
   if (!requireStaff(staff)) return;
+  ProgressBar.showModal();
+  ProgressBar.setMessage('正在簽到...');
   const meta = ApiService.newClientMeta();
   const lat = (TD.TREE && TD.TREE.lat) ? String(TD.TREE.lat) : '';
   const lng = (TD.TREE && TD.TREE.lng) ? String(TD.TREE.lng) : '';
   try{
     const r = await post({type:'checkin', staff:staff, tree_id:TD.id, prj:TD.prj, lat:lat, lng:lng, client_id: meta.client_id, client_created_at: meta.client_created_at});
+    ProgressBar.hideModal();
     alert(r.ok ? '✅ 簽到成功！' : '❌ 失敗：' + (ErrorCodes ? ErrorCodes.messageForResponse(r, r.error) : r.error));
     if(r.ok && !r.queued) setTimeout(function(){ location.reload(); }, 800);
-  }catch(err){ alert('❌ 連線錯誤：' + err.message); }
+  }catch(err){ ProgressBar.hideModal(); alert('❌ 連線錯誤：' + err.message); }
 }
 export async function submitInspection(){
   if (!requireTreeId()) return;
   const staff = prompt('工作人員姓名：');
   if (!requireStaff(staff)) return;
+  ProgressBar.showModal();
+  ProgressBar.setMessage('正在準備提交巡查記錄...');
   const healthEl = document.getElementById('health');
   const noteEl = document.getElementById('note');
-  if (!healthEl || !TDUtils.isValidHealth(healthEl.value)){ alert('⚠️ 樹木健康狀態（health）不合法：' + (healthEl?healthEl.value:'')); return; }
-  if (TD.selectedPhotos.length > TDUtils.MAX_PHOTOS){ alert('⚠️ 相片數量超出上限（最多 ' + TDUtils.MAX_PHOTOS + ' 張）'); return; }
+  if (!healthEl || !TDUtils.isValidHealth(healthEl.value)){ ProgressBar.hideModal(); alert('⚠️ 樹木健康狀態（health）不合法：' + (healthEl?healthEl.value:'')); return; }
+  if (TD.selectedPhotos.length > TDUtils.MAX_PHOTOS){ ProgressBar.hideModal(); alert('⚠️ 相片數量超出上限（最多 ' + TDUtils.MAX_PHOTOS + ' 張）'); return; }
   {
     const up=(Config.UPLOAD)?Config.UPLOAD:null;
     const allowed=(up&&up.ALLOWED_MIMES)||TDUtils.ALLOWED_IMAGE_MIMES||['image/jpeg','image/png','image/webp'];
     const maxBytes=(up&&up.MAX_BYTES)||TDUtils.MAX_IMAGE_BYTES||10*1024*1024;
     const bad=[]; for(let _i=0; _i<TD.selectedPhotos.length; _i++){ const f=TD.selectedPhotos[_i]; const mime=f.type?String(f.type).toLowerCase():''; if(mime&&allowed.indexOf(mime)===-1) bad.push('第'+(_i+1)+'張格式不支援（'+mime+'）'); else if(!mime){ const nm=f.name?String(f.name).toLowerCase():''; const okExt=(nm.endsWith('.jpg')||nm.endsWith('.jpeg')||nm.endsWith('.png')||nm.endsWith('.webp')); if(!okExt) bad.push('第'+(_i+1)+'張格式不支援（未知）'); } if(f.size>maxBytes) bad.push('第'+(_i+1)+'張過大（'+(f.size/1024/1024).toFixed(1)+'MB）'); }
-    if(bad.length){ alert('⚠️ 相片檢查失敗：\n'+bad.join('\n')+'\n僅支援 '+allowed.join(', ')+'，單張上限 '+Math.round(maxBytes/1024/1024)+'MB'); return; }
+    if(bad.length){ ProgressBar.hideModal(); alert('⚠️ 相片檢查失敗：\n'+bad.join('\n')+'\n僅支援 '+allowed.join(', ')+'，單張上限 '+Math.round(maxBytes/1024/1024)+'MB'); return; }
   }
   const health=healthEl.value; const note=noteEl?noteEl.value:'';
   // 🔥 [修復 v2.62] 重用 inspection 冪等鍵（重試時不重複建立記錄）
@@ -73,22 +79,31 @@ export async function submitInspection(){
   const lat = (TD.TREE && TD.TREE.lat) ? String(TD.TREE.lat) : '';
   const lng = (TD.TREE && TD.TREE.lng) ? String(TD.TREE.lng) : '';
   if(TD.selectedPhotos.length===0){
-    try{ const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64:'', lat:lat, lng:lng, client_id:insMeta.client_id, client_created_at:insMeta.client_created_at}); alert(r.ok?'✅ 已上傳！':'❌ 失敗：'+ErrorCodes.messageForResponse(r,r.error)); if(r.ok&&!r.queued){ try{ delete TD._inspectionMeta; }catch(e){} setTimeout(function(){ location.reload(); },1000); } }catch(err){ alert('❌ 連線錯誤：'+err.message); }
+    ProgressBar.setMessage('正在提交巡查記錄...');
+    try{ const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64:'', lat:lat, lng:lng, client_id:insMeta.client_id, client_created_at:insMeta.client_created_at}); ProgressBar.hideModal(); alert(r.ok?'✅ 已上傳！':'❌ 失敗：'+ErrorCodes.messageForResponse(r,r.error)); if(r.ok&&!r.queued){ try{ delete TD._inspectionMeta; }catch(e){} setTimeout(function(){ location.reload(); },1000); } }catch(err){ ProgressBar.hideModal(); alert('❌ 連線錯誤：'+err.message); }
     return;
   }
   // 🔥 [修復 v2.62] 壓縮相片，同時為每張相片建立固定 client_id（重試重用）
+  ProgressBar.setMessage('正在壓縮相片...');
   const photosData=[]; const skipped=[];
-  for(let i=0;i<TD.selectedPhotos.length;i++){ try{ const b64clean=await TDUtils.compress(TD.selectedPhotos[i]); if(b64clean&&b64clean.length>TDUtils.MAX_PHOTO_CHARS){ skipped.push(i+1); continue; } const b64='data:image/jpeg;base64,' + b64clean; const pm=getPhotoMeta_(TD.selectedPhotos[i]); photosData.push({b64:b64, client_id:pm.client_id, client_created_at:pm.client_created_at}); }catch(err){ skipped.push(i+1); } }
+  for(let i=0;i<TD.selectedPhotos.length;i++){
+    ProgressBar.setProgress(((i+1)/TD.selectedPhotos.length)*100, '正在壓縮相片 '+(i+1)+'/'+TD.selectedPhotos.length+'...');
+    ProgressBar.setDetail('第 '+(i+1)+' 張');
+    try{ const b64clean=await TDUtils.compress(TD.selectedPhotos[i]); if(b64clean&&b64clean.length>TDUtils.MAX_PHOTO_CHARS){ skipped.push(i+1); continue; } const b64='data:image/jpeg;base64,' + b64clean; const pm=getPhotoMeta_(TD.selectedPhotos[i]); photosData.push({b64:b64, client_id:pm.client_id, client_created_at:pm.client_created_at}); }catch(err){ skipped.push(i+1); }
+  }
   if(skipped.length) alert('⚠️ 第 '+skipped.join('、')+' 張相片處理失敗，已略過；其餘 '+photosData.length+' 張繼續上傳');
-  if(photosData.length===0){ alert('❌ 沒有相片可上傳（全部處理失敗）'); return; }
+  if(photosData.length===0){ ProgressBar.hideModal(); alert('❌ 沒有相片可上傳（全部處理失敗）'); return; }
   const splitPhotos=navigator.onLine && (Config.INSPECTION_SPLIT_PHOTOS===true);
   if(splitPhotos){
+    ProgressBar.setProgress(50, '正在提交巡查記錄...');
+    ProgressBar.setDetail('');
     try{
       const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64:'', photos_total:photosData.length, photos_pending:photosData.length, lat:lat, lng:lng, client_id:insMeta.client_id, client_created_at:insMeta.client_created_at});
-      if(r.queued){ alert('📥 文字記錄已離線暫存（兩階段相片需後端回傳 inspection_id，請連線後重試）'); return; }
+      if(r.queued){ ProgressBar.hideModal(); alert('📥 文字記錄已離線暫存（兩階段相片需後端回傳 inspection_id，請連線後重試）'); return; }
       if(r.ok&&r.inspection_id){
         const res=await uploadPhotos(r.inspection_id, photosData);
         updatePhotoProgress(res.done, photosData.length);
+        ProgressBar.hideModal();
         if(res.done===photosData.length){
           alert('✅ 文字記錄已上傳；相片 '+res.done+'/'+photosData.length+' 張已處理');
           TD.selectedPhotos=[]; try{ delete TD._inspectionMeta; }catch(e){}
@@ -100,12 +115,14 @@ export async function submitInspection(){
           if(pwaToast) pwaToast('📷 相片 '+res.done+'/'+photosData.length+' 已處理，其餘待重試');
         }
       }
-      else if(r.ok){ alert('⚠️ 文字記錄已上傳，但後端未回傳 inspection_id，相片未能上傳'); TD.selectedPhotos=[]; setTimeout(function(){ location.reload(); },1000); }
-      else alert('❌ 失敗：'+ErrorCodes.messageForResponse(r,r.error));
-    }catch(err){ alert('❌ 連線錯誤：'+err.message); }
+      else if(r.ok){ ProgressBar.hideModal(); alert('⚠️ 文字記錄已上傳，但後端未回傳 inspection_id，相片未能上傳'); TD.selectedPhotos=[]; setTimeout(function(){ location.reload(); },1000); }
+      else { ProgressBar.hideModal(); alert('❌ 失敗：'+ErrorCodes.messageForResponse(r,r.error)); }
+    }catch(err){ ProgressBar.hideModal(); alert('❌ 連線錯誤：'+err.message); }
     return;
   }
-  try{ const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64: photosData.map(function(p){return p.b64;}), lat:lat, lng:lng, client_id:insMeta.client_id, client_created_at:insMeta.client_created_at}); alert(r.ok?'✅ 已上傳 '+photosData.length+' 張相片！':'❌ 失敗：'+ErrorCodes.messageForResponse(r,r.error)); if(r.ok&&!r.queued){ TD.selectedPhotos=[]; try{ delete TD._inspectionMeta; }catch(e){} setTimeout(function(){ location.reload(); },1000); } }catch(err){ alert('❌ 連線錯誤：'+err.message); }
+  ProgressBar.setProgress(50, '正在提交巡查記錄...');
+  ProgressBar.setDetail('');
+  try{ const r=await post({type:'inspection', staff:staff, tree_id:TD.id, prj:TD.prj, health:health, note:note, photo_base64: photosData.map(function(p){return p.b64;}), lat:lat, lng:lng, client_id:insMeta.client_id, client_created_at:insMeta.client_created_at}); ProgressBar.hideModal(); alert(r.ok?'✅ 已上傳 '+photosData.length+' 張相片！':'❌ 失敗：'+ErrorCodes.messageForResponse(r,r.error)); if(r.ok&&!r.queued){ TD.selectedPhotos=[]; try{ delete TD._inspectionMeta; }catch(e){} setTimeout(function(){ location.reload(); },1000); } }catch(err){ ProgressBar.hideModal(); alert('❌ 連線錯誤：'+err.message); }
 }
 // 🔥 [修復 v2.62] 修改 uploadPhotos：逐張容錯＋收集錯誤訊息；回傳 {done, errors}
 export async function uploadPhotos(inspectionId, photosData){
@@ -113,6 +130,8 @@ export async function uploadPhotos(inspectionId, photosData){
   for(var i=0;i<total;i++){
     var item=photosData[i]||{};
     try{
+      ProgressBar.setProgress(done/total*100, '正在上傳相片 '+(done+1)+'/'+total+'...');
+      ProgressBar.setDetail('第 '+(i+1)+' 張');
       var r=await post({type:'inspection_photo', inspection_id:inspectionId, tree_id:TD.id, prj:TD.prj, photo_base64:item.b64, photo_index:i+1, client_id:item.client_id, client_created_at:item.client_created_at});
       if(r&&(r.ok||r.queued)){
         done++;
@@ -134,5 +153,6 @@ export async function uploadPhotos(inspectionId, photosData){
 }
 export function updatePhotoProgress(done, total){
   const el=document.getElementById('photoCount'); if(el) el.textContent=done+'/'+total;
+  if(total>0) ProgressBar.setProgress(done/total*100, '正在上傳相片 '+done+'/'+total+'...');
   if(pwaToast) pwaToast('📷 '+done+'/'+total+' 張相片已處理');
 }

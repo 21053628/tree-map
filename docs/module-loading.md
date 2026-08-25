@@ -73,7 +73,7 @@ handling, or offline hook is changed by the module conversion.
 
 `draw.js` 已移除 polygon 模式，量測只保留 line／area。
 
-`assets/js/core/global-utils.js` 實體存在（掛載 `window.TreeUtils`），但未被任何 HTML 頁面引用，屬歷史保留。全 repo 搜尋確認沒有剩餘 `window.TreeUtils` runtime consumers；module pages now consume named exports from `assets/js/core/utils.js`.
+`assets/js/core/global-utils.js`（掛載 `window.TreeUtils`）已於 2026-08-25 清理移除——未被任何 HTML 頁面引用，屬歷史保留檔。全 repo 搜尋確認沒有剩餘 `window.TreeUtils` runtime consumers；module pages now consume named exports from `assets/js/core/utils.js`.
 
 ## Deliberately plain scripts
 
@@ -130,7 +130,7 @@ ES Module (which also exposes `CoordUtils`/`CoordLazy` globals).
   `escapeHtml` and `sanitizeId` from `assets/js/core/utils.js`.
 - Phase 6.3: `t.js` and `assets/js/pages/tree-detail/*.js` became ES Modules;
   `t.html` loads the plain offline infrastructure before the module entry.
-- Phase 6.4: the unused `global-utils.js` compatibility bridge remains as historical file (not referenced by any HTML).
+- Phase 6.4: the unused `global-utils.js` compatibility bridge was removed (2026-08-25); it was not referenced by any HTML.
 - `nfc.html` keeps `config.js` before its module entry.
 - `index.html` keeps classic services and `offline.js` before `app.js`.
 
@@ -179,7 +179,7 @@ skeleton.css, animations.css, utilities.css
 pages/t.css, pages/nfc.css
 ```
 
-亦包含 `assets/js/pages/tree-detail/` 下 12 個 module（`route.js`、`page.js`、`view.js`、`tabs.js`、`auth-gate.js`、`inspection-controller.js`、`tree-edit-controller.js`、`photo-controller.js`、`nfc-navigation.js`、`td-utils.js`、`td-photos.js`、`td-logs.js`），以及其他頁面／application modules。`assets/css/main.css` 實體存在但唔在 `PRECACHE`，亦唔在任何 HTML `<link>` 載入順序內；`main.css` 只作歷史來源／備份名稱出現在拆分檔註解，並非目前可載入檔案。
+亦包含 `assets/js/pages/tree-detail/` 下 12 個 module（`route.js`、`page.js`、`view.js`、`tabs.js`、`auth-gate.js`、`inspection-controller.js`、`tree-edit-controller.js`、`photo-controller.js`、`nfc-navigation.js`、`td-utils.js`、`td-photos.js`、`td-logs.js`），以及其他頁面／application modules。`assets/css/main.css` 已於 2026-08-25 移除——佢唔在 `PRECACHE`，亦唔在任何 HTML `<link>` 載入順序內；`main.css` 只作歷史來源／備份名稱出現在拆分檔註解，並非目前可載入檔案。
 
 `offline.js` 必須先於 `t.js` module 執行：它會保存並替換
 `ApiService.post`／`ApiService.get`，建立離線 fallback、GET cache 及
@@ -203,4 +203,4 @@ claimed as passed by static analysis.
 
 ---
 
-> **最後核對**：2026-08-25。源碼檔案：`index.html`、`t.html`、`nfc.html`、`offline.js`、`sw.js`、`assets/js/api.js`、`assets/js/config.js`、`assets/js/auth.js`、`assets/js/env.js`、`assets/js/core/cache-policy.js`、`assets/js/core/cache-manager.js`、`assets/js/core/error-codes.js`、`assets/js/core/coordinates.js`、`assets/js/core/spatial-index.js`、`assets/js/core/utils.js`、`assets/js/core/event-bus.js`、`assets/js/ui-progress.js`、`assets/js/ui-icons.js`、`assets/js/modules/audit-log.js`、`assets/js/modules/sync-panel.js`、`assets/js/modules/state.js`、`assets/js/modules/ui-state.js`、`assets/js/modules/dom.js`、`assets/js/modules/map.js`、`assets/js/modules/search.js`、`assets/js/modules/species.js`、`assets/js/modules/trees.js`、`assets/js/modules/filters.js`、`assets/js/modules/projects.js`、`assets/js/modules/locate.js`、`assets/js/modules/lots.js`、`assets/js/modules/forms.js`、`assets/js/modules/draw.js`、`assets/js/modules/geolocate.js`、`assets/js/modules/loader.js`、`assets/js/sw-register.js`、`assets/js/app.js`、`assets/js/pages/t.js`、`assets/js/pages/nfc.js`、`assets/js/pages/tree-detail/route.js`、`assets/js/pages/tree-detail/page.js`、`assets/js/pages/tree-detail/view.js`、`assets/js/pages/tree-detail/tabs.js`、`assets/js/pages/tree-detail/auth-gate.js`、`assets/js/pages/tree-detail/inspection-controller.js`、`assets/js/pages/tree-detail/tree-edit-controller.js`、`assets/js/pages/tree-detail/photo-controller.js`、`assets/js/pages/tree-detail/nfc-navigation.js`、`assets/js/pages/tree-detail/td-utils.js`、`assets/js/pages/tree-detail/td-photos.js`、`assets/js/pages/tree-detail/td-logs.js`。`assets/js/api-config.js`、`assets/js/api-config.example.js` 及 `assets/js/core/coord-lazy.js` 已移除。`assets/js/core/global-utils.js`、`assets/js/utils.js` 及 `assets/css/main.css` 實體存在但未被引用。
+> **最後核對**：2026-08-25。源碼檔案：`index.html`、`t.html`、`nfc.html`、`offline.js`、`sw.js`、`assets/js/api.js`、`assets/js/config.js`、`assets/js/auth.js`、`assets/js/env.js`、`assets/js/core/cache-policy.js`、`assets/js/core/cache-manager.js`、`assets/js/core/error-codes.js`、`assets/js/core/coordinates.js`、`assets/js/core/spatial-index.js`、`assets/js/core/utils.js`、`assets/js/core/event-bus.js`、`assets/js/ui-progress.js`、`assets/js/ui-icons.js`、`assets/js/modules/audit-log.js`、`assets/js/modules/sync-panel.js`、`assets/js/modules/state.js`、`assets/js/modules/ui-state.js`、`assets/js/modules/dom.js`、`assets/js/modules/map.js`、`assets/js/modules/search.js`、`assets/js/modules/species.js`、`assets/js/modules/trees.js`、`assets/js/modules/filters.js`、`assets/js/modules/projects.js`、`assets/js/modules/locate.js`、`assets/js/modules/lots.js`、`assets/js/modules/forms.js`、`assets/js/modules/draw.js`、`assets/js/modules/geolocate.js`、`assets/js/modules/loader.js`、`assets/js/sw-register.js`、`assets/js/app.js`、`assets/js/pages/t.js`、`assets/js/pages/nfc.js`、`assets/js/pages/tree-detail/route.js`、`assets/js/pages/tree-detail/page.js`、`assets/js/pages/tree-detail/view.js`、`assets/js/pages/tree-detail/tabs.js`、`assets/js/pages/tree-detail/auth-gate.js`、`assets/js/pages/tree-detail/inspection-controller.js`、`assets/js/pages/tree-detail/tree-edit-controller.js`、`assets/js/pages/tree-detail/photo-controller.js`、`assets/js/pages/tree-detail/nfc-navigation.js`、`assets/js/pages/tree-detail/td-utils.js`、`assets/js/pages/tree-detail/td-photos.js`、`assets/js/pages/tree-detail/td-logs.js`。`assets/js/api-config.js`、`assets/js/api-config.example.js` 及 `assets/js/core/coord-lazy.js` 已移除。`assets/js/core/global-utils.js`、`assets/js/utils.js` 及 `assets/css/main.css` 已移除。
