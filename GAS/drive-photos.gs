@@ -1,4 +1,4 @@
-/* ---------- 相片上傳工具（在鎖外執行，縮短佔鎖時間） ---------- */
+﻿/* ---------- 相片上傳工具（在鎖外執行，縮短佔鎖時間） ---------- */
 function mimeToExt_(mime){ if(mime==='image/png') return 'png'; if(mime==='image/webp') return 'webp'; return 'jpg'; }
 function extractBase64PayloadForUpload_(s){ const str=String(s||''); const comma=str.indexOf(','); if(str.slice(0,5)==='data:' && comma!==-1) return {prefix:str.slice(0,comma), clean:str.slice(comma+1)}; return {prefix:'', clean:str}; }
 function parseImageMimeFromPrefixForUpload_(prefix){ if(!prefix) return ''; const m=prefix.match(/^data:([^;]+);base64$/i); return m?String(m[1]).toLowerCase().trim():''; }
@@ -16,7 +16,8 @@ function parseImageForUpload_(base64Str){
   const bytes=Utilities.base64Decode(clean);
   if(bytes.length>maxBytes) throw new Error('FILE_TOO_LARGE:'+bytes.length);
   if(bytes.length===0) throw new Error('DECODE_EMPTY');
-  const sniffed=detectImageMimeFromBytesForUpload_(bytes);
+  let sniffed=detectImageMimeFromBytesForUpload_(bytes);
+  if(!sniffed&&clean.length>=4){try{var _h4=Utilities.base64Decode(clean.slice(0,4));sniffed=detectImageMimeFromBytesForUpload_(_h4);}catch(e){}}
   if(declaredMime&&sniffed&&declaredMime!==sniffed) throw new Error('MIME_MISMATCH:'+declaredMime+'->'+sniffed);
   const effectiveMime=sniffed||declaredMime;
   if(!effectiveMime) throw new Error('UNKNOWN_FORMAT');
