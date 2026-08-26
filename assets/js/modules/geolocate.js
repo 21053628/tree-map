@@ -69,7 +69,8 @@ function drawPosition(lat, lng, accuracy, fly) {
     }).addTo(state.map);
   }
   if (fly) {
-    state.map.flyTo([lat, lng], Math.max(state.map.getZoom(), 18), { duration: 0.8 });
+    const curZoom = state.map ? state.map.getZoom() : 18;
+    state.map.flyTo([lat, lng], Math.max(curZoom, 18), { duration: 0.8 });
   }
 }
 
@@ -85,8 +86,9 @@ function computeStable() {
   let pool = samples;
   if (samples.length >= 4) {
     const accMed = median(samples.map(function (s) { return s.acc; }));
+    // 只保留精度 ≤ 2 倍中位數嘅 sample，剔除異常大誤差點
     const filtered = samples.filter(function (s) { return s.acc <= accMed * 2; });
-    if (filtered.length) pool = filtered;
+    pool = filtered.length ? filtered : samples;
   }
   const lat = median(pool.map(function (s) { return s.lat; }));
   const lng = median(pool.map(function (s) { return s.lng; }));
@@ -120,7 +122,7 @@ function addSample(pos, flyNow) {
   const lat = pos.coords.latitude;
   const lng = pos.coords.longitude;
   const acc = pos.coords.accuracy || 0;
-  if (!isFinite(lat) || !isFinite(lng) || !acc) return;
+  if (!isFinite(lat) || !isFinite(lng) || !(acc > 0)) return;
 
   samples.push({ lat: lat, lng: lng, acc: acc });
   const stable = computeStable();

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self';">
+<meta name="theme-color" content="#2e7d32">
+<title>離線中 - 樹木管理 GIS</title>
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/utilities.css">
+<style>
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f5f5;margin:0;padding:16px}
+  .offline-card{max-width:480px;width:100%;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.12);padding:32px;text-align:center}
+  .offline-card h1{font-size:1.6rem;color:#2e7d32;margin:0 0 12px}
+  .offline-card p{color:#555;line-height:1.6}
+  .offline-card .actions{margin-top:20px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .offline-card button{padding:10px 20px;border:none;border-radius:8px;font-size:1rem;cursor:pointer}
+  .btn-primary{background:#2e7d32;color:#fff}
+  .btn-sec{background:#e8f5e9;color:#2e7d32}
+  .pending{margin-top:16px;font-size:.9rem;color:#777}
+</style>
+</head>
+<body>
+<div class="offline-card">
+  <h1>📴 離線中</h1>
+  <p>網絡暫時無法連線。你仍可查看已快取的樹木資料，巡查記錄會暫存，恢復連線後自動同步。</p>
+  <div class="actions">
+    <button class="btn-primary" id="btnRetry" type="button">🔄 重試</button>
+    <button class="btn-sec" id="btnHome" type="button">🏠 返回首頁</button>
+  </div>
+  <div class="pending" id="pendingInfo"></div>
+</div>
+<script type="module" src="offline-pending.js"></script>
+</body>
+</html>

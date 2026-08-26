@@ -1,0 +1,208 @@
+/* =========================================================
+   animations.css — 過渡動畫與微互動
+   ========================================================= */
+
+/* ================= Panel 內容 stagger 入場 ================= */
+/* 註：面板本身嘅 translate/transform 由 layout.css 管理（桌面置中 modal、手機底部 sheet），
+   此處只負責內容元素嘅進場動畫，避免覆蓋 #panel 嘅定位 transform。 */
+#panel.is-visible #panelContent > * {
+  animation: panelContentIn 0.45s var(--ease-out) both;
+}
+#panel.is-visible #panelContent > *:nth-child(1) { animation-delay: 40ms; }
+#panel.is-visible #panelContent > *:nth-child(2) { animation-delay: 70ms; }
+#panel.is-visible #panelContent > *:nth-child(3) { animation-delay: 100ms; }
+#panel.is-visible #panelContent > *:nth-child(4) { animation-delay: 130ms; }
+#panel.is-visible #panelContent > *:nth-child(5) { animation-delay: 160ms; }
+#panel.is-visible #panelContent > *:nth-child(n+6) { animation-delay: 190ms; }
+
+@keyframes panelContentIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ================= 表單欄位 Focus 動畫 ================= */
+#panel input:focus,
+#panel select:focus,
+#panel textarea:focus {
+  animation: fieldFocusIn 0.25s var(--ease-out);
+}
+
+@keyframes fieldFocusIn {
+  0% { transform: translateY(-1px) scale(0.99); }
+  100% { transform: translateY(-1px) scale(1); }
+}
+
+/* ================= 按鈕 Ripple 波紋 ================= */
+.ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 1;
+  transform: scale(0);
+  animation: rippleIn 0.6s var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+@keyframes rippleIn {
+  to {
+    transform: scale(24);
+    opacity: 0;
+  }
+}
+
+/* ================= Status 列強化動畫 ================= */
+#status {
+  animation: statusIdle 1s var(--ease-out) both;
+}
+#status.status-visible {
+  animation: statusIn 0.4s var(--ease-spring);
+}
+#status.status-front {
+  animation: statusFront 0.3s var(--ease-spring);
+}
+
+@keyframes statusIn {
+  from { opacity: 0; transform: translateX(-50%) scale(0.85) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+@keyframes statusIdle {
+  from { opacity: 0; transform: translateX(-50%) scale(0.9); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+@keyframes statusFront {
+  0% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.15); }
+  100% { transform: translateX(-50%) scale(1.08); }
+}
+
+/* ================= Toast 系統動畫 ================= */
+.toast-container {
+  position: fixed;
+  top: calc(16px + var(--safe-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+  width: min(92vw, 420px);
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+  background: var(--card-bg, #fff);
+  color: var(--text, #222);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  animation: toastIn 0.35s var(--ease-spring);
+  transition: opacity 0.3s ease, transform 0.3s var(--ease-out);
+}
+
+.toast.is-leaving {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.95);
+}
+
+.toast .toast-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.toast .toast-msg {
+  word-break: break-word;
+}
+
+.toast.toast-success { border-left: 4px solid var(--color-primary, #2e7d32); }
+.toast.toast-error { border-left: 4px solid #c62828; }
+.toast.toast-warning { border-left: 4px solid #f9a825; }
+.toast.toast-info { border-left: 4px solid var(--color-accent, #00897b); }
+
+.toast.toast-success .toast-icon { color: var(--color-primary, #2e7d32); }
+.toast.toast-error .toast-icon { color: #c62828; }
+.toast.toast-warning .toast-icon { color: #f9a825; }
+.toast.toast-info { color: var(--color-accent, #00897b); }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-16px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ================= 表單驗證錯誤（Shake + 紅框） ================= */
+.field-error {
+  border-color: #c62828 !important;
+  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.12) !important;
+  animation: fieldShake 0.4s var(--ease-out);
+}
+
+@keyframes fieldShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+.form-error-msg {
+  display: block;
+  color: #c62828;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 5px;
+  margin-bottom: 2px;
+  animation: errorMsgIn 0.25s var(--ease-out);
+}
+
+@keyframes errorMsgIn {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ================= 深色模式 ================= */
+@media (prefers-color-scheme: dark) {
+  .toast {
+    background: #232a23;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+/* ================= 減 motion ================= */
+@media (prefers-reduced-motion: reduce) {
+  #panel.is-visible #panelContent > *,
+  #panel input:focus,
+  #panel select:focus,
+  #panel textarea:focus,
+  .ripple::after,
+  #status,
+  .toast,
+  .field-error,
+  .form-error-msg {
+    animation: none !important;
+  }
+  #panel,
+  #panel.is-visible,
+  #panel.is-hidden,
+  .toast {
+    transition: none !important;
+  }
+}

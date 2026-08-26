@@ -1,55 +1,30 @@
 /**
  * 樹木管理系統 - 主入口（ES Modules 版本）
- * v2.55 - 狀態雲「前置→淡出」：更新時浮到最前 3 秒，然後漸變退回後面
- * v2.54 - 兩段式載入：快照 → GAS 背景刷新
- * [Phase2] 移除脆皮 setter 注入，改由模組直接 import
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
  */
 
+import { ApiService } from './api.js';
+import { AuthService } from './auth.js';
+import { Config } from './config.js';
+import { preheatCache } from './core/coordinates.js';
 import { state } from './modules/state.js';
-import { DOM, closePanel } from './modules/dom.js';
+import { DOM, enableAutoClearFieldErrors } from './modules/dom.js';
 import { initMap } from './modules/map.js';
 import { handleSearch, hideSearch } from './modules/search.js';
-import { loadTreeSpecies } from './modules/species.js';
+import { SpeciesRepository } from './modules/species.js';
 import { selectProject } from './modules/projects.js';
 import { locateTree, checkURLParams } from './modules/locate.js';
-import { clearLotCache } from './modules/lots.js';
 import {
-  openProjectForm, doCreateProject,
-  openTreeForm, doCreateTree,
-  pickTreeLocation,
+  openProjectForm,
+  openTreeForm,
   setPromptAuth
 } from './modules/forms.js';
 import { load } from './modules/loader.js';
 
-// 全域依賴注入（剩餘：AuthService 尚未轉 ESM）
+// 全域依賴注入
 ApiService.init(Config.API_ENDPOINT);
 setPromptAuth(() => AuthService.promptAuth());
 
-function getPerfMetrics() {
-  return {
-    renderTime: state.perfMetrics.renderTime,
-    cacheHits: state.perfMetrics.cacheHits,
-    totalRenders: state.perfMetrics.totalRenders,
-    apiStats: ApiService.getStats(),
-    coordCacheStats: CoordUtils.getCacheStats()
-  };
-}
-
-function clearCache() {
-  state.projectMarkersCache = null;
-  state.treesCache.clear();
-  state.treeCountMap.clear();
-  state.treeMap.clear();
-  state.treeSearchIndex.clear();
-  state.treeLowerIndex.clear();
-  state.treeIdIndex.clear();
-  state.spatialIndexCache = null;
-  state.coordGroupsCache = null;
-  clearLotCache();
-  localStorage.removeItem('tree_map_last_view');
-  if (typeof ApiService !== 'undefined' && ApiService.clearCache) ApiService.clearCache();
-  console.log('🗑️ 緩存已清除');
-}
 
 function focusTree(treeId) {
   hideSearch();
@@ -61,11 +36,18 @@ function focusTree(treeId) {
 function init() {
   DOM.statusEl = document.getElementById('status');
   DOM.projSel = document.getElementById('projSel');
+  DOM.addProjectBtn = document.getElementById('addProjectBtn');
   DOM.addTreeBtn = document.getElementById('addTreeBtn');
   DOM.panel = document.getElementById('panel');
   DOM.panelContent = document.getElementById('panelContent');
   DOM.searchResults = document.getElementById('searchResults');
   DOM.treeSearch = document.getElementById('treeSearch');
+
+  // 🔥 [Bugfix] 若 API 端點未配置，喺 UI 顯示明確提示（否則只係 console warning 用戶睇唔到）
+  if (!Config.API_ENDPOINT && DOM.statusEl) {
+    DOM.statusEl.textContent = '⚠️ API 端點未配置：請建立 assets/js/env.js 或設定 <meta name="api-endpoint">';
+    DOM.statusEl.classList.add('warning');
+  }
 
   // 🔥 [v2.55] 狀態雲「前置→淡出」：文字一變就浮到最前 3 秒，然後退回後面
   if (DOM.statusEl && 'MutationObserver' in window) {
@@ -80,9 +62,8 @@ function init() {
     mo.observe(DOM.statusEl, { childList: true, characterData: true, subtree: true });
   }
 
-  const addProjectBtn = document.getElementById('addProjectBtn');
-  if (addProjectBtn) {
-    addProjectBtn.addEventListener('click', () => openProjectForm());
+  if (DOM.addProjectBtn) {
+    DOM.addProjectBtn.addEventListener('click', () => openProjectForm());
   }
   if (DOM.addTreeBtn) {
     DOM.addTreeBtn.addEventListener('click', () => openTreeForm());
@@ -97,13 +78,17 @@ function init() {
 
   if (!initMap()) return;
 
+  // [Phase13] 表單欄位自動清除錯誤（input/focus 時）
+  enableAutoClearFieldErrors();
+
   if ('requestIdleCallback' in window) {
-    requestIdleCallback(() => CoordUtils.preheatCache());
+    requestIdleCallback(() => preheatCache());
   } else {
-    setTimeout(() => CoordUtils.preheatCache(), 100);
+    setTimeout(() => preheatCache(), 100);
   }
 
-  loadTreeSpecies();
+  SpeciesRepository.load().catch(function(){ /* intentionally ignored: optional fallback failure */ });
+  // legacy alias still works via loadTreeSpecies
 
   if (DOM.searchResults) {
     DOM.searchResults.addEventListener('click', (e) => {
@@ -117,23 +102,8 @@ function init() {
 
   load().then(() => checkURLParams());
 
-  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v2.55 - 狀態雲前置淡出）');
+  console.log('🌳 樹木管理系統已啟動（ES Modules 版本 v1.0.0-beta）');
 }
 
 document.addEventListener('DOMContentLoaded', init);
-
-// 🔥 全域 API（向後相容，保留 window.App）
-window.App = {
-  selectProject,
-  openProjectForm,
-  doCreateProject,
-  openTreeForm,
-  doCreateTree,
-  pickTreeLocation,
-  closePanel,
-  clearCache,
-  getPerfMetrics,
-  locateTree,
-  handleSearch,
-  focusTree
-};
+

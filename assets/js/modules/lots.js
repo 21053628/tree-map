@@ -3,11 +3,12 @@
  * - GML 解析
  * - DD/Lot 編號顯示
  * - LRU 快取
- * v2.49 - 修正 walk() 條件反轉 bug（之前跳過了資料 tag，導致 popup 只顯示「私人地段」）
- *       - 標題對齊航拍圖格式：「Lot 533 J,1」
+ * v1.0.0-beta - 統一版本號（正式發佈前整合）
+ * 歷史：v2.49 - 修正 walk() 條件反轉 bug；v2.48 - 清洗 sublot 寫法
  */
 import { state, LOT_CACHE_MAX } from './state.js';
-import { $, escapeHtml, debounce, updateStatus } from './dom.js';
+import { escapeHtml, debounce, updateStatus } from './dom.js';
+import { toHK80, toWGS84 } from '../core/coordinates.js';
 
 const GEOM_TAGS_ = [
   'polygon','multisurface','surface','surfacemember','exterior','interior',
@@ -91,7 +92,7 @@ function parseGML(gmlText) {
         const e = parseFloat(points[j]);
         const n = parseFloat(points[j + 1]);
         if (!isNaN(e) && !isNaN(n)) {
-          const wgs = CoordUtils.toWGS84(n, e);
+          const wgs = toWGS84(n, e);
           if (wgs) coords.push([wgs.lat, wgs.lng]);
         }
       }
@@ -105,7 +106,7 @@ function parseGML(gmlText) {
             const e = parseFloat(parts[0]);
             const n = parseFloat(parts[1]);
             if (!isNaN(e) && !isNaN(n)) {
-              const wgs = CoordUtils.toWGS84(n, e);
+              const wgs = toWGS84(n, e);
               if (wgs) coords.push([wgs.lat, wgs.lng]);
             }
           }
@@ -255,8 +256,8 @@ function loadLots() {
   }
 
   const bounds = state.map.getBounds();
-  const sw = CoordUtils.toHK80(bounds.getSouth(), bounds.getWest());
-  const ne = CoordUtils.toHK80(bounds.getNorth(), bounds.getEast());
+  const sw = toHK80(bounds.getSouth(), bounds.getWest());
+  const ne = toHK80(bounds.getNorth(), bounds.getEast());
 
   if (!sw || !ne) return;
 

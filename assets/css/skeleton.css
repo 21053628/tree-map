@@ -1,0 +1,134 @@
+/* =========================================================
+   skeleton.css — Loading Skeleton 骨架屏
+   ========================================================= */
+
+/* ================= Shimmer 掃光動畫 ================= */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* ================= 通用 Skeleton class ================= */
+.skeleton {
+  background: #e0e0e0;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  /* shimmer 預設 */
+  background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.skeleton-text:last-child {
+  width: 60%;
+}
+
+.skeleton-title {
+  height: 20px;
+  margin-bottom: 12px;
+  width: 70%;
+}
+
+.skeleton-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.skeleton-button {
+  height: 44px;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.skeleton-input {
+  height: 44px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.skeleton-badge {
+  height: 24px;
+  width: 60px;
+  border-radius: 12px;
+}
+
+/* ================= Panel 載入骨架 ================= */
+.panel-loading {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panel-loading .skeleton-title {
+  margin-bottom: 16px;
+}
+
+.panel-loading .skeleton-input {
+  margin-bottom: 14px;
+}
+
+/* ================= 搜尋結果骨架 ================= */
+.sr-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.sr-skeleton .skeleton {
+  flex-shrink: 0;
+}
+
+.sr-skeleton .skeleton-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.sr-skeleton .skeleton-id {
+  width: 50px;
+  height: 14px;
+}
+
+.sr-skeleton .skeleton-name {
+  width: 120px;
+  height: 14px;
+  flex: 1;
+}
+
+/* ================= 地盤列表骨架 ================= */
+.prj-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+/* ================= 深色模式 ================= */
+@media (prefers-color-scheme: dark) {
+  .skeleton {
+    background: linear-gradient(90deg, #2a302a 25%, #363e36 50%, #2a302a 75%);
+    background-size: 800px 100%;
+  }
+}
+
+/* ================= 減 motion ================= */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: #e0e0e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    .skeleton { background: #2a302a; }
+  }
+}

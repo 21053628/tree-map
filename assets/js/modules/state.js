@@ -15,6 +15,7 @@ const businessState = {
   treeCountMap: new Map(),
   treeMap: new Map(),
   treeSearchIndex: new Map(), // projectId -> array of trees
+  treeTokenIndex: new Map(), // 🔥 Token倒排: pid -> Map<token, Set<tree>>
   // 🔥 [Phase1] 大小寫不敏感定位索引（O(1)，取代 locateTree 的 O(N) 線性掃描）
   treeLowerIndex: new Map(), // pid_lower + '_' + tree_id_lower -> tree
   treeIdIndex: new Map(),    // tree_id_lower -> tree（全域，取首個）

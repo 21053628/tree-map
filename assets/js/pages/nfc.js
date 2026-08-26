@@ -1,25 +1,18 @@
-'use strict';
+import { escapeHtml, sanitizeId, isSafeBackUrl } from '../core/utils.js';
+import { Config } from '../config.js';
+import { ApiService } from '../api.js';
 
-// 依賴：config.js（Config）與 core/global-utils.js（window.TreeUtils）需先載入
-const API = (typeof Config !== 'undefined' && Config.API_ENDPOINT)
-  ? Config.API_ENDPOINT
-  : '';
+// 依賴：config.js / api.js 現由 ESM import 提供
+const API = Config.API_ENDPOINT || '';
 
-const escapeHtml = (window.TreeUtils && window.TreeUtils.escapeHtml)
-  || function (s) {
-    const A = '&';
-    return String(s).replace(/&/g, A + 'amp;').replace(/</g, A + 'lt;').replace(/>/g, A + 'gt;');
-  };
-
-const sanitizeId = (window.TreeUtils && window.TreeUtils.sanitizeId)
-  || function (s) { return String(s || '').replace(/[^A-Za-z0-9._-]/g, ''); };
+if (ApiService && API) {
+  ApiService.init(API);
+}
 
 const TAG_CAPACITY = { '213': 144, '215': 504, '216': 888 };
 const TAG_LABELS = { '213': 'NTAG213', '215': 'NTAG215', '216': 'NTAG216' };
 
 let currentURL = '';
-let sourceTreeId = '';
-let sourcePrj = '';
 let ndef = null;
 let abortController = null;
 
@@ -29,14 +22,26 @@ window.addEventListener('DOMContentLoaded', function() {
   const urlParam = params.get('url');
   const backParam = params.get('back');
 
-  // 設定返回按鈕
+  // 設定返回按鈕（限制 back 為同源白名單，防開放重定向）
   const backBtn = document.getElementById('backBtn');
-  if (backParam) {
-    backBtn.href = backParam;
-  } else if (document.referrer && document.referrer.indexOf('t.html') !== -1) {
-    backBtn.href = document.referrer;
-  } else {
-    backBtn.style.display = 'none';
+  if (backBtn) {
+    const safeBack = isSafeBackUrl(backParam);
+    if (safeBack) {
+      backBtn.href = safeBack;
+    } else {
+      // referrer 亦需同源且為 t.html / index.html 才接受
+      let safeRef = null;
+      try {
+        if (document.referrer && document.referrer.indexOf('t.html') !== -1) {
+          safeRef = isSafeBackUrl(document.referrer);
+        }
+      } catch (e) { safeRef = null; }
+      if (safeRef) {
+        backBtn.href = safeRef;
+      } else {
+        backBtn.classList.add('is-hidden');
+      }
+    }
   }
 
   // 渲染寫入歷史
@@ -75,10 +80,7 @@ function autoImportFromURL(url) {
       document.getElementById('treeId').value = tid;
       if (pid) document.getElementById('projectId').value = pid;
 
-      sourceTreeId = tid;
-      sourcePrj = pid;
-
-      document.getElementById('autoImportBanner').style.display = 'block';
+      document.getElementById('autoImportBanner').classList.remove('is-hidden');
 
       // 自動產生 URL
       generateURL(true);
@@ -89,10 +91,33 @@ function autoImportFromURL(url) {
 }
 
 function goBack(e) {
-  const href = document.getElementById('backBtn').href;
-  if (href && href !== '#') {
+  const backBtnEl = document.getElementById('backBtn');
+  const rawHref = backBtnEl ? backBtnEl.getAttribute('href') : '';
+  // 若按鈕已隱藏，不執行跳轉
+  if (backBtnEl && backBtnEl.classList.contains('is-hidden')) {
+    if (history.length > 1) {
+      e.preventDefault();
+      history.back();
+      return false;
+    }
+    // 🔥 [Bugfix] 無瀏覽歷史時 fallback 到 index.html，避免按返回無反應
     e.preventDefault();
-    location.href = href;
+    location.href = 'index.html';
+    return false;
+  }
+  const href = backBtnEl ? backBtnEl.href : '';
+  // 二次校驗：只有同源白名單才允許 location.href 跳轉
+  const safe = isSafeBackUrl(rawHref || href);
+  const safeResolved = safe || isSafeBackUrl(href);
+  if (safeResolved) {
+    e.preventDefault();
+    location.href = safeResolved;
+    return false;
+  }
+  if (rawHref && rawHref !== '#') {
+    // 非法 back 值，攔截並回退到歷史
+    e.preventDefault();
+    if (history.length > 1) history.back();
     return false;
   }
   if (history.length > 1) {
@@ -112,6 +137,13 @@ function generateURL(silent) {
     return;
   }
 
+  // 🔥 [Bugfix] 檢查 API 端點是否已配置，避免後續 fetch 靜默失敗（silent 模式只記警告）
+  if (!API) {
+    if (!silent) alert('⚠️ API 端點未配置：請先建立 assets/js/env.js 設定 API_ENDPOINT');
+    else console.warn('[nfc] API 端點未配置，無法載入樹木預覽');
+    return;
+  }
+
   const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
   let url = baseUrl + 'index.html?tree_id=' + encodeURIComponent(treeId);
 
@@ -121,7 +153,7 @@ function generateURL(silent) {
 
   currentURL = url;
   document.getElementById('urlText').textContent = url;
-  document.getElementById('resultCard').style.display = 'block';
+  document.getElementById('resultCard').classList.remove('is-hidden');
 
   if (!silent) {
     document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
@@ -141,25 +173,30 @@ function generateURL(silent) {
 async function loadTreePreview(treeId, projectId) {
   const preview = document.getElementById('treePreview');
   try {
-    const r = await fetch(API + '?action=tree&id=' + encodeURIComponent(treeId) + '&prj=' + encodeURIComponent(projectId || ''));
-    const res = await r.json();
+    const res = await ApiService.get('tree', {
+      id: treeId,
+      prj: projectId || ''
+    });
 
     if (res && res.data) {
       const t = res.data;
       document.getElementById('previewId').textContent = '🆔 ' + (t.tree_id || treeId);
       document.getElementById('previewName').textContent = '🌳 ' + (t.name || '(未設定樹種)');
       document.getElementById('previewPrj').textContent = t.project_id ? '🚩 地盤：' + t.project_id : '(不屬於任何地盤)';
-      preview.style.display = 'block';
+      preview.classList.remove('is-hidden');
     } else {
       // API 找不到，只顯示 ID
       document.getElementById('previewId').textContent = '🆔 ' + treeId;
       document.getElementById('previewName').textContent = '⚠️ 樹木資料載入失敗';
       document.getElementById('previewPrj').textContent = projectId ? '🚩 地盤：' + projectId : '';
-      preview.style.display = 'block';
+      preview.classList.remove('is-hidden');
     }
   } catch (err) {
     console.error('loadTreePreview error:', err);
-    preview.style.display = 'none';
+    document.getElementById('previewId').textContent = '🆔 ' + treeId;
+    document.getElementById('previewName').textContent = '⚠️ ' + (err.message || '樹木資料載入失敗');
+    document.getElementById('previewPrj').textContent = projectId ? '🚩 地盤：' + projectId : '';
+    preview.classList.remove('is-hidden');
   }
 }
 
@@ -205,11 +242,10 @@ function checkNfcSupport() {
   if (!('NDEFReader' in window)) {
     status.className = 'status warn';
     status.innerHTML = '❌ 此瀏覽器不支援 Web NFC<br><small>請使用 Android Chrome，或改用「手動複製」分頁</small>';
-    status.style.background = '#fff3e0';
-    status.style.color = '#e65100';
+  status.className = 'status';
     btn.disabled = true;
     readBtn.disabled = true;
-    hint.style.display = 'block';
+    hint.classList.remove('is-hidden');
     // 自動切換去手動 tab
     switchTab('manual');
     return;
@@ -218,12 +254,11 @@ function checkNfcSupport() {
   // 檢查是否 HTTPS
   if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
     status.className = 'status';
-    status.style.background = '#fff3e0';
-    status.style.color = '#e65100';
+  status.className = 'status';
     status.innerHTML = '⚠️ Web NFC 需要 HTTPS 環境<br><small>請使用正式域名（例如 GitHub Pages）</small>';
     btn.disabled = true;
     readBtn.disabled = true;
-    hint.style.display = 'block';
+    hint.classList.remove('is-hidden');
     return;
   }
 
@@ -231,7 +266,7 @@ function checkNfcSupport() {
   status.innerHTML = '✅ 支援 Web NFC — 可以一鍵即寫！';
   btn.disabled = false;
   readBtn.disabled = false;
-  hint.style.display = 'none';
+  hint.classList.add('is-hidden');
 }
 
 // NFC 錯誤分類
@@ -262,7 +297,7 @@ async function writeNFC() {
   const totalBytes = getByteLength(currentURL) + overhead;
 
   if (totalBytes > capacity) {
-    status.style.display = 'block';
+    status.classList.remove('is-hidden');
     status.className = 'status error';
     status.innerHTML = '❌ <strong>URL 太長</strong><br><small>約需 ' + totalBytes + ' bytes，超出 ' + TAG_LABELS[tagType] + ' 容量（' + capacity + ' bytes）。請改用更高容量標籤或縮短地盤代碼</small>';
     return;
@@ -275,14 +310,14 @@ async function writeNFC() {
     if (!ok) return;
   }
 
-  status.style.display = 'block';
+  status.classList.remove('is-hidden');
   status.className = 'status writing';
   status.innerHTML = '📡 <strong>等待 NFC 標籤...</strong><br><small>請將手機背面靠近 NFC 標籤（通常在相機附近）</small>';
 
   btn.classList.add('ready');
   btn.textContent = '📡 等待中...（靠近標籤）';
   btn.disabled = true;
-  cancelBtn.style.display = 'block';
+  cancelBtn.classList.remove('is-hidden');
 
   try {
     // 取消上次操作（如果有）
@@ -318,21 +353,21 @@ async function writeNFC() {
     addHistory(document.getElementById('treeId').value.trim(), currentURL);
 
     // 播放成功提示音（如果有）
-    try { navigator.vibrate && navigator.vibrate(200); } catch(e) {}
+    try { navigator.vibrate && navigator.vibrate(200); } catch(e) { /* intentionally ignored: optional fallback failure */ }
 
     btn.classList.remove('ready');
     btn.textContent = '✅ 完成！按這裡寫下一張';
     btn.disabled = false;
-    cancelBtn.style.display = 'none';
+    cancelBtn.classList.add('is-hidden');
 
   } catch (err) {
-    cancelBtn.style.display = 'none';
+    cancelBtn.classList.add('is-hidden');
     btn.classList.remove('ready');
     btn.textContent = '📡 按一下 → 手機靠近 NFC 標籤';
     btn.disabled = false;
 
     if (err.name === 'AbortError') {
-      status.style.display = 'none';
+      status.classList.add('is-hidden');
       return;
     }
 
@@ -354,7 +389,7 @@ async function readNFC() {
   const status = document.getElementById('nfcStatus');
   const btn = document.getElementById('readNfcBtn');
 
-  status.style.display = 'block';
+  status.classList.remove('is-hidden');
   status.className = 'status writing';
   status.innerHTML = '📡 <strong>等待標籤...</strong><br><small>請將手機靠近要讀取的 NFC 標籤</small>';
 
@@ -424,7 +459,7 @@ function decodeNdefMessage(message) {
 
 // 寫入歷史
 function addHistory(treeId, url) {
-  let history = [];
+  let history;
   try {
     history = JSON.parse(localStorage.getItem('nfc_history') || '[]');
   } catch (e) { history = []; }
@@ -445,17 +480,17 @@ function renderHistory() {
   const list = document.getElementById('historyList');
   if (!card || !list) return;
 
-  let history = [];
+  let history;
   try {
     history = JSON.parse(localStorage.getItem('nfc_history') || '[]');
   } catch (e) { history = []; }
 
   if (history.length === 0) {
-    card.style.display = 'none';
+    card.classList.add('is-hidden');
     return;
   }
 
-  card.style.display = 'block';
+  card.classList.remove('is-hidden');
   list.innerHTML = history.map(function(h) {
     return '<li class="history-item"><span class="h-id">🆔 ' + escapeHtml(h.id) + '</span><span class="h-time">' + escapeHtml(h.time) + '</span></li>';
   }).join('');
@@ -484,8 +519,7 @@ function copyURL() {
 function fallbackCopy() {
   const ta = document.createElement('textarea');
   ta.value = currentURL;
-  ta.style.position = 'fixed';
-  ta.style.left = '-9999px';
+  ta.className = 'fallback-textarea';
   document.body.appendChild(ta);
   ta.select();
   try {
@@ -501,10 +535,10 @@ function showCopySuccess() {
   const btn = document.querySelector('.copy-btn');
   const orig = btn.textContent;
   btn.textContent = '✅ 已複製';
-  btn.style.background = '#2e7d32';
+  btn.classList.add('is-success');
   setTimeout(() => {
     btn.textContent = orig;
-    btn.style.background = '';
+    btn.classList.remove('is-success');
   }, 1500);
 }
 
