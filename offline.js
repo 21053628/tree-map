@@ -823,7 +823,7 @@ import { AuditLog } from './assets/js/modules/audit-log.js';
   if (typeof ApiService !== 'undefined') {
     var origPost = ApiService.post;
     var origClearCache = ApiService.clearCache; // 🔥 保留原 ApiService.clearCache（清理 responseCache Map）
-    ApiService.post = async function(payload) {
+    ApiService.post = async function(payload, options) {
       if (!navigator.onLine) {
         // 🔐 不將 token 預先寫入 IndexedDB outbox，同步時先補（見 syncOutbox）
         await push(stripToken(payload));
@@ -831,7 +831,7 @@ import { AuditLog } from './assets/js/modules/audit-log.js';
         return { ok: true, queued: true };
       }
       try {
-        var result = await origPost(payload);
+        var result = await origPost(payload, options);
         if (result && result.ok) { clearCacheForType(payload.type || 'post'); notifySwInvalidateOffline_(payload.type||'post', payload); }
         return result;
       } catch (err) {

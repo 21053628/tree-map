@@ -69,6 +69,7 @@
   @media (hover:none){.photo-preview-item:hover,.inspection-photo-item:hover,.zoomable-img:hover{transform:none!important;box-shadow:var(--shadow-1)!important}}
 
 /* ---------- 🔄 提交進度面板（ProgressBar.showModal / ui-progress.js 動態建立） ---------- */
+.progress-is-open{overflow:hidden}
 .progress-modal{
   display:none;
   position:fixed;
@@ -82,65 +83,149 @@
 .progress-modal__overlay{
   position:absolute;
   inset:0;
-  background:rgba(0,0,0,.45);
-  -webkit-backdrop-filter:blur(2px);
-  backdrop-filter:blur(2px);
+  background:rgba(8,24,18,.62);
+  -webkit-backdrop-filter:blur(7px) saturate(125%);
+  backdrop-filter:blur(7px) saturate(125%);
 }
 .progress-modal__panel{
   position:relative;
+  width:min(100%,380px);
+  padding:24px;
+  overflow:hidden;
+  color:var(--text,#222);
   background:var(--card-bg,#fff);
-  border-radius:var(--radius-lg,16px);
-  padding:28px 24px 24px;
-  width:100%;
-  max-width:320px;
-  text-align:center;
-  box-shadow:0 12px 40px rgba(0,0,0,.25);
-  animation:progressModalIn .22s var(--ease-in-out,ease-in-out);
+  border:1px solid rgba(46,125,50,.14);
+  border-radius:var(--radius-xl,var(--radius-lg,16px));
+  box-shadow:0 24px 70px rgba(0,0,0,.28),0 4px 16px rgba(0,0,0,.12);
+  animation:progressModalIn .28s var(--ease-out,cubic-bezier(.22,1,.36,1));
+}
+.progress-modal__panel::before{
+  content:'';
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:4px;
+  background:var(--grad-accent,linear-gradient(135deg,#26a69a,#00695c));
 }
 @keyframes progressModalIn{
-  from{transform:translateY(10px) scale(.97);opacity:0}
+  from{transform:translateY(14px) scale(.96);opacity:0}
   to{transform:translateY(0) scale(1);opacity:1}
 }
-.progress-modal__icon{
-  font-size:38px;
-  line-height:1;
-  margin-bottom:14px;
-  color:var(--color-accent,#00897b);
-  display:inline-block;
-  animation:progressSpin 1s linear infinite;
+.progress-modal__topline{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:18px;
 }
-@keyframes progressSpin{100%{transform:rotate(360deg)}}
+.progress-modal__icon{
+  display:grid;
+  place-items:center;
+  width:38px;
+  height:38px;
+  flex:0 0 38px;
+  color:#fff;
+  font-size:24px;
+  font-weight:700;
+  line-height:1;
+  background:var(--grad-accent,linear-gradient(135deg,#26a69a,#00695c));
+  border-radius:12px;
+  box-shadow:0 7px 16px rgba(0,105,92,.24);
+  animation:progressIconFloat 1.8s ease-in-out infinite;
+}
+@keyframes progressIconFloat{50%{transform:translateY(-2px);box-shadow:0 10px 20px rgba(0,105,92,.3)}}
+.progress-modal__eyebrow{
+  color:var(--muted,#666);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+.progress-modal__heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px;
+}
 .progress-modal__message{
-  font-size:16px;
-  font-weight:600;
+  min-width:0;
   color:var(--text,#222);
-  margin-bottom:16px;
-  min-height:24px;
+  font-size:18px;
+  font-weight:700;
+  line-height:1.35;
+}
+.progress-modal__percent{
+  flex:0 0 auto;
+  color:var(--color-accent,#00897b);
+  font-size:26px;
+  font-weight:800;
+  letter-spacing:-.04em;
+  line-height:1;
 }
 .progress-modal__bar-track{
-  height:8px;
-  background:#e0e0e0;
-  border-radius:999px;
+  position:relative;
+  height:12px;
   overflow:hidden;
+  background:color-mix(in srgb,var(--color-accent,#00897b) 12%,var(--card-bg,#fff));
+  border:1px solid color-mix(in srgb,var(--color-accent,#00897b) 16%,transparent);
+  border-radius:999px;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.12);
 }
 .progress-modal__bar-fill{
+  position:relative;
   height:100%;
   width:0%;
-  border-radius:999px;
-  background:var(--grad-primary,linear-gradient(135deg,#43a047,#1b5e20));
-  transition:width .3s ease;
+  min-width:0;
+  border-radius:inherit;
+  background:var(--grad-accent,linear-gradient(135deg,#26a69a,#00695c));
+  box-shadow:0 0 14px rgba(0,137,123,.38);
+  transition:width .42s var(--ease-out,cubic-bezier(.22,1,.36,1));
+}
+.progress-modal__bar-fill::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  width:34%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);
+  transform:translateX(-120%);
+  animation:progressShine 1.7s ease-in-out infinite;
+}
+@keyframes progressShine{to{transform:translateX(320%)}}
+.progress-modal__meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:22px;
+  margin-top:12px;
 }
 .progress-modal__detail{
-  font-size:13px;
+  min-width:0;
+  overflow:hidden;
   color:var(--muted,#666);
-  margin-top:10px;
-  min-height:18px;
+  font-size:13px;
+  line-height:1.4;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.progress-modal__hint{
+  flex:0 0 auto;
+  color:var(--muted,#666);
+  font-size:11px;
+  opacity:.78;
+}
+@media (max-width:420px){
+  .progress-modal{padding:16px}
+  .progress-modal__panel{padding:22px 18px}
+  .progress-modal__message{font-size:16px}
+  .progress-modal__percent{font-size:23px}
+  .progress-modal__hint{display:none}
 }
 @media (prefers-reduced-motion:reduce){
-  .progress-modal__icon{animation:none}
+  .progress-modal__icon,.progress-modal__bar-fill::after{animation:none}
   .progress-modal__panel{animation:none}
+  .progress-modal__bar-fill{transition:none}
 }
-
 /* --- 頁面專屬 helpers（其餘共用工具類已統一由 utilities.css 提供） --- */
 .mt-8{margin-top:8px}
 .mt-6{margin-top:6px}
@@ -150,3 +235,4 @@
 .text-muted{color:var(--muted,#666)}
 .nfc-hint{font-size:12px;color:var(--muted,#666);margin-left:6px}
 .badge-project{--badge-bg:#1976d2}
+

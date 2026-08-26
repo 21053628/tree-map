@@ -150,6 +150,51 @@ export const ApiService = (function() {
       });
   }
 
+  // 相片上傳需要讀取實際 byte 進度；一般 API 請求仍然使用 fetch。
+  function xhrWithUploadProgress(url, options, timeout, onProgress) {
+    if (!navigator.onLine) return Promise.reject(new Error('OFFLINE'));
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        xhr.abort();
+        reject(new Error('TIMEOUT'));
+      }, timeout);
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        fn(value);
+      };
+      xhr.open(options.method || 'POST', url, true);
+      xhr.timeout = timeout;
+      const headers = options.headers || {};
+      Object.keys(headers).forEach(key => xhr.setRequestHeader(key, headers[key]));
+      xhr.upload.onprogress = event => {
+        if (event.lengthComputable && typeof onProgress === 'function') {
+          onProgress(event.loaded, event.total);
+        }
+      };
+      xhr.onload = () => {
+        const response = {
+          ok: xhr.status >= 200 && xhr.status < 300,
+          status: xhr.status,
+          headers: { get: name => xhr.getResponseHeader(name) || '' },
+          text: () => Promise.resolve(xhr.responseText)
+        };
+        finish(resolve, response);
+      };
+      xhr.onerror = () => finish(reject, new Error('NETWORK_ERROR'));
+      xhr.ontimeout = () => finish(reject, new Error('TIMEOUT'));
+      xhr.onabort = () => {
+        if (!settled) finish(reject, new Error('TIMEOUT'));
+      };
+      xhr.send(options.body || null);
+    });
+  }
+
   /**
    * 安全解析 GAS 回應。
    * GAS 部署失效、權限不足或網址錯誤時，Google 可能回傳 HTML；
@@ -389,8 +434,12 @@ export const ApiService = (function() {
   }
 
   /* POST：寫入 (保持排隊，確保寫入順序同並發控制) */
-  async function post(payload) {
+  async function post(payload, options) {
     if (!apiEndpoint) throw new Error('API 服務未初始化');
+    options = options || {};
+    const onUploadProgress = typeof options.onUploadProgress === 'function'
+      ? options.onUploadProgress
+      : null;
     requestCount++;
 
     // 不直接修改呼叫端的 payload，避免重試時保留失效認證資料。
@@ -436,18 +485,23 @@ export const ApiService = (function() {
           return Promise.resolve({ ok: false, error_code: 'UNAUTHORIZED', error: 'UNAUTHORIZED' });
         }
 
-        return withRetry(() =>
-          fetchWithTimeout(apiEndpoint, {
-            method: 'POST',
-            // 🔥 [CORS 修正] 只保留 Content-Type（text/plain 為簡單請求）。
-            // 認證資料放在 body，避免 Apps Script 觸發 OPTIONS preflight。
-            headers: {
-              'Content-Type': 'text/plain;charset=utf-8'
-            },
-            body: JSON.stringify(payload)
-          }, POST_TIMEOUT)
-            .then(response => parseApiResponse(response, 'POST ' + (payload.type || 'request')))
-        );
+        const request = {
+          method: 'POST',
+          // 🔥 [CORS 修正] 只保留 Content-Type（text/plain 為簡單請求）。
+          // 認證資料放在 body，避免 Apps Script 觸發 OPTIONS preflight。
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          },
+          body: JSON.stringify(payload)
+        };
+        return withRetry(() => {
+          const responsePromise = onUploadProgress
+            ? xhrWithUploadProgress(apiEndpoint, request, POST_TIMEOUT, onUploadProgress)
+            : fetchWithTimeout(apiEndpoint, request, POST_TIMEOUT);
+          return responsePromise.then(response =>
+            parseApiResponse(response, 'POST ' + (payload.type || 'request'))
+          );
+        });
       };
 
       let data = await send();
