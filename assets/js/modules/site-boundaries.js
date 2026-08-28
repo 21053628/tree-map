@@ -11,6 +11,14 @@ const BOUNDARY_STYLE = {
   pane: 'companyBoundaryPane', interactive: false
 };
 
+// 主地圖本身使用 preferCanvas；公司範圍固定用 SVG，並保留在自訂 pane，
+// 避免手機瀏覽器在自訂 pane 內繪製 Canvas overlay 時出現紅線不顯示。
+let boundaryRenderer_ = null;
+function getBoundaryRenderer_() {
+  if (!boundaryRenderer_) boundaryRenderer_ = L.svg({ padding: 0.5, pane: 'companyBoundaryPane' });
+  return boundaryRenderer_;
+}
+
 function clearLayer_() {
   if (state.siteBoundaryLayer) state.siteBoundaryLayer.clearLayers();
   state.siteBoundary = null;
@@ -23,7 +31,7 @@ export function renderSiteBoundary(boundary) {
   if (!boundary || !boundary.geometry) return;
   const points = geometryToLatLngs(boundary.geometry);
   if (points.length < 3) return;
-  L.polygon(points, BOUNDARY_STYLE).addTo(state.siteBoundaryLayer);
+  L.polygon(points, Object.assign({}, BOUNDARY_STYLE, { renderer: getBoundaryRenderer_() })).addTo(state.siteBoundaryLayer);
 }
 
 let boundaryRequestId_ = 0;
