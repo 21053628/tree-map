@@ -1,7 +1,9 @@
 import { toHK80Async } from '../../core/coordinates.js';
+import { ApiService } from '../../api.js';
 import { escapeHtml, format1, format5 } from '../../core/utils.js';
 import * as TDUtils from './td-utils.js';
 import { goBackToMap, goNFC, zoomImage, closeZoom } from './nfc-navigation.js';
+import { TD } from './route.js';
 const $ = function (s) { return document.querySelector(s); };
 let delegated = false;
 const f1 = format1; const f5 = format5;
@@ -108,6 +110,27 @@ export function initMiniMap(t) {
       L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mm);
       L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mm);
       L.circleMarker([lat, lng], { color: '#fff', weight: 2, radius: 9, fillColor: (TDUtils.COLORS[t.status] || '#757575'), fillOpacity: .9 }).addTo(mm);
+
+      // NFC 直接開啟 t.html 時沒有主地圖的 state；按樹木所屬地盤獨立載入地盤範圍。
+      const projectId = String(t.project_id || TD.prj || '').trim();
+      if (projectId) {
+        ApiService.get('boundaries', { project: projectId })
+          .then(function (res) {
+            const geometry = res && res.data && res.data.geometry;
+            if (!geometry || !document.getElementById('minimap')) return;
+            const boundaryLayer = L.geoJSON(geometry, {
+              color: '#d32f2f', weight: 3, opacity: 0.95,
+              fillColor: '#ef5350', fillOpacity: 0.14,
+              interactive: false
+            }).addTo(mm);
+            const bounds = boundaryLayer.getBounds();
+            if (bounds.isValid()) mm.fitBounds(bounds, { padding: [12, 12], maxZoom: 18 });
+          })
+          .catch(function (error) {
+            // 地盤範圍是附加資料；失敗時仍保留樹木位置地圖。
+            console.warn('[tree-detail] boundary load failed', error);
+          });
+      }
       mm.invalidateSize();
     }); });
   }

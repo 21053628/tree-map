@@ -10,6 +10,7 @@ import { drawProjects } from './projects.js';
 import { drawTrees, bringTreeToFront } from './trees.js';
 import { sanitizeId } from '../core/utils.js';
 import { Config } from '../config.js';
+import { emit } from '../core/event-bus.js';
 
 export function saveViewState() {
   // 🔥 [v2.44] 移除 localStorage 儲存，F5 刷新時不再跳回上次位置
@@ -61,6 +62,7 @@ export async function locateTree(treeId, projectId, lat, lng) {
 
   if (finalPid && String(state.curProject) !== finalPid) {
     state.curProject = finalPid;
+    emit('project:selected', finalPid);
 
     buildSelect();
 
