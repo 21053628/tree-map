@@ -26,7 +26,7 @@
   pointer-events: auto;
 }
 
-#bar #addProjectBtn, #bar #addTreeBtn { display: none !important; }
+#bar #addProjectBtn, #bar #addTreeBtn, #bar #siteInfoBtn { display: none !important; }
 
 #bar select {
   padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border);

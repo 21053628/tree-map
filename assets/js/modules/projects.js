@@ -14,6 +14,7 @@ import { Config } from '../config.js';
 function syncTreeActionState() {
   const hasProject = Boolean(String(state.curProject || '').trim());
   const addTreeBtn = DOM.addTreeBtn;
+  const siteInfoBtn = DOM.siteInfoBtn;
 
   if (addTreeBtn) {
     addTreeBtn.classList.toggle('ghost-hidden', !hasProject);
@@ -28,6 +29,13 @@ function syncTreeActionState() {
     button.setAttribute('aria-disabled', String(!hasProject));
     button.title = hasProject ? '在目前地盤新增樹木' : '請先選擇地盤';
   });
+  if (siteInfoBtn) {
+    siteInfoBtn.classList.toggle('ghost-hidden', !hasProject);
+    siteInfoBtn.classList.toggle('is-project-selected', hasProject);
+    siteInfoBtn.setAttribute('aria-disabled', String(!hasProject));
+    siteInfoBtn.disabled = !hasProject;
+    siteInfoBtn.title = hasProject ? '查看地盤資料及樹木清單' : '請先選擇地盤';
+  }
 }
 
 export function buildSelect() {

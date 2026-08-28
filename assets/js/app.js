@@ -20,6 +20,8 @@ import {
   setPromptAuth
 } from './modules/forms.js';
 import { load } from './modules/loader.js';
+import { initSiteBoundaryLayer } from './modules/site-boundaries.js';
+import { initSiteInfo, openSiteInfo } from './modules/site-info.js';
 
 // 全域依賴注入
 ApiService.init(Config.API_ENDPOINT);
@@ -38,6 +40,7 @@ function init() {
   DOM.projSel = document.getElementById('projSel');
   DOM.addProjectBtn = document.getElementById('addProjectBtn');
   DOM.addTreeBtn = document.getElementById('addTreeBtn');
+  DOM.siteInfoBtn = document.getElementById('siteInfoBtn');
   DOM.panel = document.getElementById('panel');
   DOM.panelContent = document.getElementById('panelContent');
   DOM.searchResults = document.getElementById('searchResults');
@@ -68,6 +71,9 @@ function init() {
   if (DOM.addTreeBtn) {
     DOM.addTreeBtn.addEventListener('click', () => openTreeForm());
   }
+  if (DOM.siteInfoBtn) {
+    DOM.siteInfoBtn.addEventListener('click', () => openSiteInfo());
+  }
   if (DOM.projSel) {
     DOM.projSel.addEventListener('change', (e) => selectProject(e.target.value));
   }
@@ -77,6 +83,8 @@ function init() {
   }
 
   if (!initMap()) return;
+  initSiteBoundaryLayer();
+  initSiteInfo();
 
   // [Phase13] 表單欄位自動清除錯誤（input/focus 時）
   enableAutoClearFieldErrors();

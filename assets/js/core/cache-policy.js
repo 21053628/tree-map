@@ -14,6 +14,7 @@ const POLICY = {
   inspections: { ttl: 120, swMaxAge: 300000,  memoryTtl: 30*1000 },
   viewport:    { ttl: 120, swMaxAge: 300000,  memoryTtl: 30*1000 },
   species:     { ttl: 86400, swMaxAge: 3600000, memoryTtl: 3600*1000 },
+  boundaries:  { ttl: 300, swMaxAge: 600000, memoryTtl: 60*1000 },
   snapshot:    { ttl: 24*3600*1000, maxAgeDays: 7 },
   // 數量型快取（不以時間 TTL 驅動）
   tiles:       { countLimit: 800 },
@@ -29,6 +30,7 @@ function getMemoryTtl(action) {
   if (key === 'trees') return POLICY.trees.memoryTtl;
   if (key === 'inspections') return POLICY.inspections.memoryTtl;
   if (key === 'species') return POLICY.species.memoryTtl;
+  if (key === 'boundaries') return POLICY.boundaries.memoryTtl;
   if (key.indexOf('viewport') !== -1 || key.indexOf('bbox') !== -1) return POLICY.viewport.memoryTtl;
   return 60*1000;
 }
@@ -40,6 +42,7 @@ function getSwMaxAge(action) {
   if (key === 'trees') return POLICY.trees.swMaxAge;
   if (key === 'inspections') return POLICY.inspections.swMaxAge;
   if (key === 'species') return POLICY.species.swMaxAge;
+  if (key === 'boundaries') return POLICY.boundaries.swMaxAge;
   if (key.indexOf('viewport') !== -1) return POLICY.viewport.swMaxAge;
   return 600000;
 }

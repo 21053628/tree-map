@@ -8,6 +8,7 @@ export const DOM = {
   projSel: null,
   addProjectBtn: null,
   addTreeBtn: null,
+  siteInfoBtn: null,
   panel: null,
   panelContent: null,
   searchResults: null,

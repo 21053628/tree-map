@@ -30,6 +30,9 @@ button.is-loading::after {
 @media (pointer: coarse) {
   #bar button, #bar select, .layerbar button, #panel button, .leaflet-popup-content button, .leaflet-popup-content a {
     min-height: 44px;
+  }
+  /* 原生 <select> 唔好改成 flex：會令部分手機瀏覽器錯亂下拉清單寬度／外觀 */
+  #bar button, .layerbar button, #panel button, .leaflet-popup-content button, .leaflet-popup-content a {
     display: flex;
     align-items: center;
     justify-content: center;

@@ -40,6 +40,7 @@
 <link rel="stylesheet" href="assets/css/skeleton.css">
 <link rel="stylesheet" href="assets/css/animations.css">
 <link rel="stylesheet" href="assets/css/utilities.css">
+<link rel="stylesheet" href="assets/css/site-info.css">
 
 <!-- Modulepreload 極速 -->
 <link rel="modulepreload" href="assets/js/app.js">
@@ -57,6 +58,9 @@
 <link rel="modulepreload" href="assets/js/modules/forms.js">
 <link rel="modulepreload" href="assets/js/modules/draw.js">
 <link rel="modulepreload" href="assets/js/modules/geolocate.js">
+<link rel="modulepreload" href="assets/js/modules/site-boundaries.js">
+<link rel="modulepreload" href="assets/js/modules/site-info.js">
+<link rel="modulepreload" href="assets/js/modules/site-boundary-editor.js">
 <link rel="modulepreload" href="assets/js/modules/loader.js">
 <link rel="modulepreload" href="assets/js/core/spatial-index.js">
 </head>
@@ -93,6 +97,7 @@
   <div class="primary-actions" aria-label="主要操作">
     <button class="blue" id="addProjectBtn" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg> 建立地盤</button>
     <button id="addTreeBtn" class="ghost-hidden" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-tree"></use></svg> 新增樹木</button>
+    <button id="siteInfoBtn" class="ghost-hidden" type="button">📋 地盤資料</button>
   </div>
 
   <!-- 🔥 桌面過濾（圖層）按鈕：放在搜尋框下方 -->
@@ -105,6 +110,56 @@
 <div id="panel"><div id="panelContent"></div></div>
 <div id="status">🗺️ 載入中…</div>
 <div id="map"></div>
+
+<section id="siteInfoPage" class="site-info-page" hidden aria-labelledby="siteInfoTitle">
+  <header class="site-info-header">
+    <button id="siteInfoCloseBtn" class="site-info-back" type="button" aria-label="返回地圖">← 返回地圖</button>
+    <div>
+      <h1 id="siteInfoTitle">地盤資料</h1>
+      <p id="siteInfoSubtitle" class="site-info-subtitle"></p>
+    </div>
+    <div class="site-info-header-actions">
+      <button id="siteInfoRefreshBtn" class="site-info-secondary" type="button">重新載入</button>
+      <button id="siteInfoExportBtn" class="site-info-primary" type="button">匯出 CSV</button>
+    </div>
+  </header>
+  <div class="site-info-content">
+    <div class="site-info-summary" aria-live="polite">
+      <div class="site-info-card"><span>地盤編號</span><strong id="siteInfoProjectId">—</strong></div>
+      <div class="site-info-card"><span>樹木總數</span><strong id="siteInfoTreeCount">—</strong></div>
+      <div class="site-info-card site-info-description-card"><span>地盤描述</span><strong id="siteInfoDescription">—</strong></div>
+    </div>
+    <div class="site-info-map-card">
+      <div class="site-info-section-heading"><h2>地盤範圍</h2><span>HK80 測量段：直線＋起點／弧中點／終點</span></div>
+      <div class="site-info-map-actions">
+        <button id="siteInfoEditBoundaryBtn" class="site-info-primary" type="button">🟥 編輯地盤範圍</button>
+      </div>
+      <div id="siteInfoMap" class="site-info-map" aria-label="地盤範圍地圖"></div>
+    </div>
+    <div class="site-info-table-card">
+      <div class="site-info-section-heading site-info-table-heading">
+        <div><h2>樹木清單</h2><span id="siteInfoTableStatus" aria-live="polite"></span></div>
+        <label>每頁
+          <select id="siteInfoPageSize" aria-label="每頁顯示數量">
+            <option value="25">25</option><option value="50">50</option><option value="100">100</option>
+          </select>
+          筆
+        </label>
+      </div>
+      <div class="site-info-table-wrap">
+        <table class="site-info-table">
+          <thead><tr><th>Tree ID</th><th>Tree Species</th><th>DBH</th><th>Height</th><th>Spread</th><th>Tree Status</th></tr></thead>
+          <tbody id="siteInfoTableBody"><tr><td colspan="6" class="site-info-empty">請選擇地盤</td></tr></tbody>
+        </table>
+      </div>
+      <nav class="site-info-pagination" aria-label="樹木清單分頁">
+        <button id="siteInfoPrevBtn" class="site-info-secondary" type="button">上一頁</button>
+        <span id="siteInfoPageIndicator">第 0 / 0 頁</span>
+        <button id="siteInfoNextBtn" class="site-info-secondary" type="button">下一頁</button>
+      </nav>
+    </div>
+  </div>
+</section>
 
 <!-- 0️⃣ 環境注入（最優先，runtime 注入 API_ENDPOINT） -->
 <script type="module" src="assets/js/env.js"></script>

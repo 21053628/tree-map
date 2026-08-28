@@ -8,7 +8,6 @@ import { updateStatus } from './dom.js';
 import { buildSelect } from './projects.js';
 import { drawProjects } from './projects.js';
 import { drawTrees, bringTreeToFront } from './trees.js';
-import { emit } from '../core/event-bus.js'; // 🔥 [Phase4] 事件解耦，移除對 map.js 的直接依賴
 import { sanitizeId } from '../core/utils.js';
 import { Config } from '../config.js';
 
@@ -70,9 +69,6 @@ export async function locateTree(treeId, projectId, lat, lng) {
     state.coordGroupsCache = null;
     drawProjects();
     drawTrees();
-
-    // 🔥 [Phase4] 定位後同步換航拍圖：改用事件通知
-    emit('project:selected', finalPid);
   }
 
   if (targetLat != null && targetLng != null && !isNaN(targetLat) && !isNaN(targetLng)) {

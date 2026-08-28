@@ -61,8 +61,8 @@ import { CACHE_KEY_PREFIX, CACHE_MAX_AGE } from './config.js';
       prefixes = ['projects', 'trees', 'bootstrap'];
     } else if (type === 'create_tree' || type === 'update_tree' || type === 'delete_tree') {
       prefixes = ['trees', 'bootstrap'];
-    } else if (type === 'create_aerial') {
-      prefixes = ['aerials'];
+    } else if (type === 'create_boundary' || type === 'update_boundary' || type === 'delete_boundary') {
+      prefixes = ['boundaries'];
     } else if (type) {
       prefixes = [type];
     }

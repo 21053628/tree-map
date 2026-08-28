@@ -25,13 +25,14 @@ export const uiState = {
   lotCache: new Map(), // bboxKey -> {data, timestamp}
   lotLoadTimer: null,
 
-  // 航拍圖疊加層
-  aerialLayer: null,
-  aerialEnabled: false,
-
   // GPS 定位與繪圖邊界
   geolocation: { marker: null, circle: null },
   drawBoundary: null,
+
+  // 公司自訂地盤範圍
+  siteBoundaryLayer: null,
+  siteBoundary: null,
+  siteBoundaryEditor: false,
 
   isLocating: false,
 

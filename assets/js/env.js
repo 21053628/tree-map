@@ -6,6 +6,6 @@
  * 本文件已被 .gitignore 忽略，請複製 env.example.js 為 env.js 並填入實際值
  */
 export const ENV = {
-  API_ENDPOINT: 'https://script.google.com/macros/s/AKfycbxlwiMM1CW7tV4ljwU0GDJoM4CfDjqc7iS-yp65TzOX4DVsj4FD1BgVVlAhu2jegvn3/exec'
+  API_ENDPOINT: 'https://script.google.com/macros/s/AKfycbxM9VD8zQzICKWYH_LesKKQ3nn9hoNMhxapshrSigm8-zBJMtzZXRKjuvliHG9_P8Aj/exec'
 };
 

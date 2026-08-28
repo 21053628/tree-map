@@ -33,7 +33,7 @@ export const ApiService = (function() {
   const MAX_CONCURRENT_POST = 1;     // POST 序列化，符合 one-time CSRF Token 同步器模式
   const MAX_CACHE_SIZE = 100;        // LRU 快取上限
   
-  const WRITE_TYPES = ['checkin', 'inspection', 'inspection_photo', 'update_tree', 'create_project', 'create_tree', 'create_aerial', 'update_project', 'delete_project', 'delete_tree'];
+  const WRITE_TYPES = ['checkin', 'inspection', 'inspection_photo', 'update_tree', 'create_project', 'create_tree', 'update_project', 'delete_project', 'delete_tree', 'create_boundary', 'update_boundary', 'delete_boundary'];
 
   let apiEndpoint = null;
   let requestCount = 0;
@@ -388,6 +388,18 @@ export const ApiService = (function() {
     try{ var _u=new URLSearchParams(location.search); if(_u.get('nocache')==='1') params.nocache='1'; if(_u.get('bust')==='1') params.bust='1'; }catch(e){ /* intentionally ignored: optional fallback failure */ }
     return get('trees', params);
   }
+  function getProjectTrees(projectId, opts) {
+    opts = opts || {};
+    const params = {
+      project: String(projectId || '').trim(),
+      limit: String(opts.limit || 25),
+      offset: String(opts.offset || 0)
+    };
+    if (opts.nocache) params.nocache = String(opts.nocache);
+    if (opts.bust) params.bust = String(opts.bust);
+    return get('project_trees', params);
+  }
+
   function getTreesByViewport(projectId, bounds, opts) {
     // bounds: Leaflet LatLngBounds 或 {south,west,north,east}，自動 pad 0.3 由呼叫端決定
     let south, west, north, east;
@@ -600,10 +612,12 @@ export const ApiService = (function() {
       'create_project': ['get:projects'],
       'update_project': ['get:projects', 'get:trees', 'get:bootstrap'],
       'delete_project': ['get:projects', 'get:trees', 'get:bootstrap'],
-      'create_tree': ['get:trees', 'get:bootstrap'],
-      'update_tree': ['get:trees', 'get:bootstrap'],
-      'delete_tree': ['get:trees', 'get:bootstrap'],
-      'create_aerial': ['get:aerials']
+      'create_tree': ['get:trees', 'get:bootstrap', 'get:project_trees'],
+      'update_tree': ['get:trees', 'get:bootstrap', 'get:project_trees'],
+      'delete_tree': ['get:trees', 'get:bootstrap', 'get:project_trees'],
+      'create_boundary': ['get:boundaries'],
+      'update_boundary': ['get:boundaries'],
+      'delete_boundary': ['get:boundaries']
     };
     const prefixList = prefixes[type];
     if (prefixList) {
@@ -650,6 +664,7 @@ export const ApiService = (function() {
     get,
     getProjects,
     getTreesByProject,
+    getProjectTrees,
     getTreesByViewport,
     invalidateProjectTrees,
     post,

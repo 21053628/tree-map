@@ -57,9 +57,27 @@
 
   #bar select {
     width: 100%;
+    max-width: 100%;
     min-width: 0;
     flex: none;
+    box-sizing: border-box;
     padding: 8px 12px;
+    /* 保留原生下拉外觀，避免手機瀏覽器因自訂樣式錯亂計算清單寬度 */
+    appearance: auto;
+    -webkit-appearance: auto;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 原生選項彈出層：限制 option 寬度，防止 Android Chrome 按最長名稱
+     撐大下拉清單而超出畫面右側（bar 邊距 = 左8 + 右8 + padding 10*2 = 36px） */
+  #bar select option {
+    max-width: calc(100vw - 36px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   #bar .search-wrap {
@@ -105,7 +123,8 @@
 
   /* layout.css hides these controls for desktop; explicitly restore them on mobile. */
   #bar #addProjectBtn,
-  #bar #addTreeBtn {
+  #bar #addTreeBtn,
+  #bar #siteInfoBtn {
     display: flex !important;
   }
 

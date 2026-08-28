@@ -40,10 +40,11 @@ const UI_KEYS = [
   'lotLayerEnabled',
   'lotCache',
   'lotLoadTimer',
-  'aerialLayer',
-  'aerialEnabled',
   'geolocation',
   'drawBoundary',
+  'siteBoundaryLayer',
+  'siteBoundary',
+  'siteBoundaryEditor',
   'isLocating',
   'perfMetrics'
 ];

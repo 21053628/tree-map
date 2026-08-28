@@ -12,9 +12,8 @@ import { loadTreesForProject } from './loader.js';
 import { toggleFilterPanel, closeFilterPanel } from './filters.js'; // 🔥 [v2.52]
 import { startMeasure, cancelInteraction, clearAllDrawings, getMode as getDrawMode } from './draw.js'; // 🔥 [Phase1]
 import { toggleGeolocation, locateOnce } from './geolocate.js'; // 🔥 [Phase1]
-import { on } from '../core/event-bus.js'; // 🔥 [Phase4] 訂閱 project:selected 以觸發航拍圖刷新
+import { on } from '../core/event-bus.js';
 import { openTreeForm } from './forms.js';
-import { toWGS84 } from '../core/coordinates.js';
 import { Config } from '../config.js';
 // 🔥 layers 圖示（filter 按鈕用，清楚表示「分層」）
 const LAYERS_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>';
@@ -71,17 +70,17 @@ export function initMap() {
     }).addTo(state.map);
   }
 
-  if (!state.map.getPane('aerialPane')) {
-    const aerialPane = state.map.createPane('aerialPane');
-    aerialPane.style.zIndex = 250;
-  }
-
   // 🔥 [修復] 地段專用 pane：z-index 350 低於 overlayPane(400)，
   // 確保樹木 Canvas（400）在上層可被點擊，地段 SVG 在下層不遮擋
   if (!state.map.getPane('lotPane')) {
     const lotPane = state.map.createPane('lotPane');
     lotPane.style.zIndex = 350;
   }
+  if (!state.map.getPane('companyBoundaryPane')) {
+    const boundaryPane = state.map.createPane('companyBoundaryPane');
+    boundaryPane.style.zIndex = 360;
+  }
+  if (!state.siteBoundaryLayer) state.siteBoundaryLayer = L.layerGroup().addTo(state.map);
 
   state.baseLayers = {
     hk: L.layerGroup([
@@ -166,6 +165,7 @@ export function initMap() {
       // 手機版：底圖切換直接收納在 Layer FAB，避免再點擊一層「圖層」分類。
       div.innerHTML =
         '<button class="drawer-cat" data-cat="tools" aria-expanded="false">📏 測量工具</button>' +
+        '<button data-act="siteInfo">📋 地盤資料</button>' +
         '<div class="drawer-sub" data-sub="tools">' +
           '<button data-act="measureLine">📏 距離</button>' +
           '<button data-act="measureArea">📐 面積</button>' +
@@ -177,7 +177,6 @@ export function initMap() {
           '<button data-l="hk" class="on">🏛️ 政府</button>' +
           '<button data-l="sat">🛰️ 衛星</button>' +
           '<button data-l="lot">🗺️ 地段索引</button>' +
-          '<button data-l="aerial">📷 航拍</button>' +
         '</div>' +
         '<div class="drawer-sep"></div>' +
         '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +
@@ -187,6 +186,7 @@ export function initMap() {
       div.innerHTML =
         '<button data-act="addProject" class="drawer-action act-project">＋ 建立地盤</button>' +
         '<button data-act="addTree" class="drawer-action act-tree">🌳 新增樹木</button>' +
+        '<button data-act="siteInfo">📋 地盤資料</button>' +
         '<div class="drawer-sep sep-tools"></div>' +
         '<button data-act="measureLine">📏 距離</button>' +
         '<button data-act="measureArea">📐 面積</button>' +
@@ -194,11 +194,10 @@ export function initMap() {
         '<button data-act="clearDrawings">✕ 清除</button>' +
         '<div class="drawer-sep"></div>' +
         '<button data-l="hk" class="on">政府</button>' +
-        '<button data-l="sat">官航</button>' +
+        '<button data-l="sat">衛星</button>' +
         '<button data-l="labels">🔢</button>' +
         '<button data-l="filter">' + LAYERS_ICON + ' 篩選</button>' +   // 🔥 [v2.52] 狀態過濾按鈕
-        '<button data-l="lot">🗺️ 地段</button>' +
-        '<button data-l="aerial">🛰 航拍</button>';
+        '<button data-l="lot">🗺️ 地段</button>';
     }
 
     L.DomEvent.disableClickPropagation(layerWrap);
@@ -275,6 +274,12 @@ export function initMap() {
           openTreeForm();
           return;
         }
+        if (b.dataset.act === 'siteInfo') {
+          closeDrawer();
+          if (!state.curProject) { updateStatus('⚠️ 請先選擇地盤'); return; }
+          import('./site-info.js').then((module) => module.openSiteInfo());
+          return;
+        }
 
         if (b.dataset.act === 'sync') {
           closeDrawer();
@@ -312,9 +317,6 @@ export function initMap() {
         const layerType = b.dataset.l;
         if (layerType === 'lot') {
           toggleLotLayer();
-          if (isMobile) closeDrawer();
-        } else if (layerType === 'aerial') {
-          toggleAerial();
           if (isMobile) closeDrawer();
         } else if (layerType === 'labels') {
           toggleTreeLabels();
@@ -448,57 +450,3 @@ export function initMap() {
   return true;
 }
 
-export function toggleAerial() {
-  state.aerialEnabled = !state.aerialEnabled;
-  const btn = document.querySelector('.layerbar button[data-l="aerial"]');
-  if (btn) btn.classList.toggle('on', state.aerialEnabled);
-  refreshAerial();
-  updateStatus(state.aerialEnabled ? '✅ 已開啟航拍圖層' : '✅ 已關閉航拍圖層');
-}
-
-// 🔥 [Phase4] 訂閱地盤選擇事件，取代 projects/locate 直接 import refreshAerial（斷循環）
-on('project:selected', function () {
-  refreshAerial();
-});
-
-export function refreshAerial() {
-  if (state.aerialLayer) {
-    state.map.removeLayer(state.aerialLayer);
-    state.aerialLayer = null;
-  }
-  if (!state.aerialEnabled || !state.curProject) return;
-
-  const p = state.PROJECTS.find((x) => String(x.project_id) === String(state.curProject));
-  if (!p || !p.aerial_url || !p.aerial_n1 || !p.aerial_e1 || !p.aerial_n2 || !p.aerial_e2) {
-    updateStatus('⚠️ 此地盤未配置航拍圖（請在 projects 表填寫）');
-    return;
-  }
-
-  const sw = toWGS84(+p.aerial_n1, +p.aerial_e1);
-  const ne = toWGS84(+p.aerial_n2, +p.aerial_e2);
-  if (!sw || !ne) {
-    updateStatus('❌ 航拍座標轉換失敗');
-    return;
-  }
-  const bounds = L.latLngBounds([sw.lat, sw.lng], [ne.lat, ne.lng]);
-
-  const mode = String(p.aerial_type || 'image').toLowerCase();
-
-  if (mode === 'tiles') {
-    state.aerialLayer = L.tileLayer(p.aerial_url, {
-      bounds: bounds,
-      minNativeZoom: 17,
-      maxNativeZoom: 22,
-      maxZoom: Config.MAP.MAX_ZOOM,
-      opacity: 0.9,
-      pane: 'aerialPane',
-      noWrap: true
-    }).addTo(state.map);
-  } else {
-    state.aerialLayer = L.imageOverlay(p.aerial_url, bounds, {
-      opacity: 0.9,
-      interactive: false,
-      pane: 'aerialPane'
-    }).addTo(state.map);
-  }
-}

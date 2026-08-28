@@ -122,7 +122,7 @@ function parseGML(gmlText) {
   return polygons;
 }
 
-// 🔥 [v2.48] 將原始 sublot 寫法清洗做航拍圖格式：「S.J ss.1」→「J,1」
+// 🔥 [v2.48] 將原始 sublot 寫法清洗成地段索引格式：「S.J ss.1」→「J,1」
 function cleanSublot_(raw) {
   let s = String(raw || '').trim();
   if (!s) return '';
@@ -148,7 +148,7 @@ function buildLotPopup_(a) {
   const updated = get('lastupdatedate');
   const lotid = get('lotid');
 
-  // 🔥 [v2.48/49] 標題對齊航拍圖：「533 S.J ss.1」→「Lot 533 J,1」；「STTL 28」→「Lot STTL 28」
+  // 🔥 [v2.48/49] 標題格式化：「533 S.J ss.1」→「Lot 533 J,1」；「STTL 28」→「Lot STTL 28」
   let title = '';
   if (disp) {
     const m = String(disp).trim().match(/^([A-Za-z]*\s*\d+)\s*(.*)$/);

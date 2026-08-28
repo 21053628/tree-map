@@ -20,13 +20,13 @@ const DATA_MAX_ENTRIES = 200;
 const PRECACHE = [
   './','./index.html','./offline.html','./t.html','./nfc.html',
   './manifest.webmanifest','./offline.js','./offline-pending.js',
-  './assets/js/core/cache-policy.js','./assets/js/core/cache-manager.js','./assets/js/core/error-codes.js','./assets/js/core/coordinates.js','./assets/js/core/spatial-index.js','./assets/js/core/outbox-policy.js',
+  './assets/js/core/cache-policy.js','./assets/js/core/cache-manager.js','./assets/js/core/error-codes.js','./assets/js/core/coordinates.js','./assets/js/core/spatial-index.js','./assets/js/core/site-boundary-geometry.js','./assets/js/core/outbox-policy.js',
   './assets/js/offline/config.js','./assets/js/offline/utils.js','./assets/js/offline/storage.js','./assets/js/offline/cache.js','./assets/js/offline/sync.js','./assets/js/offline/api-hooks.js','./assets/js/offline/events.js',
   './assets/js/modules/sync-panel.js','./assets/js/modules/audit-log.js',
   './assets/css/tokens.css','./assets/css/base.css','./assets/css/layout.css',
   './assets/css/map.css','./assets/css/ui.css','./assets/css/responsive.css',
   './assets/css/dark.css','./assets/css/filters.css','./assets/css/gis.css',
-  './assets/css/performance.css','./assets/css/skeleton.css','./assets/css/animations.css','./assets/css/utilities.css',
+  './assets/css/performance.css','./assets/css/skeleton.css','./assets/css/animations.css','./assets/css/utilities.css','./assets/css/site-info.css',
   './assets/css/pages/t.css','./assets/css/pages/nfc.css',
   './assets/js/env.js','./assets/js/sw-register.js',
   './assets/js/ui-progress.js','./assets/js/ui-icons.js',
@@ -34,7 +34,7 @@ const PRECACHE = [
   './assets/js/api.js','./assets/js/auth.js','./assets/js/app.js',
   './assets/js/core/utils.js','./assets/js/core/event-bus.js',
   './assets/js/modules/state.js','./assets/js/modules/ui-state.js','./assets/js/modules/dom.js',
-  './assets/js/modules/map.js','./assets/js/modules/search.js','./assets/js/modules/species.js',
+  './assets/js/modules/map.js','./assets/js/modules/search.js','./assets/js/modules/species.js','./assets/js/modules/site-boundaries.js','./assets/js/modules/site-boundary-editor.js','./assets/js/modules/site-info.js',
   './assets/js/modules/trees.js','./assets/js/modules/filters.js','./assets/js/modules/projects.js',
   './assets/js/modules/locate.js','./assets/js/modules/lots.js','./assets/js/modules/forms.js',
   './assets/js/modules/draw.js','./assets/js/modules/geolocate.js','./assets/js/modules/loader.js',
@@ -104,7 +104,7 @@ function checkQuotaAndShrink(){
   }}catch(e){ /* intentionally ignored: optional fallback failure */ }
 }
 function handleInvalidateDataCache(type,payload){
-  var map={'inspection':['action=inspections','action=trees','action=bootstrap'],'inspection_photo':['action=inspections','action=trees','action=bootstrap'],'checkin':['action=inspections','action=trees','action=bootstrap'],'create_tree':['action=trees','action=bootstrap'],'update_tree':['action=trees','action=bootstrap'],'delete_tree':['action=trees','action=bootstrap'],'create_project':['action=projects'],'update_project':['action=projects','action=trees','action=bootstrap'],'delete_project':['action=projects','action=trees','action=bootstrap'],'create_aerial':['action=aerials'],'sync':['action=trees','action=projects','action=inspections','action=bootstrap']};
+  var map={'inspection':['action=inspections','action=trees','action=bootstrap','action=project_trees'],'inspection_photo':['action=inspections','action=trees','action=bootstrap','action=project_trees'],'checkin':['action=inspections','action=trees','action=bootstrap','action=project_trees'],'create_tree':['action=trees','action=bootstrap','action=project_trees'],'update_tree':['action=trees','action=bootstrap','action=project_trees'],'delete_tree':['action=trees','action=bootstrap','action=project_trees'],'create_project':['action=projects'],'update_project':['action=projects','action=trees','action=bootstrap'],'delete_project':['action=projects','action=trees','action=bootstrap'],'create_boundary':['action=boundaries'],'update_boundary':['action=boundaries'],'delete_boundary':['action=boundaries'],'sync':['action=trees','action=projects','action=inspections','action=bootstrap']};
   var needles=map[type]||['action=trees','action=projects','action=inspections','action=bootstrap'];
   var pid=payload&&(payload.project_id||payload.prj)?String(payload.project_id||payload.prj):'';
   return caches.open(DATA_CACHE).then(function(c){ return c.keys().then(function(keys){
